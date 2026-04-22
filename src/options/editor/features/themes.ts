@@ -1,4 +1,4 @@
-import { LOG_PREFIX_EDITOR } from "@constants";
+﻿import { LOG_PREFIX_EDITOR } from "@constants";
 import { t } from "@core/i18n";
 import { getSyncStorage } from "@core/storage";
 import {
@@ -162,7 +162,7 @@ class ThemeManager {
 
       await editorStateManager.setEditorContent(themeContent, `custom-theme:${selectedTheme.name}`, false);
 
-      await chrome.storage.sync.set({ themeName: selectedTheme.name });
+      await chrome.storage.local.set({ themeName: selectedTheme.name });
       editorStateManager.setCurrentThemeName(selectedTheme.name);
       editorStateManager.setIsCustomTheme(true);
 
@@ -190,7 +190,7 @@ class ThemeManager {
   }
 
   private async applySymlinkedTheme(theme: Theme & { storeId: string }): Promise<void> {
-    console.log(LOG_PREFIX_EDITOR, `Applying symlinked theme: ${theme.name} → ${theme.storeId}`);
+    console.log(LOG_PREFIX_EDITOR, `Applying symlinked theme: ${theme.name} â†’ ${theme.storeId}`);
 
     let installed = await installSymlinkedThemeFromMarketplace(theme.storeId);
 
@@ -230,7 +230,7 @@ class ThemeManager {
 
       await editorStateManager.setEditorContent(themeContent, `builtin-theme:${selectedTheme.name}`, false);
 
-      await chrome.storage.sync.set({ themeName: selectedTheme.name });
+      await chrome.storage.local.set({ themeName: selectedTheme.name });
       editorStateManager.setCurrentThemeName(selectedTheme.name);
       editorStateManager.setIsCustomTheme(false);
 
@@ -381,12 +381,12 @@ export function onChange(_state: string) {
 
   if (themeName !== null && !isCustom && !isStoreTheme) {
     editorStateManager.setCurrentThemeName(null);
-    chrome.storage.sync.remove("themeName");
+    chrome.storage.local.remove("themeName");
     hideThemeName();
     updateThemeSelectorButton();
   } else if (isStoreTheme && themeName) {
     editorStateManager.setIsStoreTheme(false);
-    chrome.storage.sync.remove("themeName");
+    chrome.storage.local.remove("themeName");
     hideThemeName();
     updateThemeSelectorButton();
   } else if (isCustom && themeName) {
@@ -442,7 +442,7 @@ export function saveToStorage(isTheme = false) {
 
   const isCustom = editorStateManager.getIsCustomTheme();
   if (!isTheme && editorStateManager.getIsUserTyping() && !isCustom) {
-    chrome.storage.sync.remove("themeName");
+    chrome.storage.local.remove("themeName");
     editorStateManager.setCurrentThemeName(null);
   }
 
@@ -474,7 +474,7 @@ async function updateCreateEditButton(): Promise<void> {
   const themeName = editorStateManager.getCurrentThemeName();
   const isDefaultTheme = themeName === "Default";
 
-  const { customCSS } = (await chrome.storage.sync.get("customCSS")) as { customCSS?: string };
+  const { customCSS } = (await chrome.storage.local.get("customCSS")) as { customCSS?: string };
   const hasContent = customCSS && customCSS.trim().length > 0;
 
   const showEdit = !isDefaultTheme && hasContent;
@@ -496,7 +496,7 @@ export async function updateThemeSelectorButton(): Promise<void> {
   let bgUrl = "";
 
   if (!themeName) {
-    const { customCSS } = (await chrome.storage.sync.get("customCSS")) as { customCSS?: string };
+    const { customCSS } = (await chrome.storage.local.get("customCSS")) as { customCSS?: string };
     if (customCSS && customCSS.trim().length > 0) {
       displayName = t("options_themes_customTheme");
       authorText = t("theme_author_you");
@@ -811,7 +811,7 @@ export async function handleSaveTheme() {
   try {
     await saveCustomTheme(themeName.trim(), cleanCss);
 
-    chrome.storage.sync.set({ themeName: themeName.trim() });
+    chrome.storage.local.set({ themeName: themeName.trim() });
     editorStateManager.setCurrentThemeName(themeName.trim());
     editorStateManager.setIsCustomTheme(true);
 
@@ -839,7 +839,7 @@ export async function handleRenameTheme() {
     await renameCustomTheme(themeName, newName.trim());
 
     editorStateManager.setCurrentThemeName(newName.trim());
-    chrome.storage.sync.set({ themeName: newName.trim() });
+    chrome.storage.local.set({ themeName: newName.trim() });
 
     showThemeName(newName.trim(), "custom");
     updateThemeSelectorButton();
@@ -869,7 +869,7 @@ export async function handleDeleteTheme() {
   try {
     await deleteCustomTheme(themeName);
 
-    chrome.storage.sync.remove("themeName");
+    chrome.storage.local.remove("themeName");
     editorStateManager.setCurrentThemeName(null);
     editorStateManager.setIsCustomTheme(false);
 
@@ -881,3 +881,4 @@ export async function handleDeleteTheme() {
     showAlert("Failed to delete theme!");
   }
 }
+

@@ -1,4 +1,4 @@
-import type { EditorView } from "@codemirror/view";
+﻿import type { EditorView } from "@codemirror/view";
 import { LOG_PREFIX_EDITOR } from "@constants";
 
 type OperationType = "import" | "theme" | "storage" | "init";
@@ -215,7 +215,7 @@ class EditorStateManager {
 
   async clearThemeState(): Promise<void> {
     console.log(LOG_PREFIX_EDITOR, "Clearing theme state");
-    await chrome.storage.sync.remove("themeName");
+    await chrome.storage.local.remove("themeName");
     this.currentThemeName = null;
     this.isCustomTheme = false;
     this.isStoreTheme = false;
@@ -224,3 +224,4 @@ class EditorStateManager {
 }
 
 export const editorStateManager = new EditorStateManager();
+

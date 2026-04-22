@@ -2,7 +2,7 @@ import { execSync } from "child_process";
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
 
-const allBrowsers = ["chrome", "edge", "firefox"];
+const allBrowsers = ["chrome"];
 const browsers = process.argv[2] ? [process.argv[2]] : allBrowsers;
 
 for (const browser of browsers) {

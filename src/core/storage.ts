@@ -22,10 +22,10 @@ export async function getLocalStorage<T>(keys: string | string[] | null): Promis
 }
 
 /**
- * Typed wrapper for chrome.storage.sync.get that casts results to expected type.
+ * Typed wrapper for chrome.storage.local.get that casts results to expected type.
  */
 export async function getSyncStorage<T>(keys: string | string[] | null): Promise<T> {
-  return (await chrome.storage.sync.get(keys as string[])) as unknown as T;
+  return (await chrome.storage.local.get(keys as string[])) as unknown as T;
 }
 
 interface TransientStorageItem {
@@ -106,7 +106,7 @@ export function getStorage(
   key: string | { [key: string]: any },
   callback: (items: { [key: string]: any }) => void
 ): void {
-  chrome.storage.sync.get(key, callback);
+  chrome.storage.local.get(key, callback);
 }
 
 /**
@@ -213,11 +213,11 @@ async function getUpdatedCacheInfo(): Promise<{ count: number; size: number }> {
 }
 
 /**
- * Updates and saves current cache information to sync storage.
+ * Updates and saves current cache information to local storage.
  */
 export async function saveCacheInfo(): Promise<void> {
   const cacheInfo = await getUpdatedCacheInfo();
-  await chrome.storage.sync.set({ cacheInfo: cacheInfo });
+  await chrome.storage.local.set({ cacheInfo: cacheInfo });
 }
 
 /**

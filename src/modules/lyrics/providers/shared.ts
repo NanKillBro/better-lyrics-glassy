@@ -1,4 +1,4 @@
-import { LYRIC_SOURCE_KEYS, PROVIDER_CONFIGS, PROVIDER_SWITCHED_LOG } from "@constants";
+﻿import { LYRIC_SOURCE_KEYS, PROVIDER_CONFIGS, PROVIDER_SWITCHED_LOG } from "@constants";
 import { getTransientStorage, setTransientStorage } from "@core/storage";
 import { log } from "@utils";
 import binimum from "./binimum";
@@ -135,12 +135,12 @@ export function initProviders(): void {
   };
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "sync" && changes.preferredProviderList) {
+    if (area === "local" && changes.preferredProviderList) {
       updateProvidersList(changes.preferredProviderList.newValue as string[] | null);
     }
   });
 
-  chrome.storage.sync.get({ preferredProviderList: null }, function (items) {
+  chrome.storage.local.get({ preferredProviderList: null }, function (items) {
     updateProvidersList(items.preferredProviderList as string[] | null);
   });
 }
@@ -225,3 +225,4 @@ export async function getLyrics(
 
   return lyricSource.lyricSourceResult;
 }
+

@@ -1004,7 +1004,7 @@ function setupKeyboardListeners(): void {
 
 function setupThemeChangeListener(): void {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "sync" && changes.themeName) {
+    if (area === "local" && changes.themeName) {
       const newThemeName = changes.themeName.newValue as string | undefined;
       if (!newThemeName || !newThemeName.startsWith("store:")) {
         clearActiveStoreTheme().then(() => updateYourThemesDropdown());

@@ -1,4 +1,4 @@
-import { LOG_PREFIX } from "@constants";
+﻿import { LOG_PREFIX } from "@constants";
 import { LOCALE_CODES } from "@core/generated/locales";
 
 // -- Display Code Mapping --------------------------
@@ -38,7 +38,7 @@ let overrideMessages: Record<string, MessageEntry> | null = null;
 
 export async function loadLocaleOverride(): Promise<void> {
   try {
-    const items = await chrome.storage.sync.get({ uiLanguage: "auto" });
+    const items = await chrome.storage.local.get({ uiLanguage: "auto" });
     const locale = items.uiLanguage as string | undefined;
 
     if (!locale || locale === "auto") {
@@ -101,7 +101,7 @@ export function getLanguageDisplayName(langCode: string): string {
 
 export function subscribeToLocaleChanges(): void {
   chrome.storage.onChanged.addListener(async (changes, area) => {
-    if (area !== "sync" || !changes.uiLanguage) return;
+    if (area !== "local" || !changes.uiLanguage) return;
     await loadLocaleOverride();
     injectI18nCssVars();
   });
@@ -144,3 +144,4 @@ export function initI18n(): void {
   document.title = document.title.replace(msgPattern, (_, key) => t(key));
   document.body.classList.add("i18n-ready");
 }
+

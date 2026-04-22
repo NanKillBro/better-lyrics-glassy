@@ -1,6 +1,6 @@
 import { execSync } from "child_process";
 
-const browsers = ["chrome", "edge", "firefox"];
+const browsers = ["chrome"];
 
 try {
   execSync("rm -rf sourcemaps_for_upload", { stdio: "inherit" });

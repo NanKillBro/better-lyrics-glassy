@@ -1,4 +1,4 @@
-// Function to save user options
+﻿// Function to save user options
 
 import { LOG_PREFIX, ROMANIZATION_LANGUAGES } from "@constants";
 import { getLanguageDisplayName, initI18n, loadLocaleOverride, SUPPORTED_LOCALES, t } from "@core/i18n";
@@ -61,7 +61,7 @@ const getOptionsFromForm = (): Options => {
 
 // Function to save options to Chrome storage
 const saveOptionsToStorage = (options: Options): void => {
-  chrome.storage.sync.set(options, () => {
+  chrome.storage.local.set(options, () => {
     chrome.tabs.query({ url: "https://music.youtube.com/*" }, tabs => {
       tabs.forEach(tab => {
         chrome.tabs.sendMessage(tab.id!, {
@@ -146,13 +146,13 @@ const _formatBytes = (bytes: number, decimals = 2): string => {
 
 // Function to subscribe to cache info updates
 const subscribeToCacheInfo = (): void => {
-  chrome.storage.sync.get("cacheInfo", items => {
+  chrome.storage.local.get("cacheInfo", items => {
     //@ts-ignore -- I'm lazy someone fix this
     updateCacheInfo(items);
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "sync" && changes.cacheInfo) {
+    if (area === "local" && changes.cacheInfo) {
       updateCacheInfo({
         cacheInfo: changes.cacheInfo.newValue as {
           count: number;
@@ -210,7 +210,7 @@ const restoreOptions = (): void => {
     uiLanguage: "auto",
   };
 
-  chrome.storage.sync.get(defaultOptions, setOptionsInForm);
+  chrome.storage.local.get(defaultOptions, setOptionsInForm);
 
   document.getElementById("clear-cache")!.addEventListener("click", () => clearTransientLyrics());
 };
@@ -891,3 +891,4 @@ function filterLanguagePills(containerId: string, query: string): void {
     pill.classList.toggle("lang-pill-hidden", !matches);
   });
 }
+

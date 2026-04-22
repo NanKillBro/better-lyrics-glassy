@@ -1,4 +1,4 @@
-import { LOG_PREFIX_EDITOR } from "@constants";
+﻿import { LOG_PREFIX_EDITOR } from "@constants";
 import { compressString, decompressString, isCompressed } from "@core/compression";
 import { getLocalStorage, getSyncStorage, loadChunkedStyles } from "@core/storage";
 import { setActiveStoreTheme } from "@/options/store/themeStoreManager";
@@ -91,13 +91,13 @@ async function saveChunkedCSS(css: string): Promise<void> {
     customCSS_chunked: true,
     customCSS_chunkCount: chunks.length,
   });
-  await chrome.storage.sync.set({
+  await chrome.storage.local.set({
     cssStorageType: "chunked",
     customCSS_chunkCount: chunks.length,
   });
 
   await chrome.storage.local.remove(["customCSS", "cssCompressed"]);
-  await chrome.storage.sync.remove("customCSS");
+  await chrome.storage.local.remove("customCSS");
 
   if (oldChunkCount > chunks.length) {
     const extraChunkKeys = Array.from(
@@ -138,7 +138,7 @@ export const saveToStorageWithFallback = async (css: string, _isTheme = false, r
 
     if (strategy === "chunked") {
       await saveChunkedCSS(cssToStore);
-      await chrome.storage.sync.set({ cssCompressed: shouldCompress });
+      await chrome.storage.local.set({ cssCompressed: shouldCompress });
       return { success: true, strategy: "chunked" };
     }
 
@@ -146,12 +146,12 @@ export const saveToStorageWithFallback = async (css: string, _isTheme = false, r
       const estimatedSize = compressedSize * 1.2;
       await clearLyricsCacheIfNeeded(estimatedSize);
       await chrome.storage.local.set({ customCSS: cssToStore, cssCompressed: shouldCompress });
-      await chrome.storage.sync.set({ cssStorageType: "local", cssCompressed: shouldCompress });
+      await chrome.storage.local.set({ cssStorageType: "local", cssCompressed: shouldCompress });
       await clearCSSChunks();
-      await chrome.storage.sync.remove("customCSS");
+      await chrome.storage.local.remove("customCSS");
       console.log(LOG_PREFIX_EDITOR, "Saved to local storage");
     } else {
-      await chrome.storage.sync.set({ customCSS: cssToStore, cssStorageType: "sync", cssCompressed: shouldCompress });
+      await chrome.storage.local.set({ customCSS: cssToStore, cssStorageType: "sync", cssCompressed: shouldCompress });
       await clearCSSChunks();
       await chrome.storage.local.remove(["customCSS", "cssCompressed"]);
       console.log(LOG_PREFIX_EDITOR, "Saved to sync storage");
@@ -169,7 +169,7 @@ export const saveToStorageWithFallback = async (css: string, _isTheme = false, r
         const cssToStore = shouldCompress ? compressString(css) : css;
 
         await saveChunkedCSS(cssToStore);
-        await chrome.storage.sync.set({ cssCompressed: shouldCompress });
+        await chrome.storage.local.set({ cssCompressed: shouldCompress });
         return { success: true, strategy: "chunked", wasRetry: true };
       } catch (chunkError) {
         console.error(LOG_PREFIX_EDITOR, "Chunked storage fallback failed:", chunkError);
@@ -253,7 +253,7 @@ export function showSyncSuccess(strategy: "local" | "sync" | "chunked", wasRetry
 export function showSyncError(error: any): void {
   let errorMessage = "Something went wrong!";
   if (error.message?.includes("quota") || error.message?.includes("QUOTA_BYTES")) {
-    errorMessage = "Storage full! Go to Settings → Clear lyrics cache, then try again.";
+    errorMessage = "Storage full! Go to Settings â†’ Clear lyrics cache, then try again.";
   }
 
   syncIndicator.innerText = errorMessage;
@@ -309,7 +309,7 @@ export async function applyStoreThemeComplete(options: ApplyStoreThemeOptions): 
   try {
     editorStateManager.incrementSaveCount();
 
-    await chrome.storage.sync.set({ themeName: `store:${themeId}` });
+    await chrome.storage.local.set({ themeName: `store:${themeId}` });
     await setActiveStoreTheme(themeId);
 
     const saveResult = await saveToStorageWithFallback(themeContent, true);
@@ -494,3 +494,4 @@ class StorageManager {
 }
 
 export const storageManager = new StorageManager();
+

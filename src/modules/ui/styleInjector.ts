@@ -140,7 +140,7 @@ export function subscribeToCustomStyles(): void {
   hasSubscribedToStyles = true;
 
   chrome.storage.onChanged.addListener(async (changes, area) => {
-    if ((area === "sync" || area === "local") && changes.customCSS) {
+    if (area === "local" && changes.customCSS) {
       if (changes.customCSS.newValue) {
         let css = changes.customCSS.newValue as string;
         if (isCompressed(css)) {
