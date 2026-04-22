@@ -4,6 +4,9 @@
 
 Better Lyrics upgrades your YouTube Music™ experience by providing beautiful time-synced lyrics for your favorite songs.
 
+> [!WARNING]
+> This extension is specifically designed to be used with [Glassy Music](https://github.com/NanKillBro/glassy-music-nankill) and may not function properly when run in a standard web browser.
+
 ## Stats
 
 <p align="left">
