@@ -3,7 +3,7 @@ const MY_CUSTOM_CSS = `
 /* =================================================================================================================*/
 /* MERGED THEME V21: Some UI Update                                                                                 */
 /* Adds: Crossfade animated artwork (beta), new toast UI                                                            */
-/* Fixes: Differrent text height in diffrent languages, crossfade artwork sometime not work                         */
+/* Fixes: Different text height in different languages, crossfade artwork sometime not work                         */
 /* Based on: Dynamic Background (by chengg), Big Blurry Slow Lyrics for TV (by zobiron), Luxurious Glass (by SKMJi) */
 /* Made by: Gemini 3.1 Pro and NanKill                                                                              */
 /* ================================================================================================================ */
