@@ -229,7 +229,12 @@ Yes you can! Please follow the contributing guidelines below.
 
 Better Lyrics fetches from many providers, so the first thing to try is switching to a different one in extension settings (Sources tab); a better version may already exist elsewhere.
 
-If you want to fix the lyrics for everyone, use **Unison**, our built-in community lyrics platform. Unison is the recommended contribution path going forward (it replaces LRCLIBup, which we no longer use). You can:
+If you want to fix the lyrics for everyone, use **Unison**, our built-in community lyrics platform. Unison is the recommended contribution path going forward (it replaces LRCLIBup, which we no longer use).
+
+> [!IMPORTANT]
+> Unison isn't live in the store builds yet. If you're on the Chrome, Firefox, or Edge version, lyrics you submit through Unison won't show up in your extension until the next release. To try it now, install from source.
+
+You can:
 
 1. **Vote or report** directly from the lyrics panel. When Unison is the active provider, an Unison card appears below the lyrics with upvote, downvote, and report buttons. Reports include reasons (wrong lyrics, bad timing, offensive content, etc.) so curators know how to act.
 2. **Submit corrected lyrics.** Click the "Submit to Unison" button at the bottom of any song's lyrics view, or open Unison directly from the Unison card. The submit form is pre-filled with the current song's metadata; just paste your corrected lyrics in your preferred format (LRC, plain text, or rich-sync).
@@ -339,7 +344,7 @@ Contributions are welcome! If you have any ideas, suggestions, or bug reports, p
 
 ## License
 
-This project is licensed under the [GNU GPLv3 License](LICENSE). As long as you attribute me or [Better Lyrics](https://better-lyrics.boidu.dev) as the original creator and comply with the rest of the license terms, you can use this project for personal or commercial purposes.
+This project is licensed under the [GNU GPLv3 License](LICENSE). As long as you attribute me or [Better Lyrics](https://betterlyrics.org) as the original creator and comply with the rest of the license terms, you can use this project for personal or commercial purposes.
 
 ## Privacy
 
