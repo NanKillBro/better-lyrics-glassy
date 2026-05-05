@@ -2,9 +2,9 @@
 const MY_CUSTOM_CSS = `
 /* =================================================================================================================*/
 /* MERGED THEME V21: Major UI Update                                                                                */
-/* Adds: Crossfade animated artwork (beta), new toast UI, Share UI renew, smooth Progress Bar                       */
+/* Adds: Crossfade animated artwork (beta), new toast UI, Share UI renew, smooth Progress Bar, more colors          */
 /* Fixes: Different text height in different languages, crossfade artwork sometime not work,                        */
-/*        weird white line on track info                                                                            */
+/*        weird white line on track info, share menu and add to playlist menu doesn't have animation                */
 /* Based on: Dynamic Background (by chengg), Big Blurry Slow Lyrics for TV (by zobiron), Luxurious Glass (by SKMJi) */
 /* Made by: Gemini 3.1 Pro and NanKill                                                                              */
 /* ================================================================================================================ */
@@ -153,6 +153,9 @@ ytmusic-settings-page,
 ytmusic-dialog .content,
 ytmusic-dialog #content,
 ytmusic-unified-share-panel-renderer #contents,
+ytmusic-add-to-playlist-renderer,
+ytmusic-add-to-playlist-renderer .top-bar,
+ytmusic-add-to-playlist-renderer #actions,
 ytmusic-playlist-form,
 ytmusic-playlist-form .content,
 ytmusic-playlist-form #general-pane,
@@ -314,9 +317,9 @@ ytmusic-search-box #suggestion-list {
   visibility: hidden;
   display: initial !important;
   border-radius: 12px !important;
-  background: rgba(0, 0, 0, 0.8) !important; /* Đổi từ transparent sang dòng này */
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  border: transparent !important;
+  background: rgba(var(--ytmusic-album-color-dark), 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 30px rgba(var(--ytmusic-album-color-dark), 0.5) !important;
   transition: opacity 0.3s ease, top 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0.3s;
 }
 ytmusic-search-box[opened] #suggestion-list {
@@ -331,7 +334,8 @@ ytmusic-search-box #suggestion-list ytmusic-search-suggestion {
   transition: background 0.2s ease, color 0.2s ease;
 }
 ytmusic-search-box #suggestion-list ytmusic-search-suggestion:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
+  /* Hiệu ứng hover dùng màu sáng của bài hát */
+  background: rgba(var(--ytmusic-album-color), 0.3) !important;
   color: white;
 }
 #suggestions .ytmusic-search-suggestions-section {
@@ -799,20 +803,31 @@ ytmusic-play-button-renderer[size="MUSIC_PLAY_BUTTON_SIZE_HUGE"] .content-wrappe
 }
 
 ytmusic-tabs#tabs {
-    /* Thu gọn và căn giữa */
-    width: 50% !important;  /* Tự co lại vừa khít với các tab bên trong */
-    margin: 10px auto 0 auto !important;      /* Đẩy thanh tab ra giữa màn hình */
+    /* Thu gọn và căn giữa (Giữ nguyên của bạn) */
+    width: 50% !important;  
+    margin: 10px auto 0 auto !important;      
     top: calc(var(--menu-bar-height, 0px) + 100px) !important;
 
-    /* Bo tròn và hiệu ứng kính mờ (cũ) */
+    /* Bo tròn và padding (Giữ nguyên) */
     border-radius: 16px !important; 
-    background-color: rgba(0, 0, 0, 0.6) !important; 
-    backdrop-filter: blur(12px) !important; 
-    -webkit-backdrop-filter: blur(12px) !important; 
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.8) !important; 
     padding-left: 30px;
     padding-top: 10px;
     padding-bottom: 10px;
+
+    /* --- PHẦN ĐỒNG BỘ MÀU (SYNC COLOR) --- */
+
+    /* 1. Đổi nền đen thành màu tối của bài hát (giảm độ đậm xuống 0.5 hoặc 0.6 cho trong trẻo) */
+    background-color: rgba(var(--ytmusic-album-color-dark), 0.5) !important; 
+
+    /* 2. Giữ nguyên hiệu ứng mờ */
+    backdrop-filter: blur(12px) !important; 
+    -webkit-backdrop-filter: blur(12px) !important; 
+
+    /* 3. Bóng đổ bốc lên màu bài hát (tăng độ nhòe từ 16px lên 24px để glow đẹp hơn) */
+    box-shadow: 0 8px 24px rgba(var(--ytmusic-album-color-dark), 0.6) !important; 
+
+    /* 4. (Khuyên dùng) Thêm một đường viền kính siêu mỏng để thanh tab trông sắc sảo hơn */
+    border: 1px solid rgba(255, 255, 255, 0.1) !important; 
 }
 
 /* Xóa nốt viền xám ở container bên trong (nếu có) */
@@ -1031,7 +1046,7 @@ ytmusic-message-renderer {
 
 /* Container của Menu 3 chấm */
 tp-yt-iron-dropdown.ytmusic-popup-container {
-  background: rgba(0, 0, 0, 0.5);
+  background-color: rgba(var(--ytmusic-album-color-dark), 0.3) !important;
   backdrop-filter: blur(15px);
   border-radius: 24px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
@@ -1049,21 +1064,21 @@ tp-yt-paper-listbox.ytmusic-menu-popup-renderer {
 }
 
 /* Gộp cả 6 loại bảng vào chung một thuộc tính */
-ytmusic-add-to-playlist-renderer,
-ytmusic-unified-share-panel-renderer,
+tp-yt-paper-dialog:has(ytmusic-add-to-playlist-renderer),
+tp-yt-paper-dialog:has(ytmusic-unified-share-panel-renderer),
 ytmusic-dialog,
 ytmusic-engagement-panel-section-list-renderer,
 tp-yt-paper-dialog:has(yt-confirm-dialog-renderer),
 tp-yt-paper-dialog:has(ytmusic-dismissable-dialog-renderer) {
   /* Nền đen trong suốt & hiệu ứng mờ */
-  background-color: rgba(15, 15, 15, 0.5) !important;
+  background-color: rgba(var(--ytmusic-album-color-dark), 0.3) !important;
   backdrop-filter: blur(15px) !important;
   -webkit-backdrop-filter: blur(15px) !important;
   
   /* Viền và khối 3D */
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(var(--ytmusic-album-color), 0.2) !important;
   border-radius: 16px !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: 0 15px 40px rgba(var(--ytmusic-album-color-dark), 0.5) !important;
   
   /* Ép bảng luôn nằm giữa màn hình (ghi đè inline CSS của YouTube) */
   position: fixed !important;
@@ -1073,6 +1088,10 @@ tp-yt-paper-dialog:has(ytmusic-dismissable-dialog-renderer) {
 
   /* Gọi animation xuất hiện */
   animation: popupXuatHien 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+}
+
+ytmusic-add-to-playlist-renderer #actions {
+  border-top: none !important; 
 }
 
 /* Remove background share popup*/
@@ -1688,11 +1707,6 @@ yt-icon.ytmusic-inline-badge-renderer {
 
 /* Icons in explore top songs  */
 .icon-column.ytmusic-custom-index-column-renderer .yt-icon-shape {
-  color: white;
-}
-
-.icon.ytmusic-play-button-renderer {
-  --ytmusic-play-button-guide-icon-color: white;
   color: white;
 }
 
