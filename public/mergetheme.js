@@ -1,9 +1,10 @@
 // Dán CSS theme "cucu" của bạn vào giữa 2 dấu huyền (`) ở dưới
 const MY_CUSTOM_CSS = `
 /* =================================================================================================================*/
-/* MERGED THEME V21: Some UI Update                                                                                 */
-/* Adds: Crossfade animated artwork (beta), new toast UI                                                            */
-/* Fixes: Different text height in different languages, crossfade artwork sometime not work                         */
+/* MERGED THEME V21: Major UI Update                                                                                */
+/* Adds: Crossfade animated artwork (beta), new toast UI, Share UI renew, smooth Progress Bar                       */
+/* Fixes: Different text height in different languages, crossfade artwork sometime not work,                        */
+/*        weird white line on track info                                                                            */
 /* Based on: Dynamic Background (by chengg), Big Blurry Slow Lyrics for TV (by zobiron), Luxurious Glass (by SKMJi) */
 /* Made by: Gemini 3.1 Pro and NanKill                                                                              */
 /* ================================================================================================================ */
@@ -51,7 +52,7 @@ ytmusic-app {
 /* 2. TINH CHỈNH GIAO DIỆN CHUNG (GLOBAL FIXES)   */
 /* ============================================== */
 /* Xóa thanh cuộn cho gọn mắt */
-html, .scrollable-content, .scroller {
+html, #items, #tab-renderer, #chips, ytmusic-menu-popup-renderer, .ytmusicMultiPageMenuHost, .scrollable-content, .scroller, .dropdown-content, .ytmusic-settings-page {
   scrollbar-width: none !important;
 }
 body::-webkit-scrollbar {
@@ -356,6 +357,13 @@ ytmusic-responsive-list-item-renderer,
 ytmusic-carousel-shelf-renderer {
     padding-inline: 20px; /* Áp dụng 20px cho cả left và right */
 }
+
+/* Divider */
+ytmusic-responsive-list-item-renderer.ytmusic-shelf-renderer,
+.ytmusic-playlist-shelf-renderer {
+  border-bottom: 0 !important;
+}
+
 /* Album Cover Size */
 ytmusic-player-page:not([video-mode]):not([player-fullscreened]):not([blyrics-dfs]):not([player-ui-state="MINIPLAYER"]) #player.ytmusic-player-page, 
 ytmusic-player[player-ui-state=FULLSCREEN], 
@@ -1006,6 +1014,21 @@ ytmusic-player-page tp-yt-paper-tabs.tab-header-container .blyrics-footer__conta
   }
 }
 
+/* Divider */
+ytmusic-responsive-list-item-renderer.ytmusic-shelf-renderer,
+.ytmusic-playlist-shelf-renderer {
+  border-bottom: 0 !important;
+}
+
+ytmusic-message-renderer {
+  .text.ytmusic-message-renderer {
+    color: white !important;
+  }
+  .yt-icon-shape {
+    color: white !important;
+  }
+}
+
 /* Container của Menu 3 chấm */
 tp-yt-iron-dropdown.ytmusic-popup-container {
   background: rgba(0, 0, 0, 0.5);
@@ -1052,9 +1075,39 @@ tp-yt-paper-dialog:has(ytmusic-dismissable-dialog-renderer) {
   animation: popupXuatHien 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
 }
 
+/* Remove background share popup*/
+#bar.yt-copy-link-renderer {
+  background: rgba(255, 255, 255, 0.1);
+  border: transparent;
+}
+#checkbox.tp-yt-paper-checkbox {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  --paper-checkbox-checked-color: rgba(255, 255, 255, 0.1) !important;
+}
+#checkmark.tp-yt-paper-checkbox {
+  border-color: white !important;
+}
 ytmusic-engagement-panel-title-header-renderer #header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important; /* Tạo đường kẻ mờ ngăn cách header */
   background: transparent !important;
+}
+.yt-spec-button-shape-next--call-to-action.yt-spec-button-shape-next--filled {
+color: white;
+background: rgba(255, 255, 255, 0.1);
+border-radius: 16px;
+hover background: rgba(255, 255, 255, 0.2);
+}
+.scroll-button.yt-third-party-share-target-section-renderer {
+background: rgba(255, 255, 255, 0.1);
+backdrop-filter: blur(10px);
+box-shadow: none;
+}
+.scroll-button.yt-third-party-share-target-section-renderer .yt-icon-shape{
+color: white;
+}
+yt-formatted-string.yt-start-at-renderer{
+color: rgba(255, 255, 255, 0.7);
 }
 
 /* Animation xuất hiện */
@@ -1128,6 +1181,10 @@ tp-yt-paper-listbox tp-yt-paper-item.menu-item.iron-selected {
 /* Bỏ viền outline xấu xí khi click vào mục menu */
 tp-yt-paper-listbox tp-yt-paper-item:focus {
   outline: none !important;
+}
+
+tp-yt-paper-item:focus:before {
+  border-radius: 8px !important;
 }
 
 /* Hiệu ứng khi di chuột qua các mục chọn (Highlight) */
@@ -1533,6 +1590,26 @@ div.autoplay.ytmusic-player-queue {
   padding-left: 12px !important;
 }
 
+/* Toggle Buttons */
+.toggle-bar.tp-yt-paper-toggle-button {
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.5;
+}
+
+.toggle-button.tp-yt-paper-toggle-button {
+  background: rgb(180, 180, 180);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+tp-yt-paper-toggle-button[checked]:not([disabled]) {
+  .toggle-bar.tp-yt-paper-toggle-button,
+  .toggle-button.tp-yt-paper-toggle-button {
+    background: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+
 /* =========================================================
    GlassyUI - Toast Notifications
    ========================================================= */
@@ -1591,6 +1668,75 @@ tp-yt-paper-toast#toast yt-icon-button#close-button button:hover {
 tp-yt-paper-toast#toast yt-icon-button#close-button yt-icon {
   fill: #fff !important;
   color: #fff !important;
+}
+
+/* ========================== TEXT & ICONS ========================== */
+yt-formatted-string.title {
+  color: white !important;
+  --yt-endpoint-color: white !important;
+  --yt-endpoint-hover-color: white !important;
+  --yt-endpoint-visited-color: white !important;
+}
+
+yt-icon {
+  color: white;
+}
+
+yt-icon.ytmusic-inline-badge-renderer {
+  color: white;
+}
+
+/* Icons in explore top songs  */
+.icon-column.ytmusic-custom-index-column-renderer .yt-icon-shape {
+  color: white;
+}
+
+.icon.ytmusic-play-button-renderer {
+  --ytmusic-play-button-guide-icon-color: white;
+  color: white;
+}
+
+/* CTA Text */
+a.yt-simple-endpoint.yt-formatted-string {
+  --yt-spec-call-to-action: white;
+  --yt-endpoint-hover-color: white;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* Like Dislike 3 Dots */
+.yt-spec-button-shape-next--mono.yt-spec-button-shape-next--text {
+  color: white;
+}
+
+.index.ytmusic-responsive-list-item-renderer {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Like buttons pressed */
+.yt-spec-button-shape-next[aria-pressed="true"] {
+  color: white;
+}
+
+tp-yt-paper-ripple.tp-yt-paper-tab {
+  color: transparent;
+}
+
+.stroke.yt-interaction,
+.fill.yt-interaction {
+  border: 0;
+  background: transparent;
+}
+
+/* Smooth Progress Bar */
+#primaryProgress.tp-yt-paper-progress,
+#secondaryProgress.tp-yt-paper-progress {
+  transition: transform 1s linear;
+}
+ytmusic-app-layout[is-mweb-modernization-enabled][player-ui-state="PLAYER_PAGE_OPEN"] .slider-knob.tp-yt-paper-slider,
+ytmusic-app-layout:not([is-mweb-modernization-enabled]) .slider-knob.tp-yt-paper-slider:not(.dragging) {
+  transition: left 1s linear;
 }
 `;
 
