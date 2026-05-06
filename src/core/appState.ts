@@ -72,7 +72,7 @@ export const AppState: AppStateType = {
   isPassiveScrollEnabled: true,
   hasPreloadedNextSong: false,
   currentInjectionId: 0,
-  isUnisonPinnedDockEnabled: true,
+  isUnisonPinnedDockEnabled: false,
   unisonPinnedDockPosition: UNISON_DOCK_DEFAULT_POSITION,
   isUnisonAutoHideInFullscreenEnabled: true,
   currentUnisonData: null,
