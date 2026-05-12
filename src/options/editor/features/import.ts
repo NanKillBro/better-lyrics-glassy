@@ -11,61 +11,22 @@ export const generateDefaultFilename = (): string => {
 };
 
 export const saveCSSToFile = (css: string, defaultFilename: string): void => {
-  chrome.permissions.contains({ permissions: ["downloads"] }, hasPermission => {
-    if (hasPermission) {
-      downloadFile(css, defaultFilename);
-    } else {
-      chrome.permissions.request({ permissions: ["downloads"] }, granted => {
-        if (granted) {
-          downloadFile(css, defaultFilename);
-        } else {
-          fallbackSaveMethod(css, defaultFilename);
-        }
-      });
-    }
-  });
+  downloadFile(css, defaultFilename);
 };
 
 const downloadFile = (content: string, defaultFilename: string): void => {
   const blob = new Blob([content], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
 
-  if (chrome.downloads) {
-    chrome.downloads
-      .download({
-        url: url,
-        filename: defaultFilename,
-        saveAs: true,
-      })
-      .then(() => {
-        showAlert("Theme file save dialog opened. Choose where to save your file.");
-        URL.revokeObjectURL(url);
-      })
-      .catch(error => {
-        console.log(error);
-        showAlert("Error saving file. Please try again.");
-        URL.revokeObjectURL(url);
-      });
-  } else {
-    fallbackSaveMethod(content, defaultFilename);
-  }
-};
-
-const fallbackSaveMethod = (content: string, defaultFilename: string): void => {
-  const blob = new Blob([content], { type: "application/octet-stream" });
-  const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
   a.href = url;
   a.download = defaultFilename;
-
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
 
+  showAlert("Theme file save dialog opened. Choose where to save your file.");
   setTimeout(() => URL.revokeObjectURL(url), 100);
-
-  showAlert("Theme file download initiated. Check your downloads folder.");
 };
 
 class ImportManager {
