@@ -893,7 +893,9 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
     if (lastLoadedThumbnail !== smallThumbnail) {
       imgElm.src = smallThumbnail.url;
       imgElm.classList.remove(HIDDEN_CLASS);
-      setBackgroundImage(smallThumbnail.url);
+      // Don't update --blyrics-background-img with the low-res URL.
+      // Keep the previous background image visible until high-res loads,
+      // so the CSS transition can crossfade smoothly without a flash.
     }
 
     lastLoadedThumbnail = smallThumbnail;
