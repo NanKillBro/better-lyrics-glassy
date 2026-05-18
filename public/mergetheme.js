@@ -1,10 +1,9 @@
 // Dán CSS theme "cucu" của bạn vào giữa 2 dấu huyền (`) ở dưới
 const MY_CUSTOM_CSS = `
 /* =================================================================================================================*/
-/* MERGED THEME V21: Major UI Update                                                                                */
-/* Adds: Crossfade animated artwork (beta), new toast UI, Share UI renew, smooth Progress Bar, more colors          */
-/* Fixes: Different text height in different languages, crossfade artwork sometime not work,                        */
-/*        weird white line on track info, share menu and add to playlist menu doesn't have animation                */
+/* MERGED THEME V22: Some UI Update                                                                                 */
+/* Adds: New search box design (idea from WolfTheE themes)                                                          */
+/* Fixes: None                                                                                                      */
 /* Based on: Dynamic Background (by chengg), Big Blurry Slow Lyrics for TV (by zobiron), Luxurious Glass (by SKMJi) */
 /* Made by: Gemini 3.1 Pro and NanKill                                                                              */
 /* ================================================================================================================ */
@@ -311,32 +310,101 @@ ytmusic-search-box[opened] .search-container.ytmusic-search-box {
 }
 
 /* Hiệu ứng kính cho Danh sách gợi ý tìm kiếm */
+/* Danh sách gợi ý tìm kiếm (Bây giờ chỉ là nền trong suốt) */
 ytmusic-search-box #suggestion-list {
   top: 0;
   opacity: 0;
   visibility: hidden;
   display: initial !important;
   border-radius: 12px !important;
-  background: rgba(var(--ytmusic-album-color-dark), 0.8) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 10px 30px rgba(var(--ytmusic-album-color-dark), 0.5) !important;
+  
+  /* Xoá nền, viền và bóng đi để lớp Ảo gánh */
+  background: transparent !important; 
+  border: none !important;
+  box-shadow: none !important;
+  
+  /* GÁN MỎ NEO CHO NÓ VỚI TÊN RIÊNG */
+  anchor-name: --nankill-search-dropdown; 
+  
   transition: opacity 0.3s ease, top 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0.3s;
+}
+/* ============================================== */
+/* HIỆU ỨNG KÍNH MỜ CHO KHUNG SEARCH (Huge Thanks to WolfTheE for this idea) */
+/* ============================================== */
+
+/* Cố định lớp z-index cho thanh điều hướng để không bị đè */
+ytmusic-app-layout:not([player-ui-state="PLAYER_PAGE_OPEN"]) #nav-bar-background {
+  z-index: 4 !important;
+}
+
+/* Lớp ảo ::after này sẽ tạo ra khối kính mờ */
+ytmusic-app-layout::after {
+  z-index: 4 !important;
+  content: "";
+  position: fixed;  
+  
+  /* Bám sát 100% theo toạ độ của mỏ neo */
+  position-anchor: --nankill-search-dropdown;      
+  top: anchor(top) !important;              
+  left: anchor(left) !important;           
+  width: anchor-size(width) !important;    
+  height: anchor-size(height) !important;
+  
+  /* Bơm Blur vào đây thì chắc chắn 100% ăn */
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  
+  /* Lấy màu chủ đạo của bài hát làm nền kính */
+  background: rgba(var(--ytmusic-album-color-dark), 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: none !important;
+
+  transition: opacity 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0.3s;
+  opacity: 0; 
+  visibility: hidden;
+  
+  /* Cho phép chuột click xuyên qua cái kính này để bấm được vào text ở dưới */
+  pointer-events: none; 
+}
+
+/* Khi người dùng click vào search box thì hiện lớp kính ảo lên */
+ytmusic-app-layout:has(ytmusic-search-box:focus-within)::after,
+ytmusic-app-layout:has(ytmusic-search-box[opened])::after {
+  opacity: 1;
+  visibility: visible;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7) !important;
 }
 ytmusic-search-box[opened] #suggestion-list {
   top: calc(var(--ytmusic-search-box-height) + 16px) !important;
   opacity: 1;
   visibility: visible;
 }
-ytmusic-search-box #suggestion-list ytmusic-search-suggestion {
+/* Tạo khoảng cách padding/margin để các item floating bên trong box */
+ytmusic-search-box #suggestion-list ytmusic-search-suggestions-section {
+  padding: 8px 0 !important; /* Thêm khoảng trống ở đỉnh và đáy của danh sách */
+}
+
+ytmusic-search-box #suggestion-list ytmusic-search-suggestion,
+ytmusic-search-box #suggestion-list ytmusic-responsive-list-item-renderer {
+  margin: 2px 12px !important; /* Thụt vào 12px ở 2 bên trái/phải, cách nhau 2px trên/dưới */
+  width: auto !important; /* Trả lại auto để margin không làm tràn khung */
+  border-radius: 8px !important; /* Bo góc cho khớp với highlight */
   background: transparent !important;
   color: white;
-  border-radius: 12px;
   transition: background 0.2s ease, color 0.2s ease;
 }
-ytmusic-search-box #suggestion-list ytmusic-search-suggestion:hover {
-  /* Hiệu ứng hover dùng màu sáng của bài hát */
-  background: rgba(var(--ytmusic-album-color), 0.3) !important;
-  color: white;
+/* Phủ một lớp kính trắng 15% lên trên màu Album 40% để ép sáng */
+ytmusic-search-box #suggestion-list ytmusic-search-suggestion:hover,
+ytmusic-search-box #suggestion-list ytmusic-responsive-list-item-renderer:hover {
+  background: linear-gradient(rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.15)), rgba(var(--ytmusic-album-color), 0.4) !important; 
+  border-radius: 8px !important;
+  color: white !important;
+}
+
+/* Đảm bảo text bên trong kết quả bài hát cũng đổi màu sáng rõ */
+ytmusic-search-box #suggestion-list ytmusic-responsive-list-item-renderer:hover * {
+  color: white !important;
 }
 #suggestions .ytmusic-search-suggestions-section {
   border-radius: 8px;
