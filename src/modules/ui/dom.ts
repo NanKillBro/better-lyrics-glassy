@@ -841,67 +841,160 @@ function getHighResImageUrl(smallThumbnail: ThumbnailElement) {
   return url;
 }
 
+const CROSSFADE_TIMEOUT_MS = 2000;
+const CROSSFADE_TRANSITION_MS = 600;
+
+function cleanupOutgoingImages(): void {
+  const thumbnail = document.getElementById("thumbnail");
+  if (!thumbnail) return;
+  const outgoing = thumbnail.querySelectorAll(".blyrics-img-outgoing");
+  for (const el of outgoing) el.remove();
+}
+
 export function addThumbnail(smallThumbnail: ThumbnailElement): void {
   thumbnailResizeObserver?.disconnect();
 
-  let imgElm = document.getElementById("blyrics-img") as HTMLImageElement | undefined;
-  if (!imgElm) {
+  albumArtLoadController?.abort();
+  const loadController = new AbortController();
+  albumArtLoadController = loadController;
+  const signal = loadController.signal;
+
+  const thumbnailContainer = document.getElementById("thumbnail");
+  if (!thumbnailContainer) return;
+
+  const existingImg = document.getElementById("blyrics-img") as HTMLImageElement | null;
+
+  // Determine mode:
+  // - "first": No existing image → create and show immediately (no crossfade)
+  // - "reload": Same thumbnail (resize) → reuse existing element, update src
+  // - "crossfade": Different thumbnail (song change) → demote old, create new, fade in
+  const isReload = existingImg !== null && smallThumbnail === lastLoadedThumbnail;
+  const isCrossfade = existingImg !== null && existingImg.src !== "" && !isReload;
+
+  let imgElm: HTMLImageElement;
+
+  if (isCrossfade) {
+    // ── CROSSFADE: Demote old image, create new at opacity:0 ──
+    existingImg.removeAttribute("id");
+    existingImg.classList.add("blyrics-img-outgoing");
+    existingImg.style.pointerEvents = "none";
+
     imgElm = document.createElement("img");
     imgElm.id = "blyrics-img";
     imgElm.draggable = false;
     imgElm.classList.add("style-scope", "yt-img-shadow");
     imgElm.style.position = "absolute";
     imgElm.style.inset = "0";
-    document.getElementById("thumbnail")?.appendChild(imgElm);
+    imgElm.style.width = "100%";
+    imgElm.style.height = "100%";
+    imgElm.style.objectFit = "cover";
+    imgElm.style.opacity = "0";
+    imgElm.style.transition = `opacity ${CROSSFADE_TRANSITION_MS}ms ease-in-out`;
+    thumbnailContainer.appendChild(imgElm);
+  } else if (existingImg) {
+    // ── RELOAD: Reuse existing element ──
+    imgElm = existingImg;
+  } else {
+    // ── FIRST LOAD: Create and show immediately ──
+    imgElm = document.createElement("img");
+    imgElm.id = "blyrics-img";
+    imgElm.draggable = false;
+    imgElm.classList.add("style-scope", "yt-img-shadow");
+    imgElm.style.position = "absolute";
+    imgElm.style.inset = "0";
+    thumbnailContainer.appendChild(imgElm);
   }
 
   const containerSize = getContainerSize();
-  const url = getHighResImageUrl(smallThumbnail);
-
-  albumArtLoadController?.abort();
-  const loadController = new AbortController();
-  albumArtLoadController = loadController;
-
+  const highResUrl = getHighResImageUrl(smallThumbnail);
   const proxy = new Image();
-  proxy.src = url;
+  proxy.src = highResUrl;
 
-  const setHighResImage = () => {
-    if (loadController.signal.aborted) return;
+  // Called when we have a final src to display
+  const applyImage = (src: string) => {
+    if (signal.aborted) return;
 
-    imgElm.src = proxy.src;
-    setBackgroundImage(proxy.src);
+    imgElm.src = src;
+    setBackgroundImage(src);
+    lastLoadedThumbnail = smallThumbnail;
 
-    if (getContainerSize() !== containerSize) {
+    if (isCrossfade) {
+      // Force browser to resolve current styles (opacity:0) so transition triggers.
+      // getComputedStyle works even when the element is not visible, unlike rAF.
+      void getComputedStyle(imgElm).opacity;
+      imgElm.style.opacity = "1";
+      setTimeout(() => {
+        if (!signal.aborted) cleanupOutgoingImages();
+      }, CROSSFADE_TRANSITION_MS + 50);
+    }
+
+    // Setup resize observer (skip size-change-reload during crossfade to avoid abort loop)
+    if (!isCrossfade && getContainerSize() !== containerSize) {
       reloadAlbumArt();
       return;
     }
-
-    const thumbnailElm = document.getElementById("thumbnail")!;
+    const thumbElm = document.getElementById("thumbnail");
+    if (!thumbElm) return;
     thumbnailResizeObserver = new ResizeObserver(() => {
       if (getContainerSize() !== containerSize) {
         thumbnailResizeObserver?.disconnect();
         reloadAlbumArt();
       }
     });
-    thumbnailResizeObserver.observe(thumbnailElm);
+    thumbnailResizeObserver.observe(thumbElm);
   };
 
-  if (proxy.complete) {
-    lastLoadedThumbnail = smallThumbnail;
-    setHighResImage();
-  } else {
-    if (lastLoadedThumbnail !== smallThumbnail) {
-      imgElm.src = smallThumbnail.url;
-      imgElm.classList.remove(HIDDEN_CLASS);
-      // Don't update --blyrics-background-img with the low-res URL.
-      // Keep the previous background image visible until high-res loads,
-      // so the CSS transition can crossfade smoothly without a flash.
-    }
+  // ── Load high-res image ──
+  let resolved = false;
 
-    lastLoadedThumbnail = smallThumbnail;
+  const onLoad = () => {
+    if (signal.aborted || resolved) return;
+    resolved = true;
+    applyImage(proxy.src);
+  };
 
-    proxy.onload = setHighResImage;
+  const onError = () => {
+    if (signal.aborted || resolved) return;
+    resolved = true;
+    applyImage(smallThumbnail.url);
+  };
+
+  // Fast path: image already in browser cache
+  if (proxy.complete && proxy.naturalWidth > 0) {
+    onLoad();
+    return;
   }
+
+  // Attach handlers, then re-check for race condition
+  proxy.onload = onLoad;
+  proxy.onerror = onError;
+
+  // Race fix: image may have completed between setting src and attaching onload
+  if (proxy.complete) {
+    proxy.onload = null;
+    proxy.onerror = null;
+    if (proxy.naturalWidth > 0) {
+      onLoad();
+    } else {
+      onError();
+    }
+    return;
+  }
+
+  // Timeout: after 2s, show low-res and upgrade later when high-res arrives
+  setTimeout(() => {
+    if (signal.aborted || resolved) return;
+    resolved = true;
+    applyImage(smallThumbnail.url);
+
+    // If high-res loads after timeout, silently upgrade src
+    proxy.onload = () => {
+      if (signal.aborted) return;
+      imgElm.src = proxy.src;
+      setBackgroundImage(proxy.src);
+    };
+    proxy.onerror = null;
+  }, CROSSFADE_TIMEOUT_MS);
 }
 
 export function preloadHighResThumbnail(smallThumbnail: ThumbnailElement) {
@@ -910,6 +1003,9 @@ export function preloadHighResThumbnail(smallThumbnail: ThumbnailElement) {
 }
 
 export function showYtThumbnail(): void {
+  albumArtLoadController?.abort();
+  cleanupOutgoingImages();
+
   const blyricsImg = document.getElementById("blyrics-img") as HTMLImageElement | null;
   if (blyricsImg) {
     blyricsImg.src = "";
