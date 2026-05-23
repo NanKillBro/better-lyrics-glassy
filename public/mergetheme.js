@@ -649,6 +649,7 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
 }
 
 /* downwards blurring */
+/* credit to Apple Music theme by tposejank, but some custom has been made for this to work properly */
 
 /* 1 line below */
 .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line:not(.blyrics--animating) {
