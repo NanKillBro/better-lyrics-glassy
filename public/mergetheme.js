@@ -638,7 +638,6 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
 
 .blyrics-container > div {
   opacity: 0.2;
-  filter: blur(6px);
   margin-bottom: 20px;
   transition: opacity 0.7s ease-out, 
               filter 0.7s ease-out,
@@ -647,6 +646,60 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
   word-break: break-word; 
   overflow-wrap: break-word;
   max-width: 100%;
+}
+
+/* downwards blurring */
+
+/* 1 line below */
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line:not(.blyrics--animating) {
+  filter: blur(2px) !important;
+}
+
+/* 2 lines below */
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+  filter: blur(3.5px) !important;
+}
+
+/* 3 line below */
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+  filter: blur(5px) !important;
+}
+
+/* 4 lines below */
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+  filter: blur(6.5px) !important;
+}
+
+/* 5 lines below */
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+  filter: blur(8px) !important;
+}
+
+/* 6 lines below */
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+  filter: blur(9.5px) !important;
+}
+
+/* past lines: vẫn sáng cho đến khi GlassyFlow đánh dấu trong đợt scroll tiếp theo */
+.blyrics-container.blyrics--gf-managed:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating):not(.blyrics--gf-past) {
+  opacity: 1;
+  filter: blur(0px) !important;
+}
+
+/* past lines: ẩn sau khi GlassyFlow scroll */
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-past:not(.blyrics--animating) {
+  opacity: 0;
+  filter: blur(5px);
+  transition: filter 0.25s 0s, opacity 0.9s,
+    transform 0.166s var((--blyrics-anim-delay, 0s) - 0.3s) !important;
+}
+
+/* Fallback: ẩn ngay khi GlassyFlow không quản lý (no-sync, resize, v.v.) */
+.blyrics-container:not(.blyrics-user-scrolling):not(.blyrics--gf-managed)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating) {
+  opacity: 0;
+  filter: blur(5px);
+  transition: filter 0.25s 0s, opacity 0.9s,
+    transform 0.166s var((--blyrics-anim-delay, 0s) - 0.3s) !important;
 }
 
 /* ===== NO-SYNC MODE: Tắt blur khi lyrics tĩnh/không có sync ===== */
@@ -681,12 +734,12 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
 /* Active Lyric Animation */
 .blyrics-container > div.blyrics--animating:not(:empty):not(.blyrics--translated):not(.blyrics--romanized) {
   opacity: 1;
-  filter: blur(0px);
+  filter: blur(0px) !important;
   transform: scale(1.02);
   
-  transition: opacity 0.7s ease calc(var(--blyrics-anim-delay) - 0.3s), 
-              filter 0.7s ease calc(var(--blyrics-anim-delay) - 0.3s),
-              transform 1.3s ease calc(var(--blyrics-anim-delay) - 0.3s);
+  transition: opacity 0.7s ease calc(var(--blyrics-anim-delay, 0s) - 0.3s), 
+              filter 0.7s ease calc(var(--blyrics-anim-delay, 0s) - 0.3s),
+              transform 1.3s ease calc(var(--blyrics-anim-delay, 0s) - 0.3s);
 }
 
 /* Hover to see Static Lyrics */
