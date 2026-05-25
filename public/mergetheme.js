@@ -681,22 +681,29 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
   filter: blur(9.5px) !important;
 }
 
-/* past lines: vẫn sáng cho đến khi GlassyFlow đánh dấu trong đợt scroll tiếp theo */
-.blyrics-container.blyrics--gf-managed:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating):not(.blyrics--gf-past) {
+/* past lines (non-fullscreen): chỉ blur nhẹ, không biến mất */
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating) {
+  filter: blur(6px);
+  transition: filter 0.25s 0s, opacity 0.9s,
+    transform 0.166s var((--blyrics-anim-delay, 0s) - 0.3s) !important;
+}
+
+/* past lines (fullscreen): vẫn sáng cho đến khi GlassyFlow đánh dấu trong đợt scroll tiếp theo */
+ytmusic-player-page[player-fullscreened] .blyrics-container.blyrics--gf-managed:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating):not(.blyrics--gf-past) {
   opacity: 1;
   filter: blur(0px) !important;
 }
 
-/* past lines: ẩn sau khi GlassyFlow scroll */
-.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-past:not(.blyrics--animating) {
+/* past lines (fullscreen): ẩn sau khi GlassyFlow scroll */
+ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-past:not(.blyrics--animating) {
   opacity: 0;
   filter: blur(5px);
   transition: filter 0.25s 0s, opacity 0.9s,
     transform 0.166s var((--blyrics-anim-delay, 0s) - 0.3s) !important;
 }
 
-/* Fallback: ẩn ngay khi GlassyFlow không quản lý (no-sync, resize, v.v.) */
-.blyrics-container:not(.blyrics-user-scrolling):not(.blyrics--gf-managed)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating) {
+/* past lines (fullscreen, fallback): ẩn ngay khi GlassyFlow không quản lý (no-sync, resize, v.v.) */
+ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling):not(.blyrics--gf-managed)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating) {
   opacity: 0;
   filter: blur(5px);
   transition: filter 0.25s 0s, opacity 0.9s,
