@@ -865,6 +865,7 @@ function getHighResImageUrl(smallThumbnail: ThumbnailElement) {
 
 const CROSSFADE_TIMEOUT_MS = 2000;
 const CROSSFADE_TRANSITION_MS = 600;
+const CROSSFADE_FORCE_VISIBLE_MS = 5000;
 
 function cleanupOutgoingImages(): void {
   const thumbnail = document.getElementById("thumbnail");
@@ -925,6 +926,22 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
     imgElm.style.position = "absolute";
     imgElm.style.inset = "0";
     thumbnailContainer.appendChild(imgElm);
+  }
+
+  // Safety net: force new image visible after 5s, covering stuck CSS transitions or load failures.
+  // When crossfade completes normally (~2.6s), everything here is already done → pure no-op.
+  if (isCrossfade) {
+    setTimeout(() => {
+      if (signal.aborted) return;
+      if (!imgElm.src) {
+        imgElm.src = smallThumbnail.url;
+        setBackgroundImage(smallThumbnail.url);
+        lastLoadedThumbnail = smallThumbnail;
+      }
+      imgElm.style.transition = "none";
+      imgElm.style.opacity = "1";
+      cleanupOutgoingImages();
+    }, CROSSFADE_FORCE_VISIBLE_MS);
   }
 
   const containerSize = getContainerSize();
