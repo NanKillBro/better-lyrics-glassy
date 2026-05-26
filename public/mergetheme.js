@@ -2,9 +2,10 @@
 const MY_CUSTOM_CSS = `
 /* =================================================================================================================*/
 /* MERGED THEME V22: Some UI Update                                                                                 */
-/* Adds: New search box design (idea from WolfTheE themes)                                                          */
+/* Adds: Redesign some UI (Search Box, User menu and Settings), AM style lyrics                                     */
 /* Fixes: None                                                                                                      */
-/* Based on: Dynamic Background (by chengg), Big Blurry Slow Lyrics for TV (by zobiron), Luxurious Glass (by SKMJi) */
+/* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),         */
+/*           better-ytm (WolfTheE), blyrics-am-theme (tposejank)                                                    */
 /* Made by: Gemini 3.1 Pro and NanKill                                                                              */
 /* ================================================================================================================ */
 
@@ -408,6 +409,130 @@ ytmusic-search-box #suggestion-list ytmusic-responsive-list-item-renderer:hover 
 }
 #suggestions .ytmusic-search-suggestions-section {
   border-radius: 8px;
+}
+
+/* ============================================== */
+/* MENU TÀI KHOẢN & MULTI-PAGE MENU (GLASSY)      */
+/* ============================================== */
+/* Khung bọc ngoài cùng của popup menu để không bị cắt viền */
+tp-yt-iron-dropdown:has(.ytmusicMultiPageMenuRendererHost) {
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3) !important;
+  overflow: hidden !important;
+}
+
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost {
+  border-radius: 12px !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: white !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Thêm khoảng cách ở các list item */
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost #sections {
+  padding: 8px 0 !important;
+}
+
+/* Bo góc và khoảng cách 2 bên cho từng list item */
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost ytd-compact-link-renderer {
+  margin: 2px 12px !important;
+  width: auto !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  transition: background 0.2s ease, color 0.2s ease !important;
+}
+
+/* Hiệu ứng kính trắng khi hover (đã làm trong suốt hơn theo yêu cầu) */
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost ytd-compact-link-renderer:hover,
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost tp-yt-paper-item:hover {
+  background: linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)), rgba(var(--ytmusic-album-color, 100, 100, 100), 0.2) !important; 
+  border-radius: 8px !important;
+  color: white !important;
+}
+
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost ytd-compact-link-renderer:hover * {
+  color: white !important;
+}
+
+/* ============================================== */
+/* MENU CÀI ĐẶT (SETTINGS CATEGORY MENU)          */
+/* ============================================== */
+tp-yt-paper-listbox.category-menu.ytmusic-settings-page {
+  /* Đẩy khung menu rời khỏi viền của Settings cha để tạo hiệu ứng đảo nổi */
+  margin: 16px !important;
+  height: calc(100% - 32px) !important;
+  
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  /* Giữ lại shadow đẹp, khắc phục lỗi tràn bằng cách clip thẻ cha */
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  padding: 8px 0 !important;
+}
+
+/* Sửa lỗi bóng râm của menu con bị tràn ra làm mất bo tròn (vuông góc) của khung Settings cha */
+tp-yt-paper-dialog, ytmusic-settings-page {
+  overflow: hidden !important;
+  border-radius: 12px !important;
+}
+
+/* Xoá đường viền đen chia 2 bảng cài đặt */
+ytmusic-setting-category-collection-renderer.ytmusic-settings-page {
+  border-left: none !important;
+  border-right: none !important;
+}
+
+/* Các item trong menu settings */
+tp-yt-paper-item.category-menu-item.ytmusic-settings-page {
+  margin: 2px 12px !important;
+  width: auto !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  transition: background 0.2s ease, color 0.2s ease !important;
+  color: white !important;
+}
+
+/* Đổi màu chữ sang trắng để nổi trên nền kính */
+tp-yt-paper-item.category-menu-item.ytmusic-settings-page yt-formatted-string,
+tp-yt-paper-item.category-menu-item.ytmusic-settings-page yt-icon {
+  color: white !important;
+}
+
+/* Hiệu ứng kính trắng khi hover hoặc đang được chọn (iron-selected) */
+tp-yt-paper-item.category-menu-item.ytmusic-settings-page:hover,
+tp-yt-paper-item.category-menu-item.ytmusic-settings-page.iron-selected {
+  background: linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)), rgba(var(--ytmusic-album-color, 100, 100, 100), 0.2) !important; 
+  border-radius: 8px !important;
+}
+
+tp-yt-paper-item.category-menu-item.ytmusic-settings-page:hover *,
+tp-yt-paper-item.category-menu-item.ytmusic-settings-page.iron-selected * {
+  color: white !important;
+}
+
+/* Xoá nền trắng/xám mặc định của item */
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost tp-yt-paper-item {
+  background: transparent !important;
+}
+
+/* Đổi màu chữ sang trắng để dễ đọc trên nền tối/kính */
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost yt-formatted-string,
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost yt-icon,
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost #account-name,
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost #channel-handle {
+  color: white !important;
+}
+
+/* Làm mờ các đường kẻ phân cách */
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost yt-multi-page-menu-section-renderer {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost yt-multi-page-menu-section-renderer:last-child {
+  border-bottom: none !important;
 }
 
 /* ============================================== */
