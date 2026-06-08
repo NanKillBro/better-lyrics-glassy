@@ -144,7 +144,4 @@ chrome.runtime.onMessage.addListener(request => {
   return true;
 });
 
-<<<<<<< HEAD
-=======
 initBackgroundAuth();
->>>>>>> 45b6e489135c4560b0fa1971f0848cdf43b03556
