@@ -10,6 +10,7 @@
  */
 import { LOG_PREFIX_BACKGROUND } from "@constants";
 import { getLocalStorage, getSyncStorage } from "@core/storage";
+import { initBackgroundAuth } from "@modules/auth/backgroundAuth";
 import {
   getInstalledStoreThemes,
   installSymlinkedThemeFromMarketplace,
@@ -143,3 +144,7 @@ chrome.runtime.onMessage.addListener(request => {
   return true;
 });
 
+<<<<<<< HEAD
+=======
+initBackgroundAuth();
+>>>>>>> 45b6e489135c4560b0fa1971f0848cdf43b03556
