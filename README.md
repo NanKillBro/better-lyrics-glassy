@@ -228,9 +228,6 @@ Better Lyrics fetches from many providers, so the first thing to try is switchin
 
 If you want to fix the lyrics for everyone, use **Unison**, our built-in community lyrics platform. Unison is the recommended contribution path going forward (it replaces LRCLIBup, which we no longer use).
 
-> [!IMPORTANT]
-> Unison isn't live in the store builds yet. If you're on the Chrome, Firefox, or Edge version, lyrics you submit through Unison won't show up in your extension until the next release. To try it now, install from source.
-
 You can:
 
 1. **Vote or report** directly from the lyrics panel. When Unison is the active provider, an Unison card appears below the lyrics with upvote, downvote, and report buttons. Reports include reasons (wrong lyrics, bad timing, offensive content, etc.) so curators know how to act.
