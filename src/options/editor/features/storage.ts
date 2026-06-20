@@ -1,4 +1,4 @@
-﻿import { LOG_PREFIX_EDITOR } from "@constants";
+import { LOG_PREFIX_EDITOR } from "@constants";
 import { compressString, decompressString, isCompressed } from "@core/compression";
 import { getLocalStorage, getSyncStorage, loadChunkedStyles } from "@core/storage";
 import { setActiveStoreTheme } from "@/options/store/themeStoreManager";
@@ -145,15 +145,12 @@ export const saveToStorageWithFallback = async (css: string, _isTheme = false, r
     if (strategy === "local") {
       const estimatedSize = compressedSize * 1.2;
       await clearLyricsCacheIfNeeded(estimatedSize);
-      await chrome.storage.local.set({ customCSS: cssToStore, cssCompressed: shouldCompress });
-      await chrome.storage.local.set({ cssStorageType: "local", cssCompressed: shouldCompress });
+      await chrome.storage.local.set({ customCSS: cssToStore, cssStorageType: "local", cssCompressed: shouldCompress });
       await clearCSSChunks();
-      await chrome.storage.local.remove("customCSS");
       console.log(LOG_PREFIX_EDITOR, "Saved to local storage");
     } else {
       await chrome.storage.local.set({ customCSS: cssToStore, cssStorageType: "sync", cssCompressed: shouldCompress });
       await clearCSSChunks();
-      await chrome.storage.local.remove(["customCSS", "cssCompressed"]);
       console.log(LOG_PREFIX_EDITOR, "Saved to sync storage");
     }
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Handles runtime messages from extension components.
  * Processes style updates for YouTube Music tabs and settings updates.
  *
@@ -43,9 +43,7 @@ async function saveThemeCSS(css: string, title: string, creators: string[]): Pro
   if (cssSize <= SYNC_STORAGE_LIMIT) {
     await chrome.storage.local.set({ customCSS: themeContent, cssStorageType: "sync", cssCompressed: false });
   } else {
-    await chrome.storage.local.set({ customCSS: themeContent, cssCompressed: false });
-    await chrome.storage.local.set({ cssStorageType: "local", cssCompressed: false });
-    await chrome.storage.local.remove("customCSS");
+    await chrome.storage.local.set({ customCSS: themeContent, cssStorageType: "local", cssCompressed: false });
   }
 }
 

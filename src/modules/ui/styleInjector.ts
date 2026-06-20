@@ -55,9 +55,23 @@ function decompressStyles(css: string): string {
   return decompressString(css);
 }
 
-export async function getAndApplyCustomStyles(): Promise<void> {
+export async function getAndApplyCustomStyles(retryContext?: { attempt: number; maxAttempts: number; delays: number[] }): Promise<void> {
   try {
-    const syncData = await getSyncStorage<CSSStorageData>(["cssStorageType", "customCSS", "cssCompressed"]);
+    const syncData = await getSyncStorage<CSSStorageData & { activePearTheme?: string }>([
+      "cssStorageType",
+      "customCSS",
+      "cssCompressed",
+      "activePearTheme",
+    ]);
+
+    const activePearTheme = syncData.activePearTheme;
+    if (activePearTheme === "glassy-merge-theme") {
+      const existing = document.getElementById("blyrics-custom-style");
+      if (existing) {
+        existing.remove();
+      }
+      return;
+    }
 
     let css: string | null = null;
     let compressed = false;
@@ -79,10 +93,30 @@ export async function getAndApplyCustomStyles(): Promise<void> {
         css = decompressStyles(css);
       }
       applyCustomStyles(compileRicsToStyles(css));
+      return; // Successfully applied, no retry needed
+    }
+
+    // No CSS found - schedule retry if we have attempts remaining
+    if (retryContext && retryContext.attempt < retryContext.maxAttempts) {
+      const nextAttempt = retryContext.attempt + 1;
+      const delay = retryContext.delays[retryContext.attempt] || 5000;
+      log(LOG_PREFIX, `No custom CSS found (attempt ${retryContext.attempt + 1}/${retryContext.maxAttempts}), retrying in ${delay}ms`);
+      setTimeout(() => {
+        getAndApplyCustomStyles({ ...retryContext, attempt: nextAttempt });
+      }, delay);
     }
   } catch (error) {
     log(GENERAL_ERROR_LOG, error);
     try {
+      const { activePearTheme } = await getLocalStorage<{ activePearTheme?: string }>(["activePearTheme"]);
+      if (activePearTheme === "glassy-merge-theme") {
+        const existing = document.getElementById("blyrics-custom-style");
+        if (existing) {
+          existing.remove();
+        }
+        return;
+      }
+
       const chunkedStyles = await loadChunkedStyles();
       if (chunkedStyles) {
         const syncCompressedData = await getSyncStorage<CSSStorageData>(["cssCompressed"]);
@@ -111,6 +145,17 @@ export async function getAndApplyCustomStyles(): Promise<void> {
           css = decompressStyles(css);
         }
         applyCustomStyles(compileRicsToStyles(css));
+        return;
+      }
+
+      // All fallbacks failed, schedule retry if available
+      if (retryContext && retryContext.attempt < retryContext.maxAttempts) {
+        const nextAttempt = retryContext.attempt + 1;
+        const delay = retryContext.delays[retryContext.attempt] || 5000;
+        log(LOG_PREFIX, `All fallbacks failed (attempt ${retryContext.attempt + 1}/${retryContext.maxAttempts}), retrying in ${delay}ms`);
+        setTimeout(() => {
+          getAndApplyCustomStyles({ ...retryContext, attempt: nextAttempt });
+        }, delay);
       }
     } catch (fallbackError) {
       log(GENERAL_ERROR_LOG, fallbackError);
@@ -158,5 +203,13 @@ export function subscribeToCustomStyles(): void {
       }
     }
   });
-  getAndApplyCustomStyles();
+
+  // Initial load with retry mechanism for Electron environments
+  // where chrome.storage may not be ready immediately
+  getAndApplyCustomStyles({
+    attempt: 0,
+    maxAttempts: 5,
+    delays: [1000, 3000, 5000, 10000, 15000],
+  });
 }
+

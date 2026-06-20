@@ -28,6 +28,20 @@ import {
 } from "./ui/dom";
 import { showAlert, showModal } from "./ui/feedback";
 
+// Helper to open extension pages - falls back to window.open in Electron
+function openEditorExtensionPage(pagePath: string): void {
+  const url = chrome.runtime.getURL(pagePath);
+  try {
+    if (chrome.tabs && chrome.tabs.create) {
+      chrome.tabs.create({ url });
+    } else {
+      window.open(url, "_blank");
+    }
+  } catch {
+    window.open(url, "_blank");
+  }
+}
+
 function initializeNavigation() {
   document.getElementById("edit-css-btn")?.addEventListener("click", openEditCSS);
   document.getElementById("back-btn")?.addEventListener("click", openOptions);
@@ -72,9 +86,7 @@ function initializeEditorKeyboardShortcuts() {
           cancelText: "Close",
         }).then(result => {
           if (result) {
-            chrome.tabs.create({
-              url: chrome.runtime.getURL("pages/standalone-editor.html"),
-            });
+            openEditorExtensionPage("pages/standalone-editor.html");
           }
         });
       }

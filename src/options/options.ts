@@ -1,4 +1,4 @@
-﻿// Function to save user options
+// Function to save user options
 
 import { LOG_PREFIX, ROMANIZATION_LANGUAGES, UNISON_API_BASE_URL, UNISON_DOCK_DEFAULT_POSITION } from "@constants";
 import { getLanguageDisplayName, initI18n, loadLocaleOverride, SUPPORTED_LOCALES, t } from "@core/i18n";
@@ -547,6 +547,20 @@ function initTabScrollIndicators(): void {
   update();
 }
 
+// Helper to open extension pages - falls back to window.open in Electron where chrome.tabs is unavailable
+function openExtensionPage(pagePath: string): void {
+  const url = chrome.runtime.getURL(pagePath);
+  try {
+    if (chrome.tabs && chrome.tabs.create) {
+      chrome.tabs.create({ url });
+    } else {
+      window.open(url, "_blank");
+    }
+  } catch {
+    window.open(url, "_blank");
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   new Sortable(document.getElementById("providers-list")!, {
     animation: 150,
@@ -562,19 +576,16 @@ document.addEventListener("DOMContentLoaded", () => {
   initLangExclusionsModal();
 
   document.getElementById("browse-themes-btn")?.addEventListener("click", () => {
-    chrome.tabs.create({
-      url: chrome.runtime.getURL("pages/marketplace.html"),
-    });
+    openExtensionPage("pages/marketplace.html");
   });
 
   document.getElementById("open-unison-btn")?.addEventListener("click", () => {
-    chrome.tabs.create({
-      url: chrome.runtime.getURL("pages/unison.html"),
-    });
+    openExtensionPage("pages/unison.html");
   });
 
   initIdentityUI();
   initNicknameModal();
+  initPearThemeSelector();
 });
 
 async function initIdentityUI(): Promise<void> {
@@ -1343,4 +1354,92 @@ function setupUnisonActionsModal(): void {
   });
 
   autoHideToggle.addEventListener("change", saveOptions);
+}
+
+// -- Pear Desktop Theme Selector (Electron only) --
+
+interface ElectronBL {
+  getActiveTheme: () => Promise<string>;
+  setActiveTheme: (name: string) => Promise<{ changed: boolean; theme?: string }>;
+}
+
+declare global {
+  interface Window {
+    electronBL?: ElectronBL;
+  }
+}
+
+async function initPearThemeSelector(): Promise<void> {
+  // Only show this section when running inside Electron (electronBL is exposed via preload)
+  if (!window.electronBL) {
+    return;
+  }
+
+  const section = document.getElementById("pear-theme-section");
+  const select = document.getElementById("pearActiveTheme") as HTMLSelectElement | null;
+  const warning = document.getElementById("pear-theme-warning");
+  const restartNote = document.getElementById("pear-theme-restart-note");
+  const themePreviewCard = document.getElementById("theme-preview-card");
+  const editCssContainer = document.querySelector("#edit-css-btn")?.closest(".container") as HTMLElement | null;
+  const storeButtonsRow = document.querySelector(".store-buttons-row") as HTMLElement | null;
+
+  if (!section || !select) return;
+
+  // Show the section
+  section.style.display = "block";
+
+  try {
+    // Get current theme from Electron main process
+    const currentTheme = await window.electronBL.getActiveTheme();
+    select.value = currentTheme;
+    updateThemeUI(currentTheme);
+    await chrome.storage.local.set({ activePearTheme: currentTheme });
+  } catch (err) {
+    console.warn("[BetterLyrics] Failed to get active theme:", err);
+    select.value = "glassy-merge-theme";
+    updateThemeUI("glassy-merge-theme");
+    await chrome.storage.local.set({ activePearTheme: "glassy-merge-theme" });
+  }
+
+  function updateThemeUI(theme: string): void {
+    const isGlassy = theme === "glassy-merge-theme";
+
+    // Show/hide warning for non-glassy themes
+    if (warning) {
+      warning.style.display = isGlassy ? "none" : "flex";
+    }
+
+    // Show restart note
+    if (restartNote) {
+      restartNote.style.display = "block";
+    }
+
+    // Enable/disable BL theme controls based on active theme
+    const blThemeElements = [themePreviewCard, editCssContainer, storeButtonsRow];
+    for (const el of blThemeElements) {
+      if (!el) continue;
+      if (isGlassy) {
+        el.style.opacity = "0.4";
+        el.style.pointerEvents = "none";
+        el.style.filter = "grayscale(0.5)";
+      } else {
+        el.style.opacity = "1";
+        el.style.pointerEvents = "auto";
+        el.style.filter = "none";
+      }
+    }
+  }
+
+  select.addEventListener("change", async () => {
+    const selectedTheme = select.value;
+    updateThemeUI(selectedTheme);
+
+    try {
+      await chrome.storage.local.set({ activePearTheme: selectedTheme });
+      await window.electronBL!.setActiveTheme(selectedTheme);
+    } catch (err) {
+      console.error("[BetterLyrics] Failed to set active theme:", err);
+      showAlert("Failed to change theme. Please try again.");
+    }
+  });
 }

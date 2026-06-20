@@ -1,4 +1,4 @@
-﻿import { LOG_PREFIX_EDITOR } from "@constants";
+import { LOG_PREFIX_EDITOR } from "@constants";
 import { t } from "@core/i18n";
 import { getSyncStorage } from "@core/storage";
 import {
@@ -577,7 +577,16 @@ async function populateThemeModal(): Promise<void> {
   cta.appendChild(createMarketplaceIcon());
   cta.appendChild(document.createTextNode(t("deprecation_builtin_cta")));
   cta.addEventListener("click", () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL("pages/marketplace.html") });
+    const url = chrome.runtime.getURL("pages/marketplace.html");
+    try {
+      if (chrome.tabs && chrome.tabs.create) {
+        chrome.tabs.create({ url });
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch {
+      window.open(url, "_blank");
+    }
   });
   banner.appendChild(cta);
 
