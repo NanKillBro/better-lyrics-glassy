@@ -1,13 +1,13 @@
 // Dán CSS theme "cucu" của bạn vào giữa 2 dấu huyền (`) ở dưới
 const MY_CUSTOM_CSS = `
-/* =================================================================================================================*/
-/* MERGED THEME V23: Some UI Update                                                                                 */
-/* Adds: None                                                                                                       */
-/* Fixes: Unison fix                                                                                                */
-/* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),         */
-/*           better-ytm (WolfTheE), blyrics-am-theme (tposejank)                                                    */
-/* Made by: Gemini and NanKill                                                                              */
-/* ================================================================================================================ */
+/* =============================================================================================================*/
+/* MERGED THEME V23: Some UI Update                                                                             */
+/* Adds: None                                                                                                   */
+/* Fixes: Unison fix, some toast look different                                                                 */
+/* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),     */
+/*           better-ytm (WolfTheE), blyrics-am-theme (tposejank)                                                */
+/* Made by: Gemini and NanKill                                                                                  */
+/* ============================================================================================================ */
 
 :root,
 html,
@@ -1894,7 +1894,7 @@ tp-yt-paper-toggle-button[checked]:not([disabled]) {
 /* =========================================================
    GlassyUI - Toast Notifications
    ========================================================= */
-tp-yt-paper-toast#toast {
+tp-yt-paper-toast {
   /* Ép sử dụng màu Album do plugin tạo ra nhưng kèm vùng alpha để nhìn xuyên qua kính */
   background-color: rgba(var(--ytmusic-album-color-dark, 30, 30, 30), 0.6) !important;
   backdrop-filter: blur(20px) saturate(150%) !important;
@@ -1905,16 +1905,16 @@ tp-yt-paper-toast#toast {
 }
 
 /* Fix chữ bên trong để luôn dễ đọc trên nền glass */
-tp-yt-paper-toast#toast #label.style-scope.tp-yt-paper-toast,
-tp-yt-paper-toast#toast yt-formatted-string,
-tp-yt-paper-toast#toast .style-scope.yt-formatted-string {
+tp-yt-paper-toast #label.style-scope.tp-yt-paper-toast,
+tp-yt-paper-toast yt-formatted-string,
+tp-yt-paper-toast .style-scope.yt-formatted-string {
   font-weight: 500 !important;
   color: rgba(255, 255, 255, 0.95) !important;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
 }
 
 /* Nút Action "Thay đổi", "Hoàn tác"... */
-tp-yt-paper-toast#toast yt-button-renderer button {
+tp-yt-paper-toast yt-button-renderer button {
   background: rgba(255, 255, 255, 0.15) !important;
   border-radius: 10px !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -1922,31 +1922,31 @@ tp-yt-paper-toast#toast yt-button-renderer button {
   box-shadow: none !important;
 }
 
-tp-yt-paper-toast#toast yt-button-renderer button:hover {
+tp-yt-paper-toast yt-button-renderer button:hover {
   background: rgba(255, 255, 255, 0.25) !important;
   transform: translateY(-1px) !important;
 }
 
-tp-yt-paper-toast#toast yt-button-renderer button .yt-spec-button-shape-next__button-text-content,
-tp-yt-paper-toast#toast yt-button-renderer button .ytSpecButtonShapeNextButtonTextContent,
-tp-yt-paper-toast#toast yt-button-renderer button span {
+tp-yt-paper-toast yt-button-renderer button .yt-spec-button-shape-next__button-text-content,
+tp-yt-paper-toast yt-button-renderer button .ytSpecButtonShapeNextButtonTextContent,
+tp-yt-paper-toast yt-button-renderer button span {
   color: #fff !important;
   font-weight: 600 !important;
   letter-spacing: 0.3px !important;
 }
 
 /* Nút Đóng (Close) */
-tp-yt-paper-toast#toast yt-icon-button#close-button button {
+tp-yt-paper-toast yt-icon-button#close-button button {
   background: rgba(255, 255, 255, 0.1) !important;
   border-radius: 50% !important;
   transition: all 0.2s ease !important;
 }
 
-tp-yt-paper-toast#toast yt-icon-button#close-button button:hover {
+tp-yt-paper-toast yt-icon-button#close-button button:hover {
   background: rgba(255, 255, 255, 0.25) !important;
 }
 
-tp-yt-paper-toast#toast yt-icon-button#close-button yt-icon {
+tp-yt-paper-toast yt-icon-button#close-button yt-icon {
   fill: #fff !important;
   color: #fff !important;
 }
