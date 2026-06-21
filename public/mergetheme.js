@@ -1,12 +1,12 @@
 // Dán CSS theme "cucu" của bạn vào giữa 2 dấu huyền (`) ở dưới
 const MY_CUSTOM_CSS = `
 /* =================================================================================================================*/
-/* MERGED THEME V22: Some UI Update                                                                                 */
-/* Adds: Redesign some UI (Search Box, User menu and Settings), AM style lyrics                                     */
-/* Fixes: None                                                                                                      */
+/* MERGED THEME V23: Some UI Update                                                                                 */
+/* Adds: None                                                                                                       */
+/* Fixes: Unison fix                                                                                                */
 /* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),         */
 /*           better-ytm (WolfTheE), blyrics-am-theme (tposejank)                                                    */
-/* Made by: Gemini 3.1 Pro and NanKill                                                                              */
+/* Made by: Gemini and NanKill                                                                              */
 /* ================================================================================================================ */
 
 :root,
@@ -1268,6 +1268,14 @@ ytmusic-player-page tp-yt-paper-tabs.tab-header-container .blyrics-footer__conta
   /* Đổ bóng để tạo cảm giác nổi lên */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); 
 }
+
+/* unison menu */
+/* Nâng cao unison dock khi ở chế độ toàn màn hình (fullscreen) cho data-position="bottom-center" (bottom-middle) */
+ytmusic-player-page[player-fullscreened] .blyrics-unison-dock[data-position="bottom-center"] {
+  top: calc(100% - 110px); /* Nâng vị trí từ bottom (mặc định 64px lên 110px) khi ở fullscreen */
+  --blyrics-fullscreen-bottom-dock-shift: -70px; /* Dịch chuyển cao hơn một chút khi hiện thanh điều khiển ở dưới */
+}
+
 /* ============================================== */
 /* 8. MENU & HỘP THOẠI (POPUPS, MENUS, DIALOGS)   */
 /* ============================================== */
