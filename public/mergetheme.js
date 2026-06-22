@@ -2,8 +2,8 @@
 const MY_CUSTOM_CSS = `
 /* =============================================================================================================*/
 /* MERGED THEME V23: Some UI Update                                                                             */
-/* Adds: None                                                                                                   */
-/* Fixes: Unison fix, some toast look different                                                                 */
+/* Adds: Auto Collapsed the Source on the tabs when window too small                                            */
+/* Fixes: Unison dock, some toast look different, big button for some user having the Comments tab              */
 /* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),     */
 /*           better-ytm (WolfTheE), blyrics-am-theme (tposejank)                                                */
 /* Made by: Gemini and NanKill                                                                                  */
@@ -1145,6 +1145,7 @@ ytmusic-player-page tp-yt-paper-tabs.tab-header-container {
     display: flex !important;
     align-items: center !important;
     position: relative !important;
+    container-type: inline-size !important;
 }
 
 /* Tắt thanh gạch ngang dưới chữ */
@@ -1167,6 +1168,7 @@ ytmusic-player-page tp-yt-paper-tabs.tab-header-container #tabsContent {
 
 /* Giới hạn lại kích cỡ và khoảng cách của từng tab nhỏ */
 ytmusic-player-page tp-yt-paper-tabs.tab-header-container tp-yt-paper-tab.tab-header {
+    flex: 0 0 auto !important;
     margin: 0 4px !important;
     padding: 0 16px !important;
     height: 36px !important;
@@ -1240,6 +1242,11 @@ ytmusic-player-page tp-yt-paper-tabs.tab-header-container .blyrics-footer__conta
   overflow: hidden !important;
   opacity: 0.9;
   z-index: 3 !important;
+  will-change: width, padding;
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), 
+              padding 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+              background-color 0.3s ease,
+              box-shadow 0.3s ease !important;
 }
 
 ytmusic-player-page tp-yt-paper-tabs.tab-header-container .nankill-blyrics-footer-in-tabs a,
@@ -1276,6 +1283,9 @@ ytmusic-player-page[player-fullscreened] .blyrics-unison-dock[data-position="bot
   --blyrics-fullscreen-bottom-dock-shift: -70px; /* Dịch chuyển cao hơn một chút khi hiện thanh điều khiển ở dưới */
 }
 
+ytmusic-comments.ytmusicCommentsComponentHost {
+    padding-inline: 24px; /* Thay đổi thông số này theo thiết kế của bạn */
+}
 /* ============================================== */
 /* 8. MENU & HỘP THOẠI (POPUPS, MENUS, DIALOGS)   */
 /* ============================================== */
@@ -2014,6 +2024,75 @@ ytmusic-app-layout[is-mweb-modernization-enabled][player-ui-state="PLAYER_PAGE_O
 ytmusic-app-layout:not([is-mweb-modernization-enabled]) .slider-knob.tp-yt-paper-slider:not(.dragging) {
   transition: left 1s linear;
 }
+
+/* 1. Baseline Collapsed State (only showing icon) */
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .nankill-blyrics-footer-in-tabs,
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .blyrics-footer__container {
+  width: 34px !important;
+  min-width: 34px !important;
+  padding: 0 !important;              /* Zero padding to center the icon perfectly */
+  justify-content: center !important;  /* Center the icon inside flex container */
+  gap: 0 !important;                  /* Remove flex gaps to prevent overflow spacing */
+  overflow: hidden !important;
+  font-size: 0 !important;             /* Hides the raw text node */
+  transition: 
+    width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), 
+    padding 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+    font-size 0.3s ease,
+    background-color 0.3s ease,
+    box-shadow 0.3s ease !important;
+}
+
+/* Hide the text link by default with transitions */
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .nankill-blyrics-footer-in-tabs a,
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .blyrics-footer__container a {
+  display: none !important;           /* Hide block layout completely when collapsed */
+  opacity: 0;
+  width: 0;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, width 0.2s ease !important;
+  pointer-events: none;
+}
+
+/* Center the icon inside the collapsed container */
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .nankill-blyrics-footer-in-tabs img,
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .blyrics-footer__container img {
+  margin-right: 0 !important;
+  margin-left: 0 !important;
+  transition: margin-right 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+
+/* 2. Interactive Hover Expanded State (overlaying tabs) */
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .nankill-blyrics-footer-in-tabs:hover,
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .blyrics-footer__container:hover {
+  width: 230px !important;             /* Expanded width to comfortably fit text */
+  padding: 0 14px !important;          /* Restore padding */
+  gap: 8px !important;                /* Restore flex gap */
+  justify-content: center !important;  /* Center content horizontally */
+  z-index: 100 !important;             /* Floats above any tab headers */
+  font-size: 13px !important;          /* Restores font size for text node */
+  
+  /* Glassmorphism highlighting to isolate it from the underlying tabs */
+  background: rgba(20, 20, 20, 0.8) !important; /* More opaque background */
+  backdrop-filter: blur(25px) saturate(1.8) !important; /* Blurs out the tabs behind it */
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Fade-in text on hover */
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .nankill-blyrics-footer-in-tabs:hover a,
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .blyrics-footer__container:hover a {
+  display: inline !important;          /* Show the text link */
+  opacity: 1;
+  width: auto;
+  pointer-events: auto;
+}
+
+/* Push text away from icon on hover */
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .nankill-blyrics-footer-in-tabs:hover img,
+ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .blyrics-footer__container:hover img {
+  margin-right: 8px !important;
+}
 `;
 
 function injectStyles() {
@@ -2100,7 +2179,7 @@ function sanitizeSourceContainers({ containers, primary, tabsHost }) {
 
 function dockBetterLyricsFooterToTabs() {
   const sourceContainers = getBetterLyricsSourceContainers();
-  const tabsHost = document.querySelector('ytmusic-player-page tp-yt-paper-tabs.tab-header-container');
+  const tabsHost = document.querySelector('ytmusic-page tp-yt-paper-tabs.tab-header-container, ytmusic-player-page tp-yt-paper-tabs.tab-header-container');
 
   if (!sourceContainers.length || !tabsHost) {
     return;
@@ -2123,6 +2202,18 @@ function dockBetterLyricsFooterToTabs() {
     primary: footer,
     tabsHost,
   });
+
+  // Calculate dynamic collapse based on actual tab widths
+  const tabs = Array.from(tabsHost.querySelectorAll('tp-yt-paper-tab.tab-header'));
+  if (tabs.length > 0) {
+    const tabsHostWidth = tabsHost.getBoundingClientRect().width;
+    if (tabsHostWidth > 0) {
+      const tabsWidth = tabs.reduce((sum, tab) => sum + tab.getBoundingClientRect().width + 8, 0);
+      const remainingSpace = tabsHostWidth - tabsWidth - 24; // 24px extra margin for safety
+      const shouldCollapse = remainingSpace < 230; // Expanded width is 230px
+      tabsHost.classList.toggle('blyrics-dock-collapsed', shouldCollapse);
+    }
+  }
 }
 
 let nankillFooterDockObserver;
