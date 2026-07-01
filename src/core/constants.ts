@@ -18,8 +18,9 @@ export const USER_SCROLLING_CLASS = "blyrics-user-scrolling" as const;
 export const TRANSLATED_LYRICS_CLASS = "blyrics--translated" as const;
 export const ROMANIZED_LYRICS_CLASS = "blyrics--romanized" as const;
 export const FOOTER_CLASS = "blyrics-footer" as const;
-export const UNISON_DOCK_CLASS = "blyrics-unison-dock" as const;
-export const UNISON_DOCK_DEFAULT_POSITION = "bottom-center" as const;
+export const DOCK_CLASS = "blyrics-dock" as const;
+export const DOCK_DEFAULT_POSITION = "bottom-center" as const;
+export const DOCK_CONTROL_ORDER_DEFAULT = ["source", "translate", "romanize", "offset"] as const;
 export const MODAL_OVERLAY_CLASS = "blyrics-modal-overlay" as const;
 export const MODAL_CLASS = "blyrics-modal" as const;
 
@@ -60,6 +61,7 @@ export const UNISON_API_BASE_URL = "https://unison.boidu.dev" as const;
 export const THEME_STORE_TURNSTILE_URL = `${THEME_STORE_API_URL}/turnstile` as const;
 const THEME_REGISTRY_BASE = "https://raw.githubusercontent.com/better-lyrics/themes" as const;
 export const THEME_REGISTRY_URL = `${THEME_REGISTRY_BASE}/master` as const;
+export const THEME_DISCUSSIONS_URL = "https://github.com/better-lyrics/themes/discussions" as const;
 export const TRANSLATE_LYRICS_URL = function (lang: string, text: string): string {
   return `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`;
 };
@@ -195,6 +197,10 @@ export const LYRICS_CHECK_INTERVAL_ERROR = "[BetterLyrics] Error in lyrics check
 export const MUSIC_NOTES = "♪𝅘𝅥𝅮𝅘𝅥𝅯𝅘𝅥𝅰𝅘𝅥𝅱𝅘𝅥𝅲" as const;
 
 export const BLYRICS_INSTRUMENTAL_GAP_MS = 5000;
+
+export const LYRICS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const OFFSET_STORAGE_PREFIX = "blyricsOffset_";
 
 export const PLAYER_BAR_SELECTOR = "ytmusic-player-bar" as const;
 export const AD_PLAYING_ATTR = "is-advertisement" as const;

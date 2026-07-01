@@ -96,20 +96,20 @@
     "description": "Toggle label for the Shaders companion link shown in the lyrics footer"
   },
   "options_display_unisonActions": {
-    "message": "Hành Động Unison",
-    "description": "Display-section row label for the Unison Actions modal trigger"
+    "message": "Thanh điều khiển lời bài hát",
+    "description": "Display-section row label for the lyrics controls dock modal trigger"
   },
   "options_unisonModal_title": {
-    "message": "Hành Động Unison",
-    "description": "Title of the Unison Actions modal"
+    "message": "Thanh điều khiển lời bài hát",
+    "description": "Title of the lyrics controls dock settings modal"
   },
   "options_unisonModal_showPinned": {
-    "message": "Hiển thị hành động đã được ghim",
-    "description": "Toggle label inside the Unison Actions modal for the floating dock"
+    "message": "Hiện thanh điều khiển",
+    "description": "Toggle label inside the lyrics controls dock modal for showing the floating dock"
   },
   "options_unisonModal_showPinned_hint": {
-    "message": "Thanh điều khiển nổi để bình chọn tích cực, tiêu cực hoặc báo cáo lời bài hát cho Unison",
-    "description": "Hint text under the Show pinned actions toggle"
+    "message": "Một thanh tác vụ để chuyển đổi nguồn, chuyển đổi dịch thuật và phiên âm, đồng bộ hoá, và bình chọn cho lời bài hát từ Unison",
+    "description": "Hint text under the Show controls dock toggle"
   },
   "options_unisonModal_autoHide": {
     "message": "Tự động ẩn khi ở chế độ toàn màn hình",
@@ -146,6 +146,42 @@
   "options_unisonModal_position_bottomRight": {
     "message": "Phía dưới cùng bên phải",
     "description": "Tooltip for the bottom-right cell in the Unison position picker"
+  },
+  "options_unisonModal_controlsShown": {
+    "message": "Đã hiển thị tùy chọn điều khiển",
+    "description": "Label above the toggles that pick which controls appear in the lyrics dock"
+  },
+  "options_unisonModal_controlSource": {
+    "message": "Chuyển đổi nguồn lời bài hát",
+    "description": "Toggle label for showing the lyrics source switcher control in the dock"
+  },
+  "options_unisonModal_controlOffset": {
+    "message": "Độ trễ đồng bộ lời",
+    "description": "Toggle label for showing the sync offset control in the dock"
+  },
+  "lyricsDock_chooseSource": {
+    "message": "Chọn nguồn lời bài hát",
+    "description": "Accessible label for the lyrics dock button that opens the source provider dropdown"
+  },
+  "lyricsDock_previousSource": {
+    "message": "Nguồn trước",
+    "description": "Accessible label for the lyrics dock button that switches to the previous lyrics provider"
+  },
+  "lyricsDock_nextSource": {
+    "message": "Nguồn tiếp theo",
+    "description": "Accessible label for the lyrics dock button that switches to the next lyrics provider"
+  },
+  "lyricsDock_offsetEarlier": {
+    "message": "Giảm độ trễ",
+    "description": "Accessible label for the lyrics dock button that nudges sync timing earlier"
+  },
+  "lyricsDock_offsetLater": {
+    "message": "Tăng độ trễ",
+    "description": "Accessible label for the lyrics dock button that nudges sync timing later"
+  },
+  "lyricsDock_offsetReset": {
+    "message": "Nhấn hai lần để đặt lại mặc định",
+    "description": "Tooltip on the lyrics dock offset clock icon; double-clicking it resets the sync offset to zero"
   },
   "options_language_displayLanguage": {
     "message": "Ngôn ngữ hiển thị",

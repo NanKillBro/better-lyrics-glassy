@@ -99,20 +99,20 @@
     "description": "Toggle label for the Shaders companion link shown in the lyrics footer"
   },
   "options_display_unisonActions": {
-    "message": "Unison Actions",
-    "description": "Display-section row label for the Unison Actions modal trigger"
+    "message": "Lyrics controls dock",
+    "description": "Display-section row label for the lyrics controls dock modal trigger"
   },
   "options_unisonModal_title": {
-    "message": "Unison Actions",
-    "description": "Title of the Unison Actions modal"
+    "message": "Lyrics controls dock",
+    "description": "Title of the lyrics controls dock settings modal"
   },
   "options_unisonModal_showPinned": {
-    "message": "Show pinned actions",
-    "description": "Toggle label inside the Unison Actions modal for the floating dock"
+    "message": "Show controls dock",
+    "description": "Toggle label inside the lyrics controls dock modal for showing the floating dock"
   },
   "options_unisonModal_showPinned_hint": {
-    "message": "A floating control to upvote, downvote, or report Unison lyrics",
-    "description": "Hint text under the Show pinned actions toggle"
+    "message": "A floating dock to switch source, toggle translation and romanization, nudge sync, and vote on Unison lyrics",
+    "description": "Hint text under the Show controls dock toggle"
   },
   "options_unisonModal_autoHide": {
     "message": "Auto-hide in fullscreen",
@@ -149,6 +149,58 @@
   "options_unisonModal_position_bottomRight": {
     "message": "Bottom right",
     "description": "Tooltip for the bottom-right cell in the Unison position picker"
+  },
+  "options_unisonModal_controlsShown": {
+    "message": "Controls shown",
+    "description": "Label above the toggles that pick which controls appear in the lyrics dock"
+  },
+  "options_unisonModal_controlSource": {
+    "message": "Source switcher",
+    "description": "Toggle label for showing the lyrics source switcher control in the dock"
+  },
+  "options_unisonModal_controlOffset": {
+    "message": "Sync offset",
+    "description": "Toggle label for showing the sync offset control in the dock"
+  },
+  "lyricsDock_chooseSource": {
+    "message": "Choose lyrics source",
+    "description": "Accessible label for the lyrics dock button that opens the source provider dropdown"
+  },
+  "lyricsDock_previousSource": {
+    "message": "Previous source",
+    "description": "Accessible label for the lyrics dock button that switches to the previous lyrics provider"
+  },
+  "lyricsDock_nextSource": {
+    "message": "Next source",
+    "description": "Accessible label for the lyrics dock button that switches to the next lyrics provider"
+  },
+  "lyricsDock_offsetEarlier": {
+    "message": "Shift lyrics earlier",
+    "description": "Accessible label for the lyrics dock button that nudges sync timing earlier"
+  },
+  "lyricsDock_offsetLater": {
+    "message": "Shift lyrics later",
+    "description": "Accessible label for the lyrics dock button that nudges sync timing later"
+  },
+  "lyricsDock_offsetGlobal": {
+    "message": "Global",
+    "description": "Label in the lyrics dock offset menu for the global offset applied to all songs and sync types"
+  },
+  "options_offsetModal_perSong": {
+    "message": "Per-song offsets",
+    "description": "Heading in the offset settings modal for the section that manages saved per-song sync offsets"
+  },
+  "options_offsetModal_perSongClear": {
+    "message": "Clear all",
+    "description": "Button in the offset settings modal that deletes every saved per-song sync offset"
+  },
+  "options_offsetModal_perSongCount": {
+    "message": "Saved offsets",
+    "description": "Label in the offset settings modal showing how many per-song sync offsets are stored"
+  },
+  "options_offsetModal_appliesTo": {
+    "message": "Applies to",
+    "description": "Label in the offset settings modal preceding the list of sync types a given offset affects"
   },
 
   "options_language_displayLanguage": {
@@ -869,6 +921,30 @@
       "date": {
         "content": "$1",
         "example": "January 15, 2025, 3:42 PM"
+      }
+    }
+  },
+  "marketplace_requiresVersion": {
+    "message": "Requires v$version$+",
+    "description": "Footer chip in the theme detail modal showing the minimum Better Lyrics version a theme needs",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "2.0.5.6"
+      }
+    }
+  },
+  "marketplace_discussion": {
+    "message": "Discussion",
+    "description": "Footer link in the theme detail modal that opens the theme's discussion thread"
+  },
+  "marketplace_commit": {
+    "message": "Commit $hash$",
+    "description": "Footer chip in the theme detail modal linking to the exact source commit a theme was built from",
+    "placeholders": {
+      "hash": {
+        "content": "$1",
+        "example": "a1b2c3d"
       }
     }
   },

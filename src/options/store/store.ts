@@ -10,7 +10,7 @@ import type { AllThemeStats, InstalledStoreTheme, StoreTheme, ThemeStats } from 
 let gridAnimationController: AnimationController | null = null;
 
 import { getDisplayName, hasCertificate } from "@core/keyIdentity";
-import { type AlertAction, showAlert } from "../editor/ui/feedback";
+import { type AlertAction, showAlert, showConfirm } from "../editor/ui/feedback";
 import { fetchAllStats, fetchUserRatings, submitRating, trackInstall } from "./themeStoreApi";
 import {
   applyStoreTheme,
@@ -20,8 +20,11 @@ import {
   getInstalledTheme,
   type InstallOptions,
   installTheme,
+  isAnyBuildCompatible,
+  isOlderBuild,
   isThemeInstalled,
   isVersionCompatible,
+  lowestBuildFloor,
   performSilentUpdates,
   refreshUrlThemesMetadata,
   removeTheme,
@@ -131,6 +134,29 @@ let currentFilters: FilterState = {
 };
 
 const EXTENSION_VERSION = chrome.runtime.getManifest().version;
+
+/**
+ * Builds-aware compatibility: a theme is usable when any build qualifies for the
+ * running extension. Legacy themes (no builds[]) fall back to their single minVersion.
+ */
+function isThemeCompatible(theme: StoreTheme): boolean {
+  if (theme.builds && theme.builds.length > 0) {
+    return isAnyBuildCompatible(theme.builds, EXTENSION_VERSION);
+  }
+  return isVersionCompatible(theme.minVersion, EXTENSION_VERSION);
+}
+
+/**
+ * The lowest version floor to surface in "Requires Better Lyrics vX+" copy. For builds-aware
+ * themes this is the lowest build floor; legacy themes keep their single minVersion.
+ */
+function themeFloorVersion(theme: StoreTheme): string {
+  if (theme.builds && theme.builds.length > 0) {
+    return lowestBuildFloor(theme.builds) ?? theme.minVersion;
+  }
+  return theme.minVersion;
+}
+
 const INITIAL_BATCH_SIZE = 30;
 const LOAD_MORE_BATCH_SIZE = 20;
 let currentVisibleCards: HTMLElement[] = [];
@@ -172,7 +198,7 @@ function generateSyntheticTestThemes(): StoreTheme[] {
     return {
       id: `test-generated-${i}`,
       title: `${adj} ${noun} ${i + 1}`,
-      description: `Auto-generated theme #${i + 1} — ${adj.toLowerCase()} ${noun.toLowerCase()} aesthetic for stress-testing the marketplace.`,
+      description: `Auto-generated theme #${i + 1}: ${adj.toLowerCase()} ${noun.toLowerCase()} aesthetic for stress-testing the marketplace.`,
       creators,
       version: "1.0.0",
       minVersion: i % 17 === 0 ? "99.0.0" : "2.0.0",
@@ -310,6 +336,81 @@ function getTestThemes(): StoreTheme[] {
       imageUrls: [placeholderImage],
       cssUrl: "",
     },
+    {
+      // Latest build needs 2.5.0.0 (above this 2.3.2 extension), older 1.2.0 build needs 2.0.0.0.
+      // The resolver serves 1.2.0, so the card shows v1.2.0 plus an "older build" notice.
+      id: "test-older-build",
+      title: "Pinned Older Build",
+      description:
+        "Latest build needs a newer Better Lyrics than you have, so the store serves you the older build that still works.",
+      creators: ["Build Pinner"],
+      version: "1.2.0",
+      minVersion: "2.0.0.0",
+      hasShaders: false,
+      repo: "test/older-build-theme",
+      coverUrl: placeholderImage,
+      imageUrls: [placeholderImage],
+      cssUrl: "",
+      builds: [
+        { version: "2.0.0", minVersion: "2.5.0.0", path: "themes/test-older-build", integrity: "sha256-test" },
+        { version: "1.2.0", minVersion: "2.0.0.0", path: "themes/test-older-build/v/1.2.0", integrity: "sha256-test" },
+      ],
+      latestVersion: "2.0.0",
+      latestMinVersion: "2.5.0.0",
+    },
+    {
+      // Multiple builds, and this 2.3.2 extension qualifies for the newest one, so no older-build notice.
+      id: "test-builds-latest",
+      title: "Multi-Build On Latest",
+      description:
+        "Has multiple builds, and your version qualifies for the newest one, so no older-build notice shows.",
+      creators: ["Build Author"],
+      version: "2.0.0",
+      minVersion: "2.0.0.0",
+      hasShaders: false,
+      repo: "test/builds-latest-theme",
+      coverUrl: placeholderImage,
+      imageUrls: [placeholderImage],
+      cssUrl: "",
+      builds: [
+        { version: "2.0.0", minVersion: "2.0.0.0", path: "themes/test-builds-latest", integrity: "sha256-test" },
+        {
+          version: "1.0.0",
+          minVersion: "1.5.0.0",
+          path: "themes/test-builds-latest/v/1.0.0",
+          integrity: "sha256-test",
+        },
+      ],
+      latestVersion: "2.0.0",
+      latestMinVersion: "2.0.0.0",
+    },
+    {
+      // Every build needs more than 2.3.2. Install stays enabled but warns first; the floor copy
+      // shows the lowest build floor (2.5.0.0), not the latest build's floor.
+      id: "test-builds-incompatible",
+      title: "Incompatible (Builds)",
+      description:
+        "Every build needs a newer Better Lyrics than you have. Install is not blocked, but it warns before installing.",
+      creators: ["Future Dev"],
+      version: "3.0.0",
+      minVersion: "3.0.0.0",
+      hasShaders: false,
+      repo: "test/builds-incompatible-theme",
+      coverUrl: placeholderImage,
+      imageUrls: [placeholderImage],
+      cssUrl: "",
+      builds: [
+        { version: "3.0.0", minVersion: "3.0.0.0", path: "themes/test-builds-incompatible", integrity: "sha256-test" },
+        {
+          version: "2.5.0",
+          minVersion: "2.5.0.0",
+          path: "themes/test-builds-incompatible/v/2.5.0",
+          integrity: "sha256-test",
+        },
+      ],
+      latestVersion: "3.0.0",
+      latestMinVersion: "3.0.0.0",
+    },
   ];
 
   return [...curated, ...generateSyntheticTestThemes()];
@@ -329,6 +430,9 @@ function getTestStats(): AllThemeStats {
     "test-incompatible": { installs: 50, rating: 4.0, ratingCount: 50 },
     "test-multi-author": { installs: 3000, rating: 4.0, ratingCount: 3500 },
     "test-long-description": { installs: 600, rating: 4.3, ratingCount: 180 },
+    "test-older-build": { installs: 420, rating: 4.6, ratingCount: 130 },
+    "test-builds-latest": { installs: 980, rating: 4.4, ratingCount: 260 },
+    "test-builds-incompatible": { installs: 75, rating: 4.1, ratingCount: 40 },
   };
 
   const rand = pseudoRandom(0x5ed5);
@@ -457,6 +561,34 @@ function createClockIcon(): SVGSVGElement {
   path.setAttribute(
     "d",
     "M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h3.5a.75.75 0 0 0 0-1.5h-2.75V5Z"
+  );
+  svg.appendChild(path);
+  return svg;
+}
+
+function createTagIcon(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "currentColor");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("fill-rule", "evenodd");
+  path.setAttribute("clip-rule", "evenodd");
+  path.setAttribute(
+    "d",
+    "M2.123 12.816c.287 1.003 1.06 1.775 2.605 3.32l1.83 1.83C9.248 20.657 10.592 22 12.262 22c1.671 0 3.015-1.344 5.704-4.033c2.69-2.69 4.034-4.034 4.034-5.705c0-1.67-1.344-3.015-4.033-5.704l-1.83-1.83c-1.546-1.545-2.318-2.318-3.321-2.605c-1.003-.288-2.068-.042-4.197.45l-1.228.283c-1.792.413-2.688.62-3.302 1.233S3.27 5.6 2.856 7.391l-.284 1.228c-.491 2.13-.737 3.194-.45 4.197m8-5.545a2.017 2.017 0 1 1-2.852 2.852a2.017 2.017 0 0 1 2.852-2.852m8.928 4.78l-6.979 6.98a.75.75 0 0 1-1.06-1.061l6.978-6.98a.75.75 0 0 1 1.061 1.061"
+  );
+  svg.appendChild(path);
+  return svg;
+}
+
+function createCommitIcon(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("fill", "currentColor");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute(
+    "d",
+    "M11.93 8.5a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5Zm-1.43-.75a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z"
   );
   svg.appendChild(path);
   return svg;
@@ -1053,8 +1185,7 @@ async function applyFiltersToGrid(): Promise<void> {
     const matchesSearch = matchesSearchQuery(theme, currentFilters.searchQuery);
     const matchesShowFilter = matchesInstallFilter(theme.id, installedIds, currentFilters.showFilter);
     const matchesShaderFilter = !currentFilters.hasShaders || theme.hasShaders;
-    const matchesVersionFilter =
-      !currentFilters.versionCompatible || isVersionCompatible(theme.minVersion, EXTENSION_VERSION);
+    const matchesVersionFilter = !currentFilters.versionCompatible || isThemeCompatible(theme);
 
     const matchesFilters = matchesSearch && matchesShowFilter && matchesShaderFilter && matchesVersionFilter;
 
@@ -1076,8 +1207,7 @@ async function applyFiltersToGrid(): Promise<void> {
       const storeTheme = installedThemeToStoreTheme(installed);
       const matchesSearch = matchesSearchQuery(storeTheme, currentFilters.searchQuery);
       const matchesShaderFilter = !currentFilters.hasShaders || storeTheme.hasShaders;
-      const matchesVersionFilter =
-        !currentFilters.versionCompatible || isVersionCompatible(storeTheme.minVersion, EXTENSION_VERSION);
+      const matchesVersionFilter = !currentFilters.versionCompatible || isThemeCompatible(storeTheme);
 
       let card = urlOnlyThemeCards.get(installed.id);
       if (!matchesSearch || !matchesShaderFilter || !matchesVersionFilter) {
@@ -1303,7 +1433,7 @@ function createStoreThemeCard(
     card.dataset.urlTheme = "true";
   }
 
-  const isCompatible = isVersionCompatible(theme.minVersion, EXTENSION_VERSION);
+  const isCompatible = isThemeCompatible(theme);
 
   const coverImg = document.createElement("img");
   coverImg.className = "store-card-cover";
@@ -1332,10 +1462,11 @@ function createStoreThemeCard(
   const actionBtn = document.createElement("button");
   actionBtn.className = `store-card-btn ${isInstalled ? "store-card-btn-remove" : "store-card-btn-install"}`;
   actionBtn.textContent = isInstalled ? t("marketplace_remove") : t("marketplace_install");
-  actionBtn.disabled = !isCompatible && !isInstalled;
 
+  // Incompatible themes stay installable: the button is never disabled, but it carries a hint
+  // and the install handler confirms with the user first.
   if (!isCompatible && !isInstalled) {
-    actionBtn.title = `Requires Better Lyrics v${theme.minVersion}+`;
+    actionBtn.title = `Requires Better Lyrics v${themeFloorVersion(theme)}+`;
   }
 
   actionBtn.addEventListener("click", async e => {
@@ -1431,9 +1562,10 @@ function createStoreThemeCard(
   }
 
   if (!isCompatible) {
+    const floor = themeFloorVersion(theme);
     const incompatBadge = document.createElement("span");
     incompatBadge.className = "store-card-badge-warn";
-    incompatBadge.title = `Requires Better Lyrics v${theme.minVersion} or higher`;
+    incompatBadge.title = `Requires Better Lyrics v${floor} or higher`;
 
     const warnIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     warnIcon.setAttribute("viewBox", "0 0 24 24");
@@ -1446,11 +1578,62 @@ function createStoreThemeCard(
     warnIcon.appendChild(warnPath);
 
     incompatBadge.appendChild(warnIcon);
-    incompatBadge.appendChild(document.createTextNode(`v${theme.minVersion}+`));
+    incompatBadge.appendChild(document.createTextNode(`v${floor}+`));
     content.appendChild(incompatBadge);
+  } else if (theme.builds && theme.latestVersion && isOlderBuild(theme.version, theme.builds)) {
+    content.appendChild(createOlderBuildBadge(theme.version, theme.latestVersion, theme.latestMinVersion));
   }
 
   return card;
+}
+
+function createInfoIcon(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "currentColor");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("fill-rule", "evenodd");
+  path.setAttribute("clip-rule", "evenodd");
+  path.setAttribute(
+    "d",
+    "m12 2l.642.005l.616.017l.299.013l.579.034l.553.046c4.687.455 6.65 2.333 7.166 6.906l.03.29l.046.553l.041.727l.006.15l.017.617L22 12l-.005.642l-.017.616l-.013.299l-.034.579l-.046.553c-.455 4.687-2.333 6.65-6.906 7.166l-.29.03l-.553.046l-.727.041l-.15.006l-.617.017L12 22l-.642-.005l-.616-.017l-.299-.013l-.579-.034l-.553-.046c-4.687-.455-6.65-2.333-7.166-6.906l-.03-.29l-.046-.553l-.041-.727l-.006-.15l-.017-.617l-.004-.318v-.648l.004-.318l.017-.616l.013-.299l.034-.579l.046-.553c.455-4.687 2.333-6.65 6.906-7.166l.29-.03l.553-.046l.727-.041l.15-.006l.617-.017Q11.673 2 12 2m0 9h-1l-.117.007a1 1 0 0 0 0 1.986L11 13v3l.007.117a1 1 0 0 0 .876.876L12 17h1l.117-.007a1 1 0 0 0 .876-.876L14 16l-.007-.117a1 1 0 0 0-.764-.857l-.112-.02L13 15v-3l-.007-.117a1 1 0 0 0-.876-.876zm.01-3l-.127.007a1 1 0 0 0 0 1.986L12 10l.127-.007a1 1 0 0 0 0-1.986z"
+  );
+  svg.appendChild(path);
+  return svg;
+}
+
+/**
+ * Shows on a card when the locally resolved build is behind the latest published build.
+ * The latest build needs a newer extension, so we surface the version gap without blocking.
+ */
+function createOlderBuildBadge(
+  resolvedVersion: string,
+  latestVersion: string,
+  latestMinVersion?: string
+): HTMLSpanElement {
+  const badge = document.createElement("span");
+  badge.className = "store-card-badge-older";
+  const floorHint = latestMinVersion ? ` needs Better Lyrics ${latestMinVersion}+` : "";
+  badge.title = `You're on v${resolvedVersion}. Latest v${latestVersion}${floorHint}`;
+  badge.appendChild(createInfoIcon());
+  badge.appendChild(document.createTextNode(`v${resolvedVersion}`));
+  return badge;
+}
+
+/**
+ * Warns before installing or updating a theme with no qualifying build. Returns true when the
+ * user wants to proceed (best-effort legacy/latest install) and false when they cancel.
+ * Compatible themes skip the prompt and return true immediately.
+ */
+async function confirmIncompatibleInstall(theme: StoreTheme): Promise<boolean> {
+  if (isThemeCompatible(theme)) return true;
+  const floor = themeFloorVersion(theme);
+  return showConfirm(
+    t("marketplace_install"),
+    `This theme needs Better Lyrics v${floor}+ and may not work on your version. Install anyway?`,
+    false,
+    t("marketplace_install")
+  );
 }
 
 async function handleThemeAction(theme: StoreTheme, button: HTMLButtonElement): Promise<void> {
@@ -1475,6 +1658,9 @@ async function handleThemeAction(theme: StoreTheme, button: HTMLButtonElement): 
       }
       showAlert(`Removed ${theme.title}`);
     } else {
+      if (!(await confirmIncompatibleInstall(theme))) {
+        return;
+      }
       const installedTheme = await installTheme(theme, { source: "marketplace" });
       button.className = "store-card-btn store-card-btn-remove";
       button.textContent = t("marketplace_remove");
@@ -1579,26 +1765,64 @@ async function openDetailModal(theme: StoreTheme, urlThemeInfo?: UrlThemeInfo): 
         statsEl.appendChild(statsRow);
       }
     }
+  }
 
+  // -- Footer meta chips --------------------------
+  const metaRow = document.getElementById("detail-meta-row");
+  if (metaRow) {
+    metaRow.replaceChildren();
+    const floor = themeFloorVersion(theme);
+    if (floor && floor !== "0.0.0") {
+      const requiresChip = document.createElement("span");
+      requiresChip.className = "detail-meta-chip";
+      requiresChip.appendChild(createTagIcon());
+      const requiresText = document.createElement("span");
+      requiresText.className = "detail-meta-text";
+      requiresText.textContent = t("marketplace_requiresVersion", [floor]);
+      requiresChip.appendChild(requiresText);
+      metaRow.appendChild(requiresChip);
+    }
+    if (theme.repo && theme.commit) {
+      const commitChip = document.createElement("a");
+      commitChip.className = "detail-meta-chip detail-meta-link";
+      commitChip.href = `https://github.com/${theme.repo}/commit/${theme.commit}`;
+      commitChip.target = "_blank";
+      commitChip.rel = "noopener";
+      commitChip.appendChild(createCommitIcon());
+      const commitText = document.createElement("span");
+      commitText.className = "detail-meta-text";
+      commitText.textContent = t("marketplace_commit", [theme.commit.slice(0, 7)]);
+      commitChip.appendChild(commitText);
+      metaRow.appendChild(commitChip);
+    }
     if (theme.locked) {
-      const timeStat = document.createElement("span");
-      timeStat.className = "detail-stat detail-stat-updated";
+      const updatedChip = document.createElement("span");
+      updatedChip.className = "detail-meta-chip";
       const localized = new Date(theme.locked).toLocaleString(navigator.language, {
         year: "numeric",
-        month: "long",
+        month: "short",
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
       });
-      timeStat.dataset.tooltip = t("marketplace_lastUpdatedOn", [localized]);
-      timeStat.appendChild(createClockIcon());
-      timeStat.appendChild(document.createTextNode(formatTimeAgo(theme.locked)));
-      statsEl.appendChild(timeStat);
+      updatedChip.appendChild(createClockIcon());
+      const updatedText = document.createElement("span");
+      updatedText.className = "detail-meta-text";
+      updatedText.appendChild(document.createTextNode(`${t("marketplace_lastUpdatedOn", [localized])} `));
+      const relative = document.createElement("span");
+      relative.className = "detail-meta-muted";
+      relative.textContent = `(${formatTimeAgo(theme.locked)})`;
+      updatedText.appendChild(relative);
+      updatedChip.appendChild(updatedText);
+      metaRow.appendChild(updatedChip);
     }
+    metaRow.style.display = metaRow.childElementCount > 0 ? "flex" : "none";
   }
 
   const repoLinkContainer = document.getElementById("detail-repo-link");
   const repoAnchor = document.getElementById("detail-repo-anchor") as HTMLAnchorElement;
+  const discussionLink = document.getElementById("detail-discussion-link") as HTMLAnchorElement | null;
+  const discussionSep = document.getElementById("detail-footer-sep");
   const ricsBadge = document.getElementById("detail-rics-badge");
   if (repoLinkContainer && repoAnchor) {
     if (theme.repo) {
@@ -1607,6 +1831,17 @@ async function openDetailModal(theme: StoreTheme, urlThemeInfo?: UrlThemeInfo): 
       repoAnchor.textContent = theme.repo;
     } else {
       repoLinkContainer.style.display = "none";
+    }
+  }
+
+  if (discussionLink) {
+    if (theme.discussionUrl) {
+      discussionLink.href = theme.discussionUrl;
+      discussionLink.style.display = "inline-flex";
+      if (discussionSep) discussionSep.style.display = "inline-flex";
+    } else {
+      discussionLink.style.display = "none";
+      if (discussionSep) discussionSep.style.display = "none";
     }
   }
 
@@ -1796,6 +2031,9 @@ async function openDetailModal(theme: StoreTheme, urlThemeInfo?: UrlThemeInfo): 
           updateRatingEnabled?.(false);
           updateDetailApplyBtn(false, false);
         } else {
+          if (!(await confirmIncompatibleInstall(theme))) {
+            return;
+          }
           const installedTheme = await installTheme(theme, { source: "marketplace" });
           actionBtn.className = "store-card-btn store-card-btn-remove";
           setActionButtonContent(actionBtn, t("marketplace_remove"), "I");
@@ -1849,7 +2087,7 @@ async function openDetailModal(theme: StoreTheme, urlThemeInfo?: UrlThemeInfo): 
       try {
         const isRegistryTheme = !!theme.commit && !urlThemeInfo;
         const shaderConfig = isRegistryTheme
-          ? await fetchRegistryShaderConfig(theme.id)
+          ? await fetchRegistryShaderConfig(theme.registryPath ?? `themes/${theme.id}`)
           : await fetchThemeShaderConfig(theme.repo);
         if (!shaderConfig) {
           showAlert(t("marketplace_shaderFetchFailed"));

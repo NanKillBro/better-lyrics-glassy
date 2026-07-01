@@ -9,9 +9,10 @@ import {
   hideCursorOnIdle,
   hideDockOnIdleInFullscreen,
   listenForPopupMessages,
+  loadDockSettings,
+  loadLyricOffsetSettings,
   loadPassiveScrollSetting,
   loadTranslationSettings,
-  loadUnisonPinnedDockSettings,
   onAlbumArtEnabled,
 } from "@modules/settings/settings";
 import { injectHeadTags, reloadAlbumArt, setupAdObserver } from "@modules/ui/dom";
@@ -46,8 +47,9 @@ async function modify(): Promise<void> {
   handleSettings();
   setupWakeLockForFullscreen();
   loadTranslationSettings();
+  loadLyricOffsetSettings();
   loadPassiveScrollSetting();
-  loadUnisonPinnedDockSettings(hideDockOnIdleInFullscreen);
+  loadDockSettings(hideDockOnIdleInFullscreen);
   subscribeToCustomStyles();
   await purgeExpiredKeys();
   await saveCacheInfo();

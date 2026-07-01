@@ -3,6 +3,7 @@ import {
   BACKGROUND_LYRIC_CLASS,
   DISCORD_INVITE_URL,
   DISCORD_LOGO_SRC,
+  DOCK_CLASS,
   FONT_LINK,
   FOOTER_CLASS,
   FOOTER_NOT_VISIBLE_LOG,
@@ -30,7 +31,6 @@ import {
   type SyncType,
   TAB_RENDERER_SELECTOR,
   TRANSLATED_LYRICS_CLASS,
-  UNISON_DOCK_CLASS,
   WORD_CLASS,
 } from "@constants";
 import { AppState } from "@core/appState";
@@ -54,6 +54,9 @@ import { requestLyrics } from "@modules/unison/unisonApi";
 import { log } from "@utils";
 import { generatePetName } from "@/core/keyIdentity";
 import { byId, deleteVote, type UnisonData, vote } from "../lyrics/providers/unison";
+import { buildControlsSegment, closeSourceMenu } from "./lyricsDock/controls";
+import { parseSvgString, syncTypeColors, syncTypeIcons } from "./lyricsDock/icons";
+import { loadSavedOffset } from "./lyricsDock/offset";
 import { scrollEventHandler } from "./observer";
 import { showReportModal } from "./reportLyrics";
 
@@ -64,30 +67,6 @@ const voteIcons = {
 };
 
 const VOTE_ACTIVE_CLASS = `${FOOTER_CLASS}__vote--active`;
-
-const syncTypeIcons: Record<SyncType, string> = {
-  syllable: `<svg width="14" height="14" viewBox="0 0 1024 1024" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="636" y="239" width="389.981" height="233.271" rx="48" fill-opacity="0.5"/><path d="M0 335C0 289.745 0 267.118 14.0589 253.059C28.1177 239 50.7452 239 96 239H213C243.17 239 258.255 239 267.627 248.373C277 257.745 277 272.83 277 303V408C277 438.17 277 453.255 267.627 462.627C258.255 472 243.17 472 213 472H96C50.7452 472 28.1177 472 14.0589 457.941C0 443.882 0 421.255 0 376V335Z"/><path d="M337 304C337 273.83 337 258.745 346.373 249.373C355.745 240 370.83 240 401 240H460C505.255 240 527.882 240 541.941 254.059C556 268.118 556 290.745 556 336V377C556 422.255 556 444.882 541.941 458.941C527.882 473 505.255 473 460 473H401C370.83 473 355.745 473 346.373 463.627C337 454.255 337 439.17 337 409V304Z" fill-opacity="0.5"/><rect y="552.271" width="1024" height="233" rx="48" fill-opacity="0.5"/></svg>`,
-  word: `<svg width="14" height="14" viewBox="0 0 1024 1024" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="636" y="239" width="389.981" height="233.271" rx="48" fill-opacity="0.5"/><path d="M0 335C0 289.745 0 267.118 14.0589 253.059C28.1177 239 50.7452 239 96 239H213C243.17 239 258.255 239 267.627 248.373C277 257.745 277 272.83 277 303V408C277 438.17 277 453.255 267.627 462.627C258.255 472 243.17 472 213 472H96C50.7452 472 28.1177 472 14.0589 457.941C0 443.882 0 421.255 0 376V335Z"/><path d="M337 304C337 273.83 337 258.745 346.373 249.373C355.745 240 370.83 240 401 240H460C505.255 240 527.882 240 541.941 254.059C556 268.118 556 290.745 556 336V377C556 422.255 556 444.882 541.941 458.941C527.882 473 505.255 473 460 473H401C370.83 473 355.745 473 346.373 463.627C337 454.255 337 439.17 337 409V304Z"/><rect y="552.271" width="1024" height="233" rx="48" fill-opacity="0.5"/></svg>`,
-  line: `<svg width="14" height="14" viewBox="0 0 1024 1024" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="636" y="239" width="389.981" height="233.271" rx="48"/><path d="M0 335C0 289.745 0 267.118 14.0589 253.059C28.1177 239 50.7452 239 96 239H213C243.17 239 258.255 239 267.627 248.373C277 257.745 277 272.83 277 303V408C277 438.17 277 453.255 267.627 462.627C258.255 472 243.17 472 213 472H96C50.7452 472 28.1177 472 14.0589 457.941C0 443.882 0 421.255 0 376V335Z"/><path d="M337 304C337 273.83 337 258.745 346.373 249.373C355.745 240 370.83 240 401 240H460C505.255 240 527.882 240 541.941 254.059C556 268.118 556 290.745 556 336V377C556 422.255 556 444.882 541.941 458.941C527.882 473 505.255 473 460 473H401C370.83 473 355.745 473 346.373 463.627C337 454.255 337 439.17 337 409V304Z"/><rect y="552.271" width="1024" height="233" rx="48" fill-opacity="0.5"/></svg>`,
-  unsynced: `<svg width="14" height="14" viewBox="0 0 1024 1024" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><rect x="636" y="239" width="389.981" height="233.271" rx="48" fill-opacity="0.5"/><path d="M0 335C0 289.745 0 267.118 14.0589 253.059C28.1177 239 50.7452 239 96 239H213C243.17 239 258.255 239 267.627 248.373C277 257.745 277 272.83 277 303V408C277 438.17 277 453.255 267.627 462.627C258.255 472 243.17 472 213 472H96C50.7452 472 28.1177 472 14.0589 457.941C0 443.882 0 421.255 0 376V335Z" fill-opacity="0.5"/><path d="M337 304C337 273.83 337 258.745 346.373 249.373C355.745 240 370.83 240 401 240H460C505.255 240 527.882 240 541.941 254.059C556 268.118 556 290.745 556 336V377C556 422.255 556 444.882 541.941 458.941C527.882 473 505.255 473 460 473H401C370.83 473 355.745 473 346.373 463.627C337 454.255 337 439.17 337 409V304Z" fill-opacity="0.5"/><rect y="552.271" width="1024" height="233" rx="48" fill-opacity="0.5"/></svg>`,
-};
-
-const syncTypeColors: Record<SyncType, string> = {
-  syllable: "#fde69b",
-  word: "#aad1ff",
-  line: "#c9f8da",
-  unsynced: "rgba(255, 255, 255, 0.7)",
-};
-
-function parseSvgString(svgString: string): SVGElement | null {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(svgString, "image/svg+xml");
-  const svg = doc.documentElement;
-  if (svg instanceof SVGElement && !doc.querySelector("parsererror")) {
-    return svg;
-  }
-  return null;
-}
 
 function appendIconTo(button: HTMLElement, svgString: string): void {
   const svg = parseSvgString(svgString);
@@ -412,16 +391,25 @@ export function addFooter(
     footerLink.textContent = source || HOMEPAGE_DOMAIN;
   }
 
+  AppState.currentProviderKey = providerKey ?? null;
+  void loadSavedOffset(AppState.lastLoadedVideoId, AppState.currentProviderKey);
+
+  if (AppState.isControlsDockEnabled) {
+    mountDock(AppState.controlsDockPosition);
+  }
+
+  unmountVotingSegment();
   if (source === "Unison" && unisonData) {
     AppState.currentUnisonData = unisonData;
     footer.appendChild(createUnisonFooterCard(unisonData));
-    if (AppState.isUnisonPinnedDockEnabled) {
-      mountUnisonDock(unisonData, AppState.unisonPinnedDockPosition);
+    if (AppState.isControlsDockEnabled) {
+      mountVotingSegment(unisonData);
     }
   } else {
     AppState.currentUnisonData = null;
-    unmountUnisonDock();
   }
+
+  updateNoLyricsSuppression();
 }
 
 const unisonControlsRegistry = {
@@ -466,16 +454,29 @@ function hidePlayerBarOnDockLeave(): void {
   document.getElementById("layout")?.removeAttribute("show-fullscreen-controls");
 }
 
-type DockSuppressionReason = "cardVisible" | "ad" | "loading";
+type DockSuppressionReason = "ad" | "noLyrics";
 const dockSuppressionReasons = new Set<DockSuppressionReason>();
 
-function applyDockSuppression(): void {
-  const dock = document.getElementsByClassName(UNISON_DOCK_CLASS)[0] as HTMLElement | undefined;
-  if (!dock) return;
-  dock.classList.toggle(`${UNISON_DOCK_CLASS}--hidden`, dockSuppressionReasons.size > 0);
+function setVotingSegmentHidden(hidden: boolean): void {
+  document.querySelector(`.${DOCK_CLASS}__voting`)?.classList.toggle(`${DOCK_CLASS}__voting--hidden`, hidden);
 }
 
-function setUnisonDockSuppression(reason: DockSuppressionReason, suppressed: boolean): void {
+function updateNoLyricsSuppression(): void {
+  const inner = document.getElementsByClassName(`${DOCK_CLASS}__inner`)[0];
+  if (!inner) return;
+  const controls = inner.querySelector(`.${DOCK_CLASS}__controls`);
+  const hasControls = !!controls && controls.childElementCount > 0;
+  const hasVoting = !!inner.querySelector(`.${DOCK_CLASS}__voting`);
+  setDockSuppression("noLyrics", !hasControls && !hasVoting);
+}
+
+function applyDockSuppression(): void {
+  const dock = document.getElementsByClassName(DOCK_CLASS)[0] as HTMLElement | undefined;
+  if (!dock) return;
+  dock.classList.toggle(`${DOCK_CLASS}--hidden`, dockSuppressionReasons.size > 0);
+}
+
+function setDockSuppression(reason: DockSuppressionReason, suppressed: boolean): void {
   const had = dockSuppressionReasons.has(reason);
   if (suppressed === had) return;
   if (suppressed) dockSuppressionReasons.add(reason);
@@ -608,38 +609,262 @@ function createUnisonFooterCard(unisonData: UnisonData): HTMLElement {
   return unisonContainer;
 }
 
-export function mountUnisonDock(unisonData: UnisonData, position: string): void {
-  if (document.getElementsByClassName(UNISON_DOCK_CLASS).length > 0) {
+const DOCK_PROXIMITY = 104;
+const DOCK_LEAVE_GRACE = 120;
+let dockProximityAttached = false;
+let dockProximityListener: ((event: MouseEvent) => void) | null = null;
+let dockProximityRaf: number | null = null;
+let dockLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+const DOCK_EXPANDED_CLASS = `${DOCK_CLASS}__inner--expanded`;
+
+// Activates immediately, but defers deactivation by a short grace window (cancelled if the
+// cursor returns), so brief excursions across a divider or during a layout shift do not drop
+// the player bar.
+function setDockNear(inner: HTMLElement, near: boolean): void {
+  if (near) {
+    if (dockLeaveTimer) {
+      clearTimeout(dockLeaveTimer);
+      dockLeaveTimer = null;
+    }
+    if (!inner.classList.contains(DOCK_EXPANDED_CLASS)) {
+      inner.classList.add(DOCK_EXPANDED_CLASS);
+      showPlayerBarOnDockHover();
+    }
+  } else if (inner.classList.contains(DOCK_EXPANDED_CLASS) && !dockLeaveTimer) {
+    dockLeaveTimer = setTimeout(() => {
+      dockLeaveTimer = null;
+      inner.classList.remove(DOCK_EXPANDED_CLASS);
+      hidePlayerBarOnDockLeave();
+    }, DOCK_LEAVE_GRACE);
+  }
+}
+
+function evaluateDockProximity(event: MouseEvent): void {
+  const inner = document.getElementsByClassName(`${DOCK_CLASS}__inner`)[0] as HTMLElement | undefined;
+  if (!inner) return;
+  const rect = inner.getBoundingClientRect();
+  if (rect.width === 0) return;
+
+  const dock = inner.parentElement as HTMLElement | null;
+  if (dock?.classList.contains(`${DOCK_CLASS}--hidden`) || dock?.classList.contains(`${DOCK_CLASS}--idle-hidden`)) {
     return;
   }
-  const sidePanel = document.querySelector("#side-panel");
-  if (!sidePanel) return;
+  const position = dock?.dataset.position ?? "";
+  let { left, right, top, bottom } = rect;
+  if (position.includes("right")) left -= DOCK_PROXIMITY;
+  if (position.includes("left")) right += DOCK_PROXIMITY;
+  if (position.startsWith("top")) {
+    bottom += DOCK_PROXIMITY;
+  } else {
+    top -= DOCK_PROXIMITY;
+    // Activating a bottom dock translates it up by --dock-y-shift, which would carry this
+    // zone off the cursor and oscillate. Extend the zone down to the dock's resting edge so
+    // the shift can never eject the cursor. The live matrix stays exact mid-slide and follows
+    // any themed shift value.
+    const transform = dock ? getComputedStyle(dock).transform : "none";
+    const shiftY = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
+    bottom -= shiftY;
+  }
 
-  const dock = document.createElement("div");
-  dock.className = UNISON_DOCK_CLASS;
+  let near = event.clientX >= left && event.clientX <= right && event.clientY >= top && event.clientY <= bottom;
+
+  // While the source dropdown is open, treat its bounds (plus a bridging margin) as
+  // part of the dock so moving onto it does not collapse the dock or drop the player bar.
+  if (!near) {
+    const menu = document.querySelector(`.${DOCK_CLASS}__menu--open`);
+    if (menu) {
+      const m = menu.getBoundingClientRect();
+      const pad = 32;
+      near =
+        event.clientX >= m.left - pad &&
+        event.clientX <= m.right + pad &&
+        event.clientY >= m.top - pad &&
+        event.clientY <= m.bottom + pad;
+    }
+  }
+
+  // The dock is what keeps the fullscreen controls shown, so while they are up, the cursor
+  // being anywhere over the player bar must hold the dock open: collapsing here would pull
+  // the bar out from under the pointer.
+  if (!near && document.getElementById("layout")?.hasAttribute("show-fullscreen-controls")) {
+    const bar = document.querySelector(PLAYER_BAR_SELECTOR);
+    if (bar) {
+      const b = bar.getBoundingClientRect();
+      near = event.clientX >= b.left && event.clientX <= b.right && event.clientY >= b.top && event.clientY <= b.bottom;
+    }
+  }
+
+  setDockNear(inner, near);
+}
+
+// Pre-expands the dock when the cursor comes near, so the controls have settled into
+// their revealed positions before the pointer reaches them, and keeps the player bar
+// shown while the cursor is near the dock. The trigger zone is extended only toward the
+// panel interior (the approach side for the dock's anchor) and uses no overlay element,
+// so it never shadows clicks on the lyrics or player. Being position-based rather than
+// mouseenter/mouseleave, it stays stable while the cursor is held still during a click.
+// Reads are coalesced to one per frame to bound the per-move layout/style cost.
+function ensureDockProximityListener(): void {
+  if (dockProximityAttached) return;
+  dockProximityAttached = true;
+  dockProximityListener = event => {
+    if (dockProximityRaf !== null) cancelAnimationFrame(dockProximityRaf);
+    dockProximityRaf = requestAnimationFrame(() => {
+      dockProximityRaf = null;
+      evaluateDockProximity(event);
+    });
+  };
+  document.addEventListener("mousemove", dockProximityListener, { passive: true });
+}
+
+function removeDockProximityListener(): void {
+  if (!dockProximityListener) return;
+  document.removeEventListener("mousemove", dockProximityListener);
+  dockProximityListener = null;
+  dockProximityAttached = false;
+  if (dockProximityRaf !== null) {
+    cancelAnimationFrame(dockProximityRaf);
+    dockProximityRaf = null;
+  }
+  if (dockLeaveTimer) {
+    clearTimeout(dockLeaveTimer);
+    dockLeaveTimer = null;
+  }
+}
+
+// -- Dock entry/exit effect ----------------------------------------------
+// The dock's shared reveal: scale, blur, and fade, the same values the dock uses to hide and
+// reappear. Used for elements entering or leaving the dock, and for the control set swap (which
+// also transitions width so the dock resizes smoothly between the two states).
+const DOCK_FX_CLASS = `${DOCK_CLASS}__fx`;
+const DOCK_FX_OUT_CLASS = `${DOCK_CLASS}__fx-out`;
+const DOCK_FX_MS = 320;
+
+// Reveals an element with the dock effect (scale up + sharpen + fade in).
+function animateDockEnter(el: HTMLElement): void {
+  el.classList.add(DOCK_FX_CLASS, DOCK_FX_OUT_CLASS);
+  void el.offsetWidth;
+  el.classList.remove(DOCK_FX_OUT_CLASS);
+  setTimeout(() => el.classList.remove(DOCK_FX_CLASS), DOCK_FX_MS + 40);
+}
+
+let dockControlsSwapFinalize: (() => void) | null = null;
+
+// Swaps the dock's control set: the outgoing set scales down, blurs, and fades, then the
+// incoming set reveals while the dock's width eases from the old to the new size. Finalizable
+// mid-flight so a rapid second change settles cleanly first.
+function animateControlsSwap(oldControls: HTMLElement, newControls: HTMLElement): void {
+  const widthFrom = oldControls.offsetWidth;
+  let swapTimer: ReturnType<typeof setTimeout>;
+  let doneTimer: ReturnType<typeof setTimeout>;
+
+  function finalize(): void {
+    clearTimeout(swapTimer);
+    clearTimeout(doneTimer);
+    if (oldControls.isConnected) oldControls.replaceWith(newControls);
+    newControls.classList.remove(DOCK_FX_CLASS, DOCK_FX_OUT_CLASS);
+    newControls.style.width = "";
+    dockControlsSwapFinalize = null;
+  }
+
+  dockControlsSwapFinalize = finalize;
+
+  oldControls.classList.add(DOCK_FX_CLASS);
+  void oldControls.offsetWidth;
+  oldControls.classList.add(DOCK_FX_OUT_CLASS);
+
+  swapTimer = setTimeout(() => {
+    if (!oldControls.isConnected) {
+      finalize();
+      return;
+    }
+    oldControls.replaceWith(newControls);
+    const widthTo = newControls.offsetWidth;
+    newControls.classList.add(DOCK_FX_CLASS, DOCK_FX_OUT_CLASS);
+    newControls.style.width = `${widthFrom}px`;
+    void newControls.offsetWidth;
+    newControls.classList.remove(DOCK_FX_OUT_CLASS);
+    newControls.style.width = `${widthTo}px`;
+    doneTimer = setTimeout(finalize, DOCK_FX_MS + 40);
+  }, DOCK_FX_MS);
+}
+
+// Mounts the dock if absent, otherwise refreshes its controls in place. The dock
+// element persists across re-injections so the cursor's hover state (and the expanded
+// reveal) is never lost during a provider switch or toggle.
+export function mountDock(position: string): void {
+  let dock = document.getElementsByClassName(DOCK_CLASS)[0] as HTMLElement | undefined;
+  let inner: HTMLElement | null;
+
+  if (dock) {
+    inner = dock.querySelector(`.${DOCK_CLASS}__inner`);
+    if (!inner) return;
+  } else {
+    const sidePanel = document.querySelector("#side-panel");
+    if (!sidePanel) return;
+
+    dock = document.createElement("div");
+    dock.className = DOCK_CLASS;
+
+    inner = document.createElement("div");
+    inner.className = `${DOCK_CLASS}__inner`;
+
+    // Drop focus after activating a control, otherwise :focus-within keeps the dock
+    // expanded once the cursor leaves and it never collapses.
+    inner.addEventListener("click", event => {
+      (event.target as HTMLElement).closest("button")?.blur();
+    });
+
+    ensureLayoutAttrObserver();
+    ensureDockProximityListener();
+
+    dock.appendChild(inner);
+    sidePanel.appendChild(dock);
+  }
+
   dock.dataset.position = position;
+  closeSourceMenu();
 
-  const inner = document.createElement("div");
-  inner.className = `${UNISON_DOCK_CLASS}__inner`;
+  dockControlsSwapFinalize?.();
 
-  inner.appendChild(buildUnisonVoteButton(unisonData, 1));
-  inner.appendChild(buildUnisonVoteButton(unisonData, -1));
-  inner.appendChild(createReportButton(unisonData.lyricsId));
+  const controls = buildControlsSegment();
+  const existingControls = inner.querySelector(`.${DOCK_CLASS}__controls`) as HTMLElement | null;
+  if (existingControls) {
+    if (existingControls.dataset.shape !== controls.dataset.shape) {
+      animateControlsSwap(existingControls, controls);
+    } else {
+      existingControls.replaceWith(controls);
+    }
+  } else {
+    inner.prepend(controls);
+    animateDockEnter(controls);
+  }
 
-  inner.addEventListener("mouseenter", showPlayerBarOnDockHover);
-  inner.addEventListener("mouseleave", hidePlayerBarOnDockLeave);
-  ensureLayoutAttrObserver();
-
-  dock.appendChild(inner);
-  sidePanel.appendChild(dock);
   applyDockSuppression();
+}
+
+export function mountVotingSegment(unisonData: UnisonData): void {
+  const inner = document.querySelector(`.${DOCK_CLASS}__inner`);
+  if (!inner) return;
+  if (inner.querySelector(`.${DOCK_CLASS}__voting`)) return;
+
+  const segment = document.createElement("div");
+  segment.className = `${DOCK_CLASS}__voting`;
+  const divider = document.createElement("span");
+  divider.className = `${DOCK_CLASS}__divider`;
+  segment.appendChild(divider);
+  segment.appendChild(buildUnisonVoteButton(unisonData, 1));
+  segment.appendChild(buildUnisonVoteButton(unisonData, -1));
+  segment.appendChild(createReportButton(unisonData.lyricsId));
+  inner.appendChild(segment);
+  animateDockEnter(segment);
 
   const card = document.querySelector<HTMLElement>(`.${FOOTER_CLASS}__unison-card`);
   if (card) {
     unisonDockObserver = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
-          setUnisonDockSuppression("cardVisible", entry.isIntersecting);
+          setVotingSegmentHidden(entry.isIntersecting);
         }
       },
       { threshold: 0.4 }
@@ -648,20 +873,26 @@ export function mountUnisonDock(unisonData: UnisonData, position: string): void 
   }
 }
 
-export function unmountUnisonDock(): void {
+function unmountVotingSegment(): void {
   if (unisonDockObserver) {
     unisonDockObserver.disconnect();
     unisonDockObserver = null;
   }
+  document.querySelector(`.${DOCK_CLASS}__voting`)?.remove();
+}
+
+export function unmountDock(): void {
+  dockControlsSwapFinalize?.();
+  unmountVotingSegment();
   hidePlayerBarOnDockLeave();
   disconnectLayoutAttrObserver();
-  dockSuppressionReasons.delete("cardVisible");
-  const dock = document.getElementsByClassName(UNISON_DOCK_CLASS)[0];
+  removeDockProximityListener();
+  const dock = document.getElementsByClassName(DOCK_CLASS)[0];
   if (dock) dock.remove();
 }
 
-export function updateUnisonDockPosition(position: string): void {
-  const dock = document.getElementsByClassName(UNISON_DOCK_CLASS)[0] as HTMLElement | undefined;
+export function updateDockPosition(position: string): void {
+  const dock = document.getElementsByClassName(DOCK_CLASS)[0] as HTMLElement | undefined;
   if (dock) dock.dataset.position = position;
 }
 
@@ -822,7 +1053,7 @@ function createFooter(
     if (videoId && showRequestButton) {
       footer.appendChild(createRequestSyncedButton({ videoId, song, artist }));
     }
-    chrome.storage.sync.get({ isShadersPromoEnabled: true }, settings => {
+    chrome.storage.local.get({ isShadersPromoEnabled: true }, settings => {
       if (!discordLink.isConnected) return;
       if (!settings.isShadersPromoEnabled) return;
       if (!shouldRenderShadersPromo()) return;
@@ -866,7 +1097,6 @@ function setLoaderState(state: LoaderState, text?: string): void {
   if (text !== undefined) {
     loader.style.setProperty("--blyrics-loader-text", `"${text}"`);
   }
-  setUnisonDockSuppression("loading", state !== "hidden");
 }
 
 /**
@@ -1038,7 +1268,7 @@ export function showAdOverlay(): void {
   }
 
   adOverlay.setAttribute("active", "");
-  setUnisonDockSuppression("ad", true);
+  setDockSuppression("ad", true);
 }
 
 /**
@@ -1049,7 +1279,7 @@ export function hideAdOverlay(): void {
   if (adOverlay) {
     adOverlay.removeAttribute("active");
   }
-  setUnisonDockSuppression("ad", false);
+  setDockSuppression("ad", false);
 }
 
 /**
@@ -1316,6 +1546,9 @@ export function addNoLyricsButton(
   const lyricsWrapper = document.getElementById(LYRICS_WRAPPER_ID);
   if (!lyricsWrapper) return;
 
+  // No lyrics to control: the dock has nothing to offer here.
+  unmountDock();
+
   const buttonContainer = document.createElement("div");
   buttonContainer.className = "blyrics-no-lyrics-button-container";
 
@@ -1417,7 +1650,10 @@ export function cleanup(): void {
     blyricsFooter.remove();
   }
 
-  unmountUnisonDock();
+  // The dock persists across re-injections (updated in place by addFooter) so a
+  // provider switch or toggle never tears it out of the DOM. It is removed only when
+  // there are no lyrics (addNoLyricsButton) or the dock setting is disabled.
+  unmountVotingSegment();
   clearUnisonControlsRegistry();
   AppState.currentUnisonData = null;
 

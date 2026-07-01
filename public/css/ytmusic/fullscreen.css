@@ -241,30 +241,17 @@ ytmusic-app-layout[player-fullscreened]:not([blyrics-dfs]) > [slot="player-bar"]
 }
 
 /* Top-anchored Unison dock: tab header is hidden in fullscreen, so no 48px buffer needed */
-#layout[player-fullscreened]:not([blyrics-dfs]) .blyrics-unison-dock[data-position^="top-"] {
+#layout[player-fullscreened]:not([blyrics-dfs]) .blyrics-dock[data-position^="top-"] {
   top: 16px;
 }
 
-#layout[player-fullscreened]:not([blyrics-dfs])[show-fullscreen-controls] .blyrics-unison-dock[data-position^="bottom-"],
-#layout[player-fullscreened]:not([blyrics-dfs]):has(.blyrics-unison-dock__inner:hover) .blyrics-unison-dock[data-position^="bottom-"] {
+/* The proximity listener owns this attribute, including a corridor that covers the gap the
+   shift opens, so no CSS hover-bridge is needed to keep it latched. */
+#layout[player-fullscreened]:not([blyrics-dfs])[show-fullscreen-controls] .blyrics-dock[data-position^="bottom-"] {
   --dock-y-shift: var(--blyrics-fullscreen-bottom-dock-shift, -88px);
 }
 
-#layout[player-fullscreened]:not([blyrics-dfs]) .blyrics-unison-dock[data-position^="bottom-"] .blyrics-unison-dock__inner {
-  position: relative;
-}
-
-#layout[player-fullscreened]:not([blyrics-dfs]) .blyrics-unison-dock[data-position^="bottom-"] .blyrics-unison-dock__inner::before {
-  content: "";
-  position: absolute;
-  top: -88px;
-  bottom: 0;
-  left: -88px;
-  right: -88px;
-  z-index: -1;
-}
-
 /* Top-center autoscroll-button shift is smaller in fullscreen (no tab header) */
-#layout[player-fullscreened]:not([blyrics-dfs]) #side-panel:has(.autoscroll-resume-button:not([autoscroll-hidden="true"])) .blyrics-unison-dock[data-position="top-center"] {
+#layout[player-fullscreened]:not([blyrics-dfs]) #side-panel:has(.autoscroll-resume-button:not([autoscroll-hidden="true"])) .blyrics-dock[data-position="top-center"] {
   --dock-y-shift: 52px;
 }
