@@ -296,7 +296,7 @@ const restoreOptions = (): void => {
     "isUnisonAutoHideInFullscreenEnabled",
   ];
 
-  chrome.storage.sync.get(defaultOptions, setOptionsInForm);
+  chrome.storage.local.get(defaultOptions, setOptionsInForm);
 
   document.getElementById("clear-cache")!.addEventListener("click", () => clearTransientLyrics());
   setupUnisonActionsModal();
@@ -1556,7 +1556,7 @@ function initOffsetModal(): void {
 
   // Reflect changes coming from the dock (or another tab) live.
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "sync") return;
+    if (area !== "local") return;
     for (const id of ["globalLyricOffset", "richsyncOffsetTrim", "lineOffsetTrim"]) {
       const change = changes[id];
       if (change) setOffsetDisplay(id, Number(change.newValue ?? 0));
