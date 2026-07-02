@@ -1278,7 +1278,7 @@ ytmusic-player-page tp-yt-paper-tabs.tab-header-container .blyrics-footer__conta
 
 /* unison menu */
 /* Nâng cao unison dock khi ở chế độ toàn màn hình (fullscreen) cho data-position="bottom-center" (bottom-middle) */
-ytmusic-player-page[player-fullscreened] .blyrics-unison-dock[data-position="bottom-center"] {
+ytmusic-player-page[player-fullscreened] .blyrics-dock[data-position="bottom-center"] {
   top: calc(100% - 110px); /* Nâng vị trí từ bottom (mặc định 64px lên 110px) khi ở fullscreen */
   --blyrics-fullscreen-bottom-dock-shift: -70px; /* Dịch chuyển cao hơn một chút khi hiện thanh điều khiển ở dưới */
 }
