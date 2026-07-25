@@ -2,6 +2,7 @@ import { INITIALIZE_LOG } from "@constants";
 import { AppState } from "@core/appState";
 import { injectI18nCssVars, loadLocaleOverride, subscribeToLocaleChanges } from "@core/i18n";
 import { purgeExpiredKeys, saveCacheInfo } from "@core/storage";
+import { prewarmAuthenticationToken } from "@modules/lyrics/providers/unified";
 import { initProviders } from "@modules/lyrics/providers/shared";
 import { setupRequestSniffer } from "@modules/lyrics/requestSniffer/requestSniffer";
 import {
@@ -59,6 +60,7 @@ async function modify(): Promise<void> {
   disableInertWhenFullscreen();
   setupAltHoverHandler();
   initProviders();
+  prewarmAuthenticationToken();
   setUpAvButtonListener();
   log(
     INITIALIZE_LOG,
