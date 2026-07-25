@@ -34,10 +34,6 @@ export enum UnisonReportReason {
   OTHER = "other",
 }
 
-export type UnisonLyricSourceResult = LyricSourceResult & {
-  unisonData: UnisonData;
-};
-
 export interface UnisonData {
   vote: 1 | -1 | null;
   votes: number;
@@ -144,12 +140,6 @@ export default async function unison(providerParameters: ProviderParameters): Pr
     return;
   }
 
-  const result = {
-    cacheAllowed: false,
-    source: "Unison",
-    sourceHref: chrome.runtime.getURL("pages/unison.html"),
-  };
-
   const unisonData: UnisonData = {
     vote: responseData.userVote,
     votes: responseData.voteCount,
@@ -158,25 +148,26 @@ export default async function unison(providerParameters: ProviderParameters): Pr
     submitter: responseData.submitter,
   };
 
+  const result = {
+    cacheAllowed: false,
+    source: "Unison",
+    sourceHref: chrome.runtime.getURL("pages/unison.html"),
+    unisonData,
+  };
+
   switch (responseData.format) {
     case "ttml":
-      await fillTtml(
-        responseData.lyrics,
-        providerParameters,
-        {
-          richsyncKey: "unison-richsynced",
-          syncedKey: "unison-synced",
-          ...result,
-        },
-        { unisonData }
-      );
+      await fillTtml(responseData.lyrics, providerParameters, {
+        richsyncKey: "unison-richsynced",
+        syncedKey: "unison-synced",
+        ...result,
+      });
       providerParameters.sourceMap["unison-plain"].lyricSourceResult = null;
       break;
     case "lrc":
       const lrc = parseLRC(responseData.lyrics, responseData.duration);
       const res = {
         ...result,
-        unisonData,
         lyrics: lrc,
       };
 
@@ -191,7 +182,6 @@ export default async function unison(providerParameters: ProviderParameters): Pr
       providerParameters.sourceMap["unison-plain"].lyricSourceResult = plain
         ? {
             ...result,
-            unisonData,
             lyrics: plain,
           }
         : null;

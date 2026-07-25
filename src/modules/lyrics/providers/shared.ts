@@ -4,7 +4,7 @@ import { log } from "@utils";
 import unified from "./unified";
 import ytLyrics, { type YTLyricSourceResult } from "./yt";
 import { ytCaptions } from "./ytCaptions";
-import unison, { type UnisonLyricSourceResult } from "@modules/lyrics/providers/unison";
+import unison, { type UnisonData } from "@modules/lyrics/providers/unison";
 /** Current version of the lyrics cache format */
 const LYRIC_CACHE_VERSION = "2.1.0";
 
@@ -42,7 +42,7 @@ interface AudioTrackData {
 interface LyricSource {
   filled: boolean;
   resultCached: boolean;
-  lyricSourceResult: LyricSourceResult | UnisonLyricSourceResult | YTLyricSourceResult | null;
+  lyricSourceResult: LyricSourceResult | YTLyricSourceResult | null;
   lyricSourceFiller: (providerParameters: ProviderParameters) => Promise<void>;
 }
 
@@ -57,7 +57,7 @@ export interface LyricSourceResult {
   artist?: string;
   song?: string;
   duration?: number;
-  unisonId?: number;
+  unisonData?: UnisonData;
 }
 
 export type LyricsArray = Lyric[];

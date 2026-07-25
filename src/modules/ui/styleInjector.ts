@@ -3,7 +3,7 @@ import { decompressString, isCompressed } from "@core/compression";
 import { compileRicsToStyles, getLocalStorage, getSyncStorage, loadChunkedStyles } from "@core/storage";
 import { setThemeSettings } from "@modules/settings/themeOptions";
 import { log } from "@utils";
-import { cachedDurations } from "./animationEngine";
+import { clearAnimationStyleCache } from "./animationEngine";
 
 let hasSubscribedToStyles = false;
 
@@ -42,7 +42,7 @@ export function applyCustomStyles(css: string): void {
     styleTag.textContent = css;
     document.head.appendChild(styleTag);
   }
-  cachedDurations.clear();
+  clearAnimationStyleCache();
 }
 
 interface CSSStorageData {

@@ -8,12 +8,8 @@ export const CURRENT_LYRICS_CLASS = "blyrics--active" as const;
 export const ZERO_DURATION_ANIMATION_CLASS = "blyrics-zero-dur-animate" as const;
 export const RTL_CLASS = "blyrics-rtl" as const;
 export const WORD_CLASS = "blyrics--word" as const;
-export const HAS_TRAILING_SPACE_CLASS = "blyrics--has-trailing-space" as const;
 export const BACKGROUND_LYRIC_CLASS = "blyrics-background-lyric" as const;
 export const EXPLICIT_WORD_CLASS = "blyrics-explicit" as const;
-export const ANIMATING_CLASS = "blyrics--animating" as const;
-export const PAUSED_CLASS = "blyrics--paused" as const;
-export const PRE_ANIMATING_CLASS = "blyrics--pre-animating" as const;
 export const USER_SCROLLING_CLASS = "blyrics-user-scrolling" as const;
 export const TRANSLATED_LYRICS_CLASS = "blyrics--translated" as const;
 export const ROMANIZED_LYRICS_CLASS = "blyrics--romanized" as const;
@@ -170,8 +166,6 @@ export const PROVIDER_SWITCHED_LOG = "[BetterLyrics] Switching to provider = " a
 export const LYRICS_TAB_HIDDEN_LOG =
   "[BetterLyrics] (Safe to ignore) Lyrics tab is hidden, skipping lyrics fetch" as const;
 export const LYRICS_TAB_CLICKED_LOG = "[BetterLyrics] Lyrics tab clicked, fetching lyrics" as const;
-export const LYRICS_WRAPPER_NOT_VISIBLE_LOG =
-  "[BetterLyrics] (Safe to ignore) Lyrics wrapper is not visible, unable to inject lyrics" as const;
 export const LYRICS_WRAPPER_CREATED_LOG = "[BetterLyrics] Lyrics wrapper created" as const;
 export const FOOTER_NOT_VISIBLE_LOG =
   "[BetterLyrics] (Safe to ignore) Footer is not visible, unable to inject source link" as const;

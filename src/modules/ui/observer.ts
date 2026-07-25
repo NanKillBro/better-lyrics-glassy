@@ -21,7 +21,7 @@ import {
   animationEngine,
   animEngineState,
   getResumeScrollElement,
-  resetActiveAnimations,
+  noteAnimationVisibilityChange,
 } from "@modules/ui/animationEngine";
 import { adjustLyricOffset, OFFSET_STEP, OFFSET_STEP_LARGE } from "@modules/ui/lyricsDock/offset";
 import {
@@ -281,9 +281,7 @@ export function initializeLyrics(): void {
   hasInitializedLyrics = true;
 
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      resetActiveAnimations();
-    }
+    noteAnimationVisibilityChange();
   });
 
   // @ts-ignore
