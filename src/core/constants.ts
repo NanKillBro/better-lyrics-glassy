@@ -193,6 +193,7 @@ export const MUSIC_NOTES = "♪𝅘𝅥𝅮𝅘𝅥𝅯𝅘𝅥𝅰𝅘𝅥𝅱𝅘𝅥𝅲" as const;
 export const BLYRICS_INSTRUMENTAL_GAP_MS = 5000;
 
 export const LYRICS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const LYRICS_NEGATIVE_CACHE_TTL_MS = 30 * 60 * 1000;
 
 export const OFFSET_STORAGE_PREFIX = "blyricsOffset_";
 

@@ -120,16 +120,23 @@ export default async function unison(providerParameters: ProviderParameters): Pr
     headers: { "x-key-id": (await getIdentity()).keyId },
   });
 
-  providerParameters.sourceMap["unison-richsynced"].filled = true;
-  providerParameters.sourceMap["unison-synced"].filled = true;
-  providerParameters.sourceMap["unison-plain"].filled = true;
-
-  if (!response.ok) {
+  if (response.status === 404) {
+    providerParameters.sourceMap["unison-richsynced"].filled = true;
+    providerParameters.sourceMap["unison-synced"].filled = true;
+    providerParameters.sourceMap["unison-plain"].filled = true;
     providerParameters.sourceMap["unison-richsynced"].lyricSourceResult = null;
     providerParameters.sourceMap["unison-synced"].lyricSourceResult = null;
     providerParameters.sourceMap["unison-plain"].lyricSourceResult = null;
     return;
   }
+
+  if (!response.ok) {
+    return;
+  }
+
+  providerParameters.sourceMap["unison-richsynced"].filled = true;
+  providerParameters.sourceMap["unison-synced"].filled = true;
+  providerParameters.sourceMap["unison-plain"].filled = true;
 
   const responseData: UnisonResponse = await response.json().then(json => json.data);
 
