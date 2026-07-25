@@ -15,6 +15,7 @@ export interface PlayerDetails {
   audioTrackData: any;
   browserTime: number;
   playing: boolean;
+  playbackRate?: number;
   contentRect: {
     width: number;
     height: number;

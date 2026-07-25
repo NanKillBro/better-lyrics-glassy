@@ -25,6 +25,7 @@ const SCROLL_TIMING_RATIO_BASE_DURATION_MS = 750;
 const SCROLL_TIMING_RATIO_BASE_EARLY_SCROLL_CONSIDER_S = 0.62;
 const SCROLL_TIMING_RATIO_BASE_QUEUE_SCROLL_THRESHOLD_MS = 150;
 const MAX_AUTO_QUEUE_SCROLL_THRESHOLD_MS = 200;
+const SCROLL_PREPARE_LEAD_MS = 120;
 const SCROLL_TIMING_RATIO_BASE_TOTAL_MS =
   SCROLL_TIMING_RATIO_BASE_EARLY_SCROLL_CONSIDER_S * 1000 + SCROLL_TIMING_RATIO_BASE_QUEUE_SCROLL_THRESHOLD_MS;
 const SCROLL_TIMING_BUFFER_MS = SCROLL_TIMING_RATIO_BASE_TOTAL_MS - SCROLL_TIMING_RATIO_BASE_DURATION_MS;
@@ -86,6 +87,7 @@ let tabRendererResizeObserver: ResizeObserver | null = null;
 let observedTabRenderer: HTMLElement | null = null;
 let lineScrollAnimations: LineScrollAnimationRecord[] = [];
 let lineScrollAnimationToken = 0;
+let pendingLineScroll: PendingLineScroll | null = null;
 const lineScrollElementTokens = new WeakMap<HTMLElement, number>();
 let visibleWillChangeElements = new Set<HTMLElement>();
 let animationTimingVisibilityLogUntil = 0;
@@ -153,6 +155,7 @@ export let animEngineState: AnimEngineState = {
  * Called when song is switched or cleaned up
  */
 export function resetAnimEngineState(): void {
+  cancelPendingLineScroll();
   clearLineScrollAnimations();
   clearVisibleLyricWillChange();
   if (AppState.lyricData) {
@@ -169,7 +172,6 @@ export function resetAnimEngineState(): void {
   animEngineState.passiveScrollAccumulatedTime = 0;
   animEngineState.passiveLastWallTime = 0;
   stopPassiveScrollLoop();
-  clearAnimationStyleCache();
 }
 
 function resetPartAnimations(part: PartData): void {
@@ -1108,10 +1110,16 @@ function startInstrumentalExitAnimations(lineData: LineData, config: AnimationCo
 
 let cachedDurations: Map<string, number> = new Map();
 const cachedCSSValues: Map<string, string> = new Map();
+let cachedAnimationSettings: {
+  config: AnimationConfig;
+  scrollTiming: { earlyScrollConsiderS: number; queueScrollMs: number };
+} | null = null;
 
 export function clearAnimationStyleCache(): void {
+  cancelPendingLineScroll();
   cachedDurations.clear();
   cachedCSSValues.clear();
+  cachedAnimationSettings = null;
 }
 
 if (typeof window !== "undefined" && window.matchMedia) {
@@ -1314,6 +1322,20 @@ function readScrollTiming(scrollDurationMs: number): { earlyScrollConsiderS: num
   };
 }
 
+function getAnimationSettings(lyricsElement: HTMLElement): {
+  config: AnimationConfig;
+  scrollTiming: { earlyScrollConsiderS: number; queueScrollMs: number };
+} {
+  if (!cachedAnimationSettings) {
+    const config = readAnimationConfig(lyricsElement);
+    cachedAnimationSettings = {
+      config,
+      scrollTiming: readScrollTiming(config.scroll.durationMs),
+    };
+  }
+  return cachedAnimationSettings;
+}
+
 function clearLineScrollAnimations(): void {
   const records = lineScrollAnimations;
   lineScrollAnimations = [];
@@ -1377,8 +1399,8 @@ function lineScrollTranslate(side: LineScrollSide, state: LineScrollKeyframe, us
   return `0 var(${sharedProperty}, ${fallback})`;
 }
 
-function computedTranslate(lineElement: HTMLElement): string {
-  const translate = window.getComputedStyle(lineElement).translate.trim();
+function normalizedTranslate(translateValue: string): string {
+  const translate = translateValue.trim();
   return translate && translate !== "none" ? translate : "0px 0px";
 }
 
@@ -1395,20 +1417,10 @@ function restoreInlineStyleProperty(
   }
 }
 
-function resolveLineScrollTranslate(
-  lineElement: HTMLElement,
-  side: LineScrollSide,
-  state: LineScrollKeyframe,
-  useDifferentialEffects: boolean
-): string {
-  const previousTranslate = lineElement.style.getPropertyValue("translate");
-  const previousPriority = lineElement.style.getPropertyPriority("translate");
-
-  lineElement.style.setProperty("translate", lineScrollTranslate(side, state, useDifferentialEffects), "important");
-  const translate = computedTranslate(lineElement);
-  restoreInlineStyleProperty(lineElement, "translate", previousTranslate, previousPriority);
-
-  return translate;
+function lineScrollDurationProperty(side: LineScrollSide, fallbackMs: number, useDifferentialEffects: boolean): string {
+  return useDifferentialEffects
+    ? `var(--blyrics-line-scroll-${side}-duration, var(--blyrics-line-scroll-duration, ${fallbackMs}ms))`
+    : `var(--blyrics-line-scroll-duration, ${fallbackMs}ms)`;
 }
 
 function clearLineScrollInlineProperties(lineElement: HTMLElement, token?: number): void {
@@ -1422,53 +1434,69 @@ function clearLineScrollInlineProperties(lineElement: HTMLElement, token?: numbe
   lineScrollElementTokens.delete(lineElement);
 }
 
-function resolveLineScrollDuration(
-  lineElement: HTMLElement,
-  side: LineScrollSide,
-  fallbackMs: number,
-  useDifferentialEffects: boolean
-): number {
-  const previousDuration = lineElement.style.transitionDuration;
-  const previousPriority = lineElement.style.getPropertyPriority("transition-duration");
-  const durationProperty = useDifferentialEffects
-    ? `var(--blyrics-line-scroll-${side}-duration, var(--blyrics-line-scroll-duration, ${fallbackMs}ms))`
-    : `var(--blyrics-line-scroll-duration, ${fallbackMs}ms)`;
-
-  lineElement.style.setProperty("transition-duration", durationProperty, "important");
-  const durationMs = toMs(window.getComputedStyle(lineElement).transitionDuration.split(",")[0].trim());
-
-  if (previousDuration) {
-    lineElement.style.setProperty("transition-duration", previousDuration, previousPriority);
-  } else {
-    lineElement.style.removeProperty("transition-duration");
-  }
-
-  return durationMs > 0 ? durationMs : fallbackMs;
-}
-
-function resolveLineScrollKeyframeEasing(
-  lineElement: HTMLElement,
+function lineScrollEasingProperty(
   side: LineScrollSide,
   keyframe: LineScrollKeyframe,
   fallback: string,
   useDifferentialEffects: boolean
 ): string {
-  const previousEasing = lineElement.style.transitionTimingFunction;
-  const previousPriority = lineElement.style.getPropertyPriority("transition-timing-function");
-  const easingProperty = useDifferentialEffects
+  return useDifferentialEffects
     ? `var(--blyrics-line-scroll-${side}-${keyframe}-easing, var(--blyrics-line-scroll-${keyframe}-easing, var(--blyrics-line-scroll-timing-function, ${fallback})))`
     : `var(--blyrics-line-scroll-${keyframe}-easing, var(--blyrics-line-scroll-timing-function, ${fallback}))`;
+}
 
-  lineElement.style.setProperty("transition-timing-function", easingProperty, "important");
-  const easing = window.getComputedStyle(lineElement).transitionTimingFunction.trim();
+interface PreparedLineScroll {
+  lineElement: HTMLElement;
+  side: LineScrollSide;
+  token: number;
+}
 
-  if (previousEasing) {
-    lineElement.style.setProperty("transition-timing-function", previousEasing, previousPriority);
-  } else {
-    lineElement.style.removeProperty("transition-timing-function");
+interface ResolvedLineScroll extends PreparedLineScroll {
+  durationMs: number;
+  startEasing: string;
+  endEasing: string;
+  startTranslate: string;
+  endTranslate: string;
+}
+
+interface LineScrollPlan {
+  items: ResolvedLineScroll[];
+}
+
+interface PendingLineScroll {
+  plan: LineScrollPlan;
+  activeLineElement: HTMLElement;
+  fromScrollTop: number;
+  toScrollTop: number;
+}
+
+/**
+ * Resolves one temporary computed-style probe for every visible line. Keeping
+ * each property in its own write/read/restore phase preserves the original
+ * resolver semantics while reducing N style flushes to one flush per probe.
+ */
+function batchResolveLineScrollProperty<T>(
+  items: PreparedLineScroll[],
+  property: string,
+  probeValue: (item: PreparedLineScroll) => string,
+  readValue: (style: CSSStyleDeclaration) => T
+): T[] {
+  const previous = items.map(item => ({
+    value: item.lineElement.style.getPropertyValue(property),
+    priority: item.lineElement.style.getPropertyPriority(property),
+  }));
+
+  for (const item of items) {
+    item.lineElement.style.setProperty(property, probeValue(item), "important");
   }
 
-  return easing || fallback;
+  const values = items.map(item => readValue(window.getComputedStyle(item.lineElement)));
+
+  for (let index = 0; index < items.length; index++) {
+    restoreInlineStyleProperty(items[index].lineElement, property, previous[index].value, previous[index].priority);
+  }
+
+  return values;
 }
 
 function isLineVisibleDuringScroll(
@@ -1530,7 +1558,7 @@ function getLineScrollItems(lines: LineData[], lyricsElement: HTMLElement): Line
   ];
 }
 
-function animateLineScrollOffsets(
+function prepareLineScrollOffsets(
   lines: LineScrollItem[],
   activeLineIndex: number,
   scrollDeltaPx: number,
@@ -1538,13 +1566,16 @@ function animateLineScrollOffsets(
   toScrollTop: number,
   viewportHeight: number,
   config: AnimationConfig
-): void {
+): LineScrollPlan | null {
   if (!config.enabled.scroll || activeLineIndex < 0) {
-    return;
+    return null;
   }
 
   const scrollDistancePx = Math.abs(scrollDeltaPx);
+  const prepared: PreparedLineScroll[] = [];
 
+  // Preserve the original windowing exactly: only lines intersecting the
+  // union of the old and new viewports receive scroll animations.
   for (let index = 0; index < lines.length; index++) {
     if (!isLineVisibleDuringScroll(lines[index], fromScrollTop, toScrollTop, viewportHeight)) {
       continue;
@@ -1565,48 +1596,156 @@ function animateLineScrollOffsets(
     const token = ++lineScrollAnimationToken;
     lineScrollElementTokens.set(lineElement, token);
 
-    const durationMs = resolveLineScrollDuration(
-      lineElement,
-      side,
-      config.lineScroll.durationMs,
-      config.lineScroll.differentialEffects
-    );
-    const startEasing = resolveLineScrollKeyframeEasing(
-      lineElement,
-      side,
-      "start",
-      config.lineScroll.easing,
-      config.lineScroll.differentialEffects
-    );
-    const endEasing = resolveLineScrollKeyframeEasing(
-      lineElement,
-      side,
-      "end",
-      config.lineScroll.easing,
-      config.lineScroll.differentialEffects
-    );
-    const startTranslate = resolveLineScrollTranslate(
-      lineElement,
-      side,
-      "start",
-      config.lineScroll.differentialEffects
-    );
-    const endTranslate = resolveLineScrollTranslate(lineElement, side, "end", config.lineScroll.differentialEffects);
+    prepared.push({ lineElement, side, token });
+  }
 
-    const animation = lineElement.animate(
+  const durations = batchResolveLineScrollProperty(
+    prepared,
+    "transition-duration",
+    item => lineScrollDurationProperty(item.side, config.lineScroll.durationMs, config.lineScroll.differentialEffects),
+    style => {
+      const durationMs = toMs(style.transitionDuration.split(",")[0].trim());
+      return durationMs > 0 ? durationMs : config.lineScroll.durationMs;
+    }
+  );
+  const startEasings = batchResolveLineScrollProperty(
+    prepared,
+    "transition-timing-function",
+    item =>
+      lineScrollEasingProperty(item.side, "start", config.lineScroll.easing, config.lineScroll.differentialEffects),
+    style => style.transitionTimingFunction.trim() || config.lineScroll.easing
+  );
+  const endEasings = batchResolveLineScrollProperty(
+    prepared,
+    "transition-timing-function",
+    item => lineScrollEasingProperty(item.side, "end", config.lineScroll.easing, config.lineScroll.differentialEffects),
+    style => style.transitionTimingFunction.trim() || config.lineScroll.easing
+  );
+  const startTranslates = batchResolveLineScrollProperty(
+    prepared,
+    "translate",
+    item => lineScrollTranslate(item.side, "start", config.lineScroll.differentialEffects),
+    style => normalizedTranslate(style.translate)
+  );
+  const endTranslates = batchResolveLineScrollProperty(
+    prepared,
+    "translate",
+    item => lineScrollTranslate(item.side, "end", config.lineScroll.differentialEffects),
+    style => normalizedTranslate(style.translate)
+  );
+
+  return {
+    items: prepared.map((item, index) => ({
+      ...item,
+      durationMs: durations[index],
+      startEasing: startEasings[index],
+      endEasing: endEasings[index],
+      startTranslate: startTranslates[index],
+      endTranslate: endTranslates[index],
+    })),
+  };
+}
+
+function startPreparedLineScroll(plan: LineScrollPlan): void {
+  for (const item of plan.items) {
+    if (!item.lineElement.isConnected || lineScrollElementTokens.get(item.lineElement) !== item.token) continue;
+
+    const animation = item.lineElement.animate(
       [
-        { translate: startTranslate, easing: startEasing },
-        { translate: endTranslate, easing: endEasing },
+        { translate: item.startTranslate, easing: item.startEasing },
+        { translate: item.endTranslate, easing: item.endEasing },
       ] as Keyframe[],
       {
         composite: "add",
-        duration: durationMs,
+        duration: item.durationMs,
         easing: "linear",
         fill: "none",
       }
     );
 
-    trackLineScrollAnimation(animation, lineElement, token);
+    trackLineScrollAnimation(animation, item.lineElement, item.token);
+  }
+}
+
+function discardLineScrollPlan(plan: LineScrollPlan): void {
+  for (const item of plan.items) {
+    clearLineScrollInlineProperties(item.lineElement, item.token);
+  }
+}
+
+export function cancelPendingLineScroll(): void {
+  if (!pendingLineScroll) return;
+  discardLineScrollPlan(pendingLineScroll.plan);
+  pendingLineScroll = null;
+}
+
+function pendingLineScrollMatches(activeLine: LineData, fromScrollTop: number, toScrollTop: number): boolean {
+  return !!(
+    pendingLineScroll &&
+    pendingLineScroll.activeLineElement === activeLine.lyricElement &&
+    Math.abs(pendingLineScroll.fromScrollTop - fromScrollTop) <= 2 &&
+    Math.abs(pendingLineScroll.toScrollTop - toScrollTop) <= 2
+  );
+}
+
+function commitOrPrepareLineScroll(
+  lines: LineScrollItem[],
+  activeLine: LineData,
+  scrollDeltaPx: number,
+  fromScrollTop: number,
+  toScrollTop: number,
+  viewportHeight: number,
+  config: AnimationConfig
+): void {
+  if (pendingLineScrollMatches(activeLine, fromScrollTop, toScrollTop)) {
+    const pending = pendingLineScroll!;
+    pendingLineScroll = null;
+    startPreparedLineScroll(pending.plan);
+    return;
+  }
+
+  cancelPendingLineScroll();
+  const plan = prepareLineScrollOffsets(
+    lines,
+    lines.findIndex(line => line.lyricElement === activeLine.lyricElement),
+    scrollDeltaPx,
+    fromScrollTop,
+    toScrollTop,
+    viewportHeight,
+    config
+  );
+  if (plan) startPreparedLineScroll(plan);
+}
+
+function prepareUpcomingLineScroll(
+  lines: LineScrollItem[],
+  activeLine: LineData,
+  scrollDeltaPx: number,
+  fromScrollTop: number,
+  toScrollTop: number,
+  viewportHeight: number,
+  config: AnimationConfig
+): void {
+  if (pendingLineScrollMatches(activeLine, fromScrollTop, toScrollTop)) return;
+
+  cancelPendingLineScroll();
+  const activeLineIndex = lines.findIndex(line => line.lyricElement === activeLine.lyricElement);
+  const plan = prepareLineScrollOffsets(
+    lines,
+    activeLineIndex,
+    scrollDeltaPx,
+    fromScrollTop,
+    toScrollTop,
+    viewportHeight,
+    config
+  );
+  if (plan) {
+    pendingLineScroll = {
+      plan,
+      activeLineElement: activeLine.lyricElement,
+      fromScrollTop,
+      toScrollTop,
+    };
   }
 }
 
@@ -1748,6 +1887,7 @@ function setupTabRendererObserver(element: HTMLElement) {
   }
 
   tabRendererResizeObserver = new ResizeObserver(() => {
+    cancelPendingLineScroll();
     if (element && element.isConnected) {
       cachedTabRendererHeight = element.getBoundingClientRect().height;
     }
@@ -1787,6 +1927,8 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
     Math.abs(
       currentTime - animEngineState.lastTime - (eventCreationTime - animEngineState.lastEventCreationTime) / 1000
     ) > TIME_JUMP_THRESHOLD;
+
+  if (timeJumped) cancelPendingLineScroll();
 
   animEngineState.lastTime = currentTime;
   animEngineState.lastPlayState = isPlaying;
@@ -1851,8 +1993,7 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
 
     const lyricScrollTime =
       correctedScrollTimeS(currentTime) + getCSSDurationInMs(lyricsElement, "--blyrics-scroll-timing-offset") / 1000;
-    const animationConfig = readAnimationConfig(lyricsElement);
-    const scrollTiming = readScrollTiming(animationConfig.scroll.durationMs);
+    const { config: animationConfig, scrollTiming } = getAnimationSettings(lyricsElement);
 
     // Read layout values before the loop writes class changes, to avoid forced reflow
     const tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR) as HTMLElement | null;
@@ -1866,8 +2007,9 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
     const tabRendererHeight = cachedTabRendererHeight ?? tabRenderer.getBoundingClientRect().height;
     let scrollTop = tabRenderer.scrollTop;
     if (animationConfig.enabled.scroll) {
-      updateVisibleLyricWillChange(lines, scrollTop, scrollTop, tabRendererHeight);
+      updateVisibleLyricWillChange(lines, scrollTop, pendingLineScroll?.toScrollTop ?? scrollTop, tabRendererHeight);
     } else {
+      cancelPendingLineScroll();
       clearVisibleLyricWillChange();
       clearLineScrollAnimations();
     }
@@ -2157,6 +2299,29 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
         }
       }
 
+      const timeUntilUpcomingScrollMs = (lastActiveLyric.time - lyricScrollTime) * 1000;
+      if (
+        smoothScroll &&
+        animationConfig.enabled.scroll &&
+        !newLyricSelected &&
+        !animEngineState.wasUserScrolling &&
+        timeUntilUpcomingScrollMs > 0 &&
+        timeUntilUpcomingScrollMs <= SCROLL_PREPARE_LEAD_MS &&
+        Date.now() > animEngineState.nextScrollAllowedTime &&
+        Math.abs(scrollTop - scrollPos) > 2
+      ) {
+        updateVisibleLyricWillChange(lines, scrollTop, scrollPos, tabRendererHeight);
+        prepareUpcomingLineScroll(
+          getLineScrollItems(lines, lyricsElement),
+          lastActiveLyric,
+          scrollPos - scrollTop,
+          scrollTop,
+          scrollPos,
+          tabRendererHeight,
+          animationConfig
+        );
+      }
+
       if (animEngineState.wasUserScrolling || newLyricSelected || animEngineState.queuedScroll) {
         if (Date.now() > animEngineState.nextScrollAllowedTime) {
           animEngineState.queuedScroll = false;
@@ -2169,9 +2334,9 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
             if (animationConfig.enabled.scroll) {
               updateVisibleLyricWillChange(lines, scrollTop, scrollPos, tabRendererHeight);
               const lineScrollItems = getLineScrollItems(lines, lyricsElement);
-              animateLineScrollOffsets(
+              commitOrPrepareLineScroll(
                 lineScrollItems,
-                lines.indexOf(lastActiveLyric),
+                lastActiveLyric,
                 scrollDeltaPx,
                 scrollTop,
                 scrollPos,
@@ -2180,6 +2345,8 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
               );
               animEngineState.nextScrollAllowedTime = animationConfig.scroll.durationMs + Date.now() + 20;
             }
+          } else {
+            cancelPendingLineScroll();
           }
 
           scrollTop = scrollPos;
@@ -2227,6 +2394,7 @@ export function lyricsElementAdded(): void {
     return;
   }
   pendingLyricsUpdate = true;
+  cancelPendingLineScroll();
   requestAnimationFrame(() => {
     pendingLyricsUpdate = false;
     calculateLyricPositions();

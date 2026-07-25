@@ -20,6 +20,7 @@ import { onAutoSwitchEnabled, onFullScreenDisabled, wakeDockIdle } from "@module
 import {
   animationEngine,
   animEngineState,
+  cancelPendingLineScroll,
   getResumeScrollElement,
   noteAnimationVisibilityChange,
 } from "@modules/ui/animationEngine";
@@ -56,6 +57,38 @@ let hasInitializedHomepageFullscreen = false;
 let hasInitializedAltHover = false;
 let hasInitializedLyrics = false;
 let metadataAbortController: AbortController | null = null;
+const ANIMATION_ENGINE_INTERVAL_MS = 20;
+let animationFrameRequest: number | null = null;
+let lastAnimationEngineRun = -Infinity;
+let latestPlayerPlaying = false;
+let latestPlayerTime = 0;
+let latestPlayerSnapshotTime = 0;
+let latestPlayerDuration = 0;
+let latestPlaybackRate = 1;
+
+function runAnimationEngine(now: number, force = false): void {
+  if (!force && (!latestPlayerPlaying || now - lastAnimationEngineRun < ANIMATION_ENGINE_INTERVAL_MS)) return;
+
+  lastAnimationEngineRun = now;
+  const wallTime = Date.now();
+  const elapsedS = latestPlayerPlaying
+    ? (Math.max(0, wallTime - latestPlayerSnapshotTime) * latestPlaybackRate) / 1000
+    : 0;
+  const currentTime = Math.min(latestPlayerTime + elapsedS, latestPlayerDuration || Infinity);
+  if (AppState.suppressZeroTime < wallTime || currentTime !== 0) {
+    animationEngine(currentTime, wallTime, latestPlayerPlaying);
+  }
+}
+
+function animationFrameLoop(now: number): void {
+  runAnimationEngine(now);
+  animationFrameRequest = requestAnimationFrame(animationFrameLoop);
+}
+
+function startAnimationFrameLoop(): void {
+  if (animationFrameRequest !== null) return;
+  animationFrameRequest = requestAnimationFrame(animationFrameLoop);
+}
 
 async function requestWakeLock(): Promise<void> {
   if (!("wakeLock" in navigator)) {
@@ -282,11 +315,21 @@ export function initializeLyrics(): void {
 
   document.addEventListener("visibilitychange", () => {
     noteAnimationVisibilityChange();
+    if (document.visibilityState === "visible") {
+      runAnimationEngine(performance.now(), true);
+    }
   });
+
+  startAnimationFrameLoop();
 
   // @ts-ignore
   document.addEventListener("blyrics-send-player-time", (event: CustomEvent<PlayerDetails>) => {
     const detail = event.detail;
+    latestPlayerPlaying = detail.playing;
+    latestPlayerTime = detail.currentTime;
+    latestPlayerSnapshotTime = detail.browserTime;
+    latestPlayerDuration = Number(detail.duration);
+    latestPlaybackRate = detail.playbackRate ?? 1;
 
     const currentVideoId = detail.videoId;
     const currentVideoDetails = detail.song + " " + detail.artist;
@@ -384,8 +427,8 @@ export function initializeLyrics(): void {
       }
     }
 
-    if (AppState.suppressZeroTime < Date.now() || detail.currentTime !== 0) {
-      animationEngine(detail.currentTime, detail.browserTime, detail.playing);
+    if (document.visibilityState === "visible") {
+      runAnimationEngine(performance.now(), true);
     }
   });
 }
@@ -405,6 +448,7 @@ export function scrollEventHandler(): void {
     animEngineState.skipScrollsDecayTimes.shift();
     return;
   }
+  cancelPendingLineScroll();
   if (!isLoaderActive()) {
     if (animEngineState.scrollResumeTime < Date.now()) {
       log(PAUSING_LYRICS_SCROLL_LOG);
