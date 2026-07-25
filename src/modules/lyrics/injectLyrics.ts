@@ -42,6 +42,7 @@ import {
   renderLoader,
   setExtraHeight,
 } from "@modules/ui/dom";
+import { disableNativeLyricsFocus } from "@modules/ui/nativeLyricsFocus";
 import { getRelativeLayoutBounds, langCodesMatch, languageMatchesAny, log } from "@utils";
 
 let disableRichsync = registerThemeSetting("blyrics-disable-richsync", false, true);
@@ -113,7 +114,6 @@ function getResizeObserver(): ResizeObserver {
             (entry.target.clientWidth !== AppState.lyricData.lyricWidth ||
               entry.target.clientHeight !== AppState.lyricData.lyricHeight)
           ) {
-            animEngineState.doneFirstInstantScroll = false;
             animEngineState.nextScrollAllowedTime = 0;
             calculateLyricPositions();
           }
@@ -609,6 +609,7 @@ function injectLyrics(data: LyricSourceResultWithMeta, keepLoaderVisible = false
 
   const lyrics = data.lyrics!;
   cleanup();
+  disableNativeLyricsFocus();
 
   let lyricsWrapper = createLyricsWrapper();
 

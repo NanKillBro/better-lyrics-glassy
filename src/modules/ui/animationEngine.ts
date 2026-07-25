@@ -117,10 +117,6 @@ interface AnimEngineState {
   lastEventCreationTime: number;
   lastActiveElements: LineData[];
   queuedScroll: boolean;
-  /**
-   * Track if this is the first new tick to avoid rescrolls when opening the lyrics
-   */
-  doneFirstInstantScroll: boolean;
   lastScrollDebugContext: {
     activeElms: LineData[];
     centers: number[];
@@ -141,7 +137,6 @@ export let animEngineState: AnimEngineState = {
   lastTime: 0,
   lastPlayState: false,
   lastEventCreationTime: -1,
-  doneFirstInstantScroll: true,
   lastActiveElements: [],
   queuedScroll: false,
   lastScrollDebugContext: {
@@ -170,7 +165,6 @@ export function resetAnimEngineState(): void {
   animEngineState.lastActiveElements = [];
   animEngineState.lastScrollDebugContext.activeElms = [];
   animEngineState.lastScrollDebugContext.centers = [];
-  animEngineState.doneFirstInstantScroll = false;
   animEngineState.queuedScroll = false;
   animEngineState.passiveScrollAccumulatedTime = 0;
   animEngineState.passiveLastWallTime = 0;
@@ -1823,7 +1817,6 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
     playerState === "MINIPLAYER_IN_PLAYER_PAGE";
   // Don't tick lyrics if they're not visible
   if (tabSelector.getAttribute("aria-selected") !== "true" || !isPlayerOpen) {
-    animEngineState.doneFirstInstantScroll = false;
     clearVisibleLyricWillChange();
     return;
   }
@@ -2162,14 +2155,6 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
             animEngineState.lastScrollDebugContext.lyricScrollTime
           );
         }
-      }
-
-      if (scrollTop === 0 && !animEngineState.doneFirstInstantScroll) {
-        // For some reason when the panel is opened our pos is set to zero. This instant scrolls to the correct position
-        // to avoid always scrolling from the top when the panel is opened.
-        smoothScroll = false;
-        animEngineState.doneFirstInstantScroll = true;
-        animEngineState.nextScrollAllowedTime = 0;
       }
 
       if (animEngineState.wasUserScrolling || newLyricSelected || animEngineState.queuedScroll) {
