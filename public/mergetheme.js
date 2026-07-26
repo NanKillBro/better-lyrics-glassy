@@ -1,11 +1,11 @@
 // Dán CSS theme "cucu" của bạn vào giữa 2 dấu huyền (`) ở dưới
 const MY_CUSTOM_CSS = `
 /* =============================================================================================================*/
-/* MERGED THEME V23: Some UI Update                                                                             */
-/* Adds: Auto Collapsed the Source on the tabs when window too small                                            */
-/* Fixes: Unison dock, some toast look different, big button for some user having the Comments tab              */
+/* MERGED THEME V24: Some UI Update                                                                             */
+/* Adds: New fullscreen UI                                                                                      */
+/* Fixes: Artwork frame got stretched                                                                           */
 /* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),     */
-/*           better-ytm (WolfTheE), blyrics-am-theme (tposejank)                                                */
+/*           better-ytm (WolfTheE), blyrics-am-theme (tposejank), Sustain (boidushya)                           */
 /* Made by: Gemini and NanKill                                                                                  */
 /* ============================================================================================================ */
 
@@ -41,6 +41,7 @@ ytmusic-app {
   /* -- [ Glassmorphism Variables ] -- */
   --blyrics-bg-color: rgba(0, 0, 0, 0.25);
   --blyrics-border-radius: 18px;
+  --blyrics-img-max-width: 576px;
   
   /* Shadow: Toạ độ 0 0 để đều 4 cạnh */
   --blyrics-box-shadow: 0 0 60px rgba(0, 0, 0, 0.4), 0 0 25px rgba(255, 255, 255, 0.12) inset;
@@ -561,23 +562,50 @@ ytmusic-responsive-list-item-renderer.ytmusic-shelf-renderer,
   border-bottom: 0 !important;
 }
 
-/* Album Cover Size */
-ytmusic-player-page:not([video-mode]):not([player-fullscreened]):not([blyrics-dfs]):not([player-ui-state="MINIPLAYER"]) #player.ytmusic-player-page, 
-ytmusic-player[player-ui-state=FULLSCREEN], 
-ytmusic-player, 
-ytmusic-player[player-ui-state=FULLSCREEN] {
-  max-width: var(--yt-cover-size) !important;
-  border-radius: var(--blyrics-border-radius) !important;
+/* Album Cover & Video Size & Rounding in Player Page */
+ytmusic-player-page:not([player-fullscreened]):not([blyrics-dfs]):not([player-ui-state="MINIPLAYER"]) #player.ytmusic-player-page,
+ytmusic-player[player-ui-state=FULLSCREEN],
+ytmusic-player-page:not([player-fullscreened]) ytmusic-player {
+  border-radius: var(--blyrics-border-radius, 2rem) !important;
   box-shadow: var(--blyrics-box-shadow) !important;
-  overflow: hidden; 
+  overflow: hidden !important; 
   margin: 0 auto !important; 
   background: transparent !important;
 }
 
-/* Fix oversize cover when in fullscreen because new BL break it */
-ytmusic-player-page:not([is-mweb-modernization-enabled]):not([is-mweb-modernization-enabled]):not([blyrics-video-mode])
+/* Fix oversize cover — CHỈ áp dụng khi đang Fullscreen, không đụng tới chế độ cửa sổ hẹp */
+ytmusic-player-page[player-fullscreened]:not([blyrics-video-mode]):not([video-mode]):not([blyrics-dfs])
 #player.ytmusic-player-page {
-  max-width: 400px !important;
+  max-width: var(--blyrics-img-max-width, 576px) !important;
+}
+
+ytmusic-player-page {
+  --yt-img-border-radius: 2rem;
+}
+
+/* Bo tròn khung Player khi chưa Fullscreen (Chỉ áp dụng trên container cha ytmusic-player để tránh lỗi đen video) */
+ytmusic-player-page:not([player-fullscreened]) ytmusic-player {
+  border-radius: 2rem !important;
+  outline: 1px solid rgb(175 175 175 / 15%);
+  overflow: hidden !important;
+}
+
+ytmusic-player-page ytmusic-player[is-music-web-player-page-layout-fixes-enabled]:not([is-mweb-modernization-enabled])[player-page-open] {
+  border-radius: 2rem !important;
+}
+
+ytmusic-player-page img.yt-img-shadow:not(#song-image img) {
+  border: 1px solid rgb(175 175 175 / 15%);
+  box-sizing: border-box;
+}
+
+ytmusic-player-page yt-img-shadow[object-fit=CONTAIN] img.yt-img-shadow[width="56"] {
+  --yt-img-border-radius: 1rem;
+  border: 1px solid rgb(175 175 175 / 10%);
+}
+
+ytmusic-player-page yt-img-shadow[object-fit=CONTAIN] img.yt-img-shadow[width="32"] {
+  --yt-img-border-radius: 0.5rem;
 }
 
 /* Fix nút chuyển Song/Video */
@@ -709,14 +737,75 @@ ytmusic-player-page {
   }
 }
 
-/* TRẠNG THÁI FULLSCREEN */
+@keyframes blyrics-fullscreen-artwork {
+  from {
+    transform: scale(0.7);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 ytmusic-player[player-ui-state="FULLSCREEN"],
 ytmusic-player-page[player-fullscreened] #player.ytmusic-player-page {
-    /* Ép tắt mọi animation đang chạy lỡ dở từ miniplayer/mở player để tránh xung đột */
-    animation: none !important; 
-    transition: max-width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s,
-                opacity 0.4s ease 0.2s !important; 
-    will-change: max-width, opacity; 
+    animation: blyrics-fullscreen-artwork 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both !important;
+    transform-origin: center center;
+    will-change: transform, opacity;
+}
+
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-video-mode]):not([video-mode]) ytmusic-player:not([video-mode]) {
+  border-radius: 2rem !important;
+  --yt-img-border-radius: 2rem !important;
+}
+
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs]) #player.ytmusic-player-page {
+  box-shadow: rgba(0, 0, 0, 0.1) 0px 54px 55px, rgba(0, 0, 0, 0.06) 0px -12px 30px, rgba(0, 0, 0, 0.06) 0px 4px 6px, rgba(0, 0, 0, 0.09) 0px 12px 13px, rgba(0, 0, 0, 0.04) 0px -3px 5px !important;
+}
+
+@keyframes blyrics-song-info-slide {
+  from {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(-64px);
+    opacity: 1;
+  }
+}
+
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs]) #blyrics-song-info {
+  text-align: left;
+  width: 100%;
+  max-width: var(--blyrics-img-max-width, 576px);
+  padding: 2rem;
+  margin-bottom: 8rem;
+  outline: 1px dashed rgb(255 255 255 / 15%);
+  border-radius: 2rem !important;
+  z-index: -1;
+  background: rgba(var(--ytmusic-album-color-dark, 20, 20, 20), 0.5) !important;
+  box-sizing: border-box;
+  box-shadow: rgba(0, 0, 0, 0.1) 0px 20px 20px 0px;
+  animation: blyrics-song-info-slide 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s both;
+}
+
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened][video-mode]:not([blyrics-dfs]) #blyrics-song-info {
+  max-width: unset;
+}
+
+#blyrics-song-info > p#blyrics-title {
+  font-size: 2.5rem;
+  color: color(display-p3 1 1 1);
+}
+
+#blyrics-song-info > p#blyrics-artist {
+  color: color(display-p3 1 1 1 / 0.5);
+  opacity: 1;
+}
+
+ytmusic-player-page[player-fullscreened]:not([blyrics-video-mode]):not([blyrics-dfs]):has(.blyrics-container[data-no-lyrics="true"]) #blyrics-song-info {
+  max-width: 500px !important;
 }
 
 /* TRẠNG THÁI MỞ PLAYER BÌNH THƯỜNG */
