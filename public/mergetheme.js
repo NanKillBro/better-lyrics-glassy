@@ -1365,13 +1365,6 @@ ytmusic-player-page tp-yt-paper-tabs.tab-header-container .blyrics-footer__conta
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); 
 }
 
-/* unison menu */
-/* Nâng cao unison dock khi ở chế độ toàn màn hình (fullscreen) cho data-position="bottom-center" (bottom-middle) */
-ytmusic-player-page[player-fullscreened] .blyrics-dock[data-position="bottom-center"] {
-  top: calc(100% - 110px); /* Nâng vị trí từ bottom (mặc định 64px lên 110px) khi ở fullscreen */
-  --blyrics-fullscreen-bottom-dock-shift: -70px; /* Dịch chuyển cao hơn một chút khi hiện thanh điều khiển ở dưới */
-}
-
 ytmusic-comments.ytmusicCommentsComponentHost {
     padding-inline: 24px; /* Thay đổi thông số này theo thiết kế của bạn */
 }
@@ -2181,6 +2174,12 @@ ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed
 ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .nankill-blyrics-footer-in-tabs:hover img,
 ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .blyrics-footer__container:hover img {
   margin-right: 8px !important;
+}
+
+/* unison menu */
+/* Nâng cao unison dock khi ở chế độ toàn màn hình (fullscreen) cho data-position="bottom-center" (bottom-middle) */
+ytmusic-player-page[player-fullscreened] .blyrics-dock[data-position="bottom-center"] {
+  top: calc(100% - 75px - var(--menu-bar-height, 0px)) !important;
 }
 `;
 
