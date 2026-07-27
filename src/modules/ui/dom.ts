@@ -1315,12 +1315,30 @@ export function resetThumbnailState(): void {
   lastLoadedThumbnail = null;
 }
 
-function setBackgroundImage(src: string): void {
-  const layout = document.getElementById("layout");
-  if (AppState.shouldInjectAlbumArt) {
-    layout?.style.setProperty("--blyrics-background-img", `url('${src}')`);
+let bgUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+
+function setBackgroundImage(src: string, delayMs = 1000): void {
+  if (bgUpdateTimer !== null) {
+    clearTimeout(bgUpdateTimer);
+    bgUpdateTimer = null;
+  }
+
+  const applyBg = () => {
+    const layout = document.getElementById("layout");
+    if (AppState.shouldInjectAlbumArt && src) {
+      layout?.style.setProperty("--blyrics-background-img", `url('${src}')`);
+    } else {
+      layout?.style.removeProperty("--blyrics-background-img");
+    }
+  };
+
+  if (delayMs <= 0) {
+    applyBg();
   } else {
-    layout?.style.removeProperty("--blyrics-background-img");
+    bgUpdateTimer = setTimeout(() => {
+      bgUpdateTimer = null;
+      applyBg();
+    }, delayMs);
   }
 }
 
@@ -1461,7 +1479,7 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
 
     imgElm.classList.remove(HIDDEN_CLASS);
     imgElm.src = src;
-    setBackgroundImage(src);
+    setBackgroundImage(src, isCrossfade ? 1000 : 0);
     lastLoadedThumbnail = smallThumbnail;
 
     if (isCrossfade) {
@@ -1598,11 +1616,11 @@ export function showYtThumbnail(): void {
   const ytImg = document.querySelector("#thumbnail>#img") as HTMLImageElement | null;
   if (ytImg) {
     if (ytImg.src && AppState.shouldInjectAlbumArt) {
-      setBackgroundImage(ytImg.src);
+      setBackgroundImage(ytImg.src, 0);
     }
     ytImg.onload = () => {
       if (ytImg.src && AppState.shouldInjectAlbumArt) {
-        setBackgroundImage(ytImg.src);
+        setBackgroundImage(ytImg.src, 0);
       }
     };
   }
