@@ -1307,6 +1307,10 @@ export function reloadAlbumArt() {
 let lastLoadedThumbnail: ThumbnailElement | null = null;
 let thumbnailResizeObserver: ResizeObserver | null;
 
+export function getLastLoadedThumbnail(): ThumbnailElement | null {
+  return lastLoadedThumbnail;
+}
+
 export function resetThumbnailState(): void {
   lastLoadedThumbnail = null;
 }
@@ -1346,6 +1350,24 @@ function cleanupOutgoingImages(): void {
   for (const el of outgoing) el.remove();
 }
 
+export function getNativeYtThumbnailUrl(): string | null {
+  const ytImg = document.querySelector("#thumbnail>#img") as HTMLImageElement | null;
+  if (ytImg?.src && ytImg.src !== "" && !ytImg.src.startsWith("data:") && ytImg.complete && ytImg.naturalWidth > 0) {
+    return ytImg.src;
+  }
+  const altImg = document.querySelector("#song-image img") as HTMLImageElement | null;
+  if (
+    altImg?.src &&
+    altImg.src !== "" &&
+    !altImg.src.startsWith("data:") &&
+    altImg.complete &&
+    altImg.naturalWidth > 0
+  ) {
+    return altImg.src;
+  }
+  return null;
+}
+
 export function addThumbnail(smallThumbnail: ThumbnailElement): void {
   thumbnailResizeObserver?.disconnect();
 
@@ -1363,8 +1385,15 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
   // - "first": No existing image → create and show immediately (no crossfade)
   // - "reload": Same thumbnail (resize) → reuse existing element, update src
   // - "crossfade": Different thumbnail (song change) → demote old, create new, fade in
-  const isReload = existingImg !== null && smallThumbnail === lastLoadedThumbnail;
+  const isReload =
+    existingImg !== null &&
+    (smallThumbnail === lastLoadedThumbnail ||
+      (lastLoadedThumbnail !== null && smallThumbnail.url === lastLoadedThumbnail.url));
   const isCrossfade = existingImg !== null && existingImg.src !== "" && !isReload;
+
+  const containerSize = getContainerSize();
+  const highResUrl = getHighResImageUrl(smallThumbnail);
+  console.info(`[Image] Start addThumbnail | mode=${isReload ? "reload" : isCrossfade ? "crossfade" : "first"} | lowRes=${smallThumbnail.url} | highRes=${highResUrl}`);
 
   let imgElm: HTMLImageElement;
 
@@ -1400,11 +1429,14 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
     thumbnailContainer.appendChild(imgElm);
   }
 
+  let safetyNetTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Safety net: force new image visible after 5s, covering ALL failure modes —
   // stuck CSS transitions, load failures, or even incorrect crossfade detection.
   // On successful load (any mode), everything here is already done → pure no-op.
-  setTimeout(() => {
+  safetyNetTimer = setTimeout(() => {
     if (signal.aborted) return;
+    console.info("[Image] 5000ms safety net timeout triggered");
     if (!imgElm.src) {
       imgElm.src = smallThumbnail.url;
       setBackgroundImage(smallThumbnail.url);
@@ -1415,15 +1447,19 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
     cleanupOutgoingImages();
   }, CROSSFADE_FORCE_VISIBLE_MS);
 
-  const containerSize = getContainerSize();
-  const highResUrl = getHighResImageUrl(smallThumbnail);
   const proxy = new Image();
   proxy.src = highResUrl;
 
   // Called when we have a final src to display
   const applyImage = (src: string) => {
     if (signal.aborted) return;
+    if (safetyNetTimer !== null) {
+      clearTimeout(safetyNetTimer);
+      safetyNetTimer = null;
+    }
+    console.info(`[Image] applyImage called | src=${src}`);
 
+    imgElm.classList.remove(HIDDEN_CLASS);
     imgElm.src = src;
     setBackgroundImage(src);
     lastLoadedThumbnail = smallThumbnail;
@@ -1436,6 +1472,8 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
       setTimeout(() => {
         if (!signal.aborted) cleanupOutgoingImages();
       }, CROSSFADE_TRANSITION_MS + 50);
+    } else {
+      imgElm.style.opacity = "1";
     }
 
     // Setup resize observer (skip size-change-reload during crossfade to avoid abort loop)
@@ -1457,20 +1495,49 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
   // ── Load high-res image ──
   let resolved = false;
 
+  // Helper to load fallback image fully before applying it
+  const loadAndApplyFallback = (fallbackUrl: string) => {
+    const fallbackImg = new Image();
+    const onFallbackReady = () => {
+      if (signal.aborted) return;
+      console.info(`[Image] Fallback image loaded & verified: ${fallbackUrl}`);
+      applyImage(fallbackUrl);
+    };
+    if (fallbackImg.complete && fallbackImg.naturalWidth > 0) {
+      onFallbackReady();
+      return;
+    }
+    fallbackImg.onload = onFallbackReady;
+    fallbackImg.onerror = () => {
+      if (signal.aborted) return;
+      console.warn(`[Image] Fallback image failed to load: ${fallbackUrl}`);
+      applyImage(fallbackUrl);
+    };
+    fallbackImg.src = fallbackUrl;
+    if (fallbackImg.complete && fallbackImg.naturalWidth > 0) {
+      fallbackImg.onload = null;
+      fallbackImg.onerror = null;
+      onFallbackReady();
+    }
+  };
+
   const onLoad = () => {
     if (signal.aborted || resolved) return;
     resolved = true;
+    console.info(`[Image] Proxy loaded high-res successfully: ${proxy.src}`);
     applyImage(proxy.src);
   };
 
   const onError = () => {
     if (signal.aborted || resolved) return;
     resolved = true;
-    applyImage(smallThumbnail.url);
+    console.info(`[Image] Proxy failed to load high-res (${proxy.src}), falling back to low-res: ${smallThumbnail.url}`);
+    loadAndApplyFallback(smallThumbnail.url);
   };
 
   // Fast path: image already in browser cache
   if (proxy.complete && proxy.naturalWidth > 0) {
+    console.info(`[Image] Fast-path cache hit (complete=${proxy.complete}, width=${proxy.naturalWidth}): ${proxy.src}`);
     onLoad();
     return;
   }
@@ -1481,6 +1548,7 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
 
   // Race fix: image may have completed between setting src and attaching onload
   if (proxy.complete) {
+    console.info(`[Image] Race condition check hit (complete=${proxy.complete}, width=${proxy.naturalWidth})`);
     proxy.onload = null;
     proxy.onerror = null;
     if (proxy.naturalWidth > 0) {
@@ -1495,11 +1563,13 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
   setTimeout(() => {
     if (signal.aborted || resolved) return;
     resolved = true;
-    applyImage(smallThumbnail.url);
+    console.info(`[Image] 2000ms timeout reached before high-res loaded. Verifying and applying low-res fallback: ${smallThumbnail.url}`);
+    loadAndApplyFallback(smallThumbnail.url);
 
     // If high-res loads after timeout, silently upgrade src
     proxy.onload = () => {
       if (signal.aborted) return;
+      console.info(`[Image] Silent upgrade post-timeout: ${proxy.src}`);
       imgElm.src = proxy.src;
       setBackgroundImage(proxy.src);
     };
@@ -1508,23 +1578,33 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
 }
 
 export function preloadHighResThumbnail(smallThumbnail: ThumbnailElement) {
+  const highRes = getHighResImageUrl(smallThumbnail);
+  console.info(`[Image] Preloading high-res thumbnail: ${highRes}`);
   const proxy = new Image();
-  proxy.src = getHighResImageUrl(smallThumbnail);
+  proxy.src = highRes;
 }
 
 export function showYtThumbnail(): void {
+  console.info("[Image] showYtThumbnail called (falling back to YouTube default thumbnail)");
   albumArtLoadController?.abort();
   cleanupOutgoingImages();
 
   const blyricsImg = document.getElementById("blyrics-img") as HTMLImageElement | null;
   if (blyricsImg) {
-    blyricsImg.src = "";
+    blyricsImg.style.opacity = "0";
     blyricsImg.classList.add(HIDDEN_CLASS);
   }
 
   const ytImg = document.querySelector("#thumbnail>#img") as HTMLImageElement | null;
-  if (ytImg?.src && AppState.shouldInjectAlbumArt) {
-    setBackgroundImage(ytImg.src);
+  if (ytImg) {
+    if (ytImg.src && AppState.shouldInjectAlbumArt) {
+      setBackgroundImage(ytImg.src);
+    }
+    ytImg.onload = () => {
+      if (ytImg.src && AppState.shouldInjectAlbumArt) {
+        setBackgroundImage(ytImg.src);
+      }
+    };
   }
 }
 

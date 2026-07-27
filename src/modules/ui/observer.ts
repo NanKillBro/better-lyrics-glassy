@@ -15,6 +15,7 @@ import {
 } from "@constants";
 import { AppState, handleModifications, type PlayerDetails, reloadLyrics } from "@core/appState";
 import { preFetchLyrics } from "@modules/lyrics/lyrics";
+import type { ThumbnailElement } from "@modules/lyrics/requestSniffer/NextResponse";
 import { getSongMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
 import { onAutoSwitchEnabled, onFullScreenDisabled, wakeDockIdle } from "@modules/settings/settings";
 import {
@@ -34,6 +35,8 @@ import { log } from "@utils";
 import {
   addThumbnail,
   cleanup,
+  getLastLoadedThumbnail,
+  getNativeYtThumbnailUrl,
   injectSongAttributes,
   isLoaderActive,
   preloadHighResThumbnail,
@@ -313,19 +316,73 @@ export function initializeLyrics(): void {
       metadataAbortController = abortController;
 
       const videoIdAtStart = detail.videoId;
-      getSongMetadata(detail.videoId, 250, abortController.signal).then(async songMetadata => {
+      console.info(`[Image] Song changed to videoId: ${detail.videoId}`);
+
+      const tryApplyThumbnail = (smallThumb: ThumbnailElement | null): boolean => {
+        if (smallThumb?.url) {
+          console.info(`[Image] Using sniffed metadata thumbnail for ${detail.videoId}: ${smallThumb.url}`);
+          addThumbnail(smallThumb);
+          return true;
+        }
+        const nativeUrl = getNativeYtThumbnailUrl();
+        const lastThumb = getLastLoadedThumbnail();
+        // Check if native DOM URL has actually updated (different from previous song's loaded thumbnail)
+        if (nativeUrl && (!lastThumb || nativeUrl !== lastThumb.url)) {
+          console.info(`[Image] Using YouTube DOM native thumbnail for ${detail.videoId}: ${nativeUrl}`);
+          addThumbnail({ url: nativeUrl, width: 544, height: 544 });
+          return true;
+        }
+        return false;
+      };
+
+      // 1. Instant check: if metadata is already available in RAM cache
+      getSongMetadata(detail.videoId, 1, abortController.signal).then(async songMetadata => {
         if (AppState.lastVideoId !== videoIdAtStart) return;
 
         if (songMetadata?.isVideo && songMetadata.counterpartVideoId) {
-          songMetadata = await getSongMetadata(songMetadata.counterpartVideoId, 10, abortController.signal);
+          const counterpart = await getSongMetadata(songMetadata.counterpartVideoId, 1, abortController.signal);
+          if (counterpart) songMetadata = counterpart;
           if (AppState.lastVideoId !== videoIdAtStart) return;
         }
 
-        if (songMetadata) {
-          addThumbnail(songMetadata.smallThumbnail);
-        } else {
-          showYtThumbnail();
+        if (songMetadata && tryApplyThumbnail(songMetadata.smallThumbnail)) {
+          return;
         }
+
+        // 2. Fast path: try applying native DOM thumbnail immediately (if already updated)
+        let resolved = tryApplyThumbnail(null);
+
+        // 3. Polling for DOM image update on slow networks (e.g. 3G)
+        let pollInterval: ReturnType<typeof setInterval> | null = null;
+        if (!resolved) {
+          pollInterval = setInterval(() => {
+            if (AppState.lastVideoId !== videoIdAtStart || abortController.signal.aborted) {
+              if (pollInterval) clearInterval(pollInterval);
+              return;
+            }
+            if (tryApplyThumbnail(null)) {
+              resolved = true;
+              if (pollInterval) clearInterval(pollInterval);
+            }
+          }, 100);
+        }
+
+        // 4. Poll getSongMetadata in background (up to 10s for slow network)
+        getSongMetadata(detail.videoId, 500, abortController.signal).then(async delayedMetadata => {
+          if (pollInterval) clearInterval(pollInterval);
+          if (AppState.lastVideoId !== videoIdAtStart) return;
+
+          if (delayedMetadata?.isVideo && delayedMetadata.counterpartVideoId) {
+            const counterpart = await getSongMetadata(delayedMetadata.counterpartVideoId, 10, abortController.signal);
+            if (counterpart) delayedMetadata = counterpart;
+            if (AppState.lastVideoId !== videoIdAtStart) return;
+          }
+
+          if (!tryApplyThumbnail(delayedMetadata?.smallThumbnail || null) && !resolved) {
+            console.warn(`[Image] Failed to resolve any new thumbnail for ${detail.videoId}, falling back to showYtThumbnail`);
+            showYtThumbnail();
+          }
+        });
       });
     }
 
