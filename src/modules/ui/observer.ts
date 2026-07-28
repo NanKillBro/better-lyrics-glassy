@@ -15,8 +15,8 @@ import {
 } from "@constants";
 import { AppState, handleModifications, type PlayerDetails, reloadLyrics } from "@core/appState";
 import { preFetchLyrics } from "@modules/lyrics/lyrics";
+import { getArtworkMetadata, getSongMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
 import type { ThumbnailElement } from "@modules/lyrics/requestSniffer/NextResponse";
-import { getSongMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
 import { onAutoSwitchEnabled, onFullScreenDisabled, wakeDockIdle } from "@modules/settings/settings";
 import {
   animationEngine,
@@ -375,16 +375,9 @@ export function initializeLyrics(): void {
         }
         return false;
       };
-
       // 1. Instant check: if metadata is already available in RAM cache
-      getSongMetadata(detail.videoId, 1, abortController.signal).then(async songMetadata => {
+      getArtworkMetadata(detail.videoId, 1, abortController.signal).then(songMetadata => {
         if (AppState.lastVideoId !== videoIdAtStart) return;
-
-        if (songMetadata?.isVideo && songMetadata.counterpartVideoId) {
-          const counterpart = await getSongMetadata(songMetadata.counterpartVideoId, 1, abortController.signal);
-          if (counterpart) songMetadata = counterpart;
-          if (AppState.lastVideoId !== videoIdAtStart) return;
-        }
 
         if (songMetadata && tryApplyThumbnail(songMetadata.smallThumbnail)) {
           return;
@@ -408,16 +401,10 @@ export function initializeLyrics(): void {
           }, 100);
         }
 
-        // 4. Poll getSongMetadata in background (up to 10s for slow network)
-        getSongMetadata(detail.videoId, 500, abortController.signal).then(async delayedMetadata => {
+        // 4. Poll getArtworkMetadata in background (up to 10s for slow network)
+        getArtworkMetadata(detail.videoId, 500, abortController.signal).then(delayedMetadata => {
           if (pollInterval) clearInterval(pollInterval);
           if (AppState.lastVideoId !== videoIdAtStart) return;
-
-          if (delayedMetadata?.isVideo && delayedMetadata.counterpartVideoId) {
-            const counterpart = await getSongMetadata(delayedMetadata.counterpartVideoId, 10, abortController.signal);
-            if (counterpart) delayedMetadata = counterpart;
-            if (AppState.lastVideoId !== videoIdAtStart) return;
-          }
 
           if (!tryApplyThumbnail(delayedMetadata?.smallThumbnail || null) && !resolved) {
             console.warn(`[Image] Failed to resolve any new thumbnail for ${detail.videoId}, falling back to showYtThumbnail`);
@@ -484,7 +471,10 @@ export function initializeLyrics(): void {
       }
     }
 
-    if (document.visibilityState === "visible") {
+    // A window owning a Picture-in-Picture document still reports "hidden", and this is the only
+    // path that ticks the engine while playback is paused, so pausing would never reach the
+    // running word animations.
+    if (document.visibilityState === "visible" || AppState.isPictureInPictureOpen) {
       runAnimationEngine(performance.now(), true);
     }
   });
