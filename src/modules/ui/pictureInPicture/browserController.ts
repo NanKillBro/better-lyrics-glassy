@@ -102,6 +102,11 @@ function injectLyricStyles(pipWindow: Window): void {
   lyricStyles.href = chrome.runtime.getURL(LYRIC_STYLESHEET_PATH);
   pipWindow.document.head.appendChild(lyricStyles);
 
+  const pipStyles = pipWindow.document.createElement("link");
+  pipStyles.rel = "stylesheet";
+  pipStyles.href = chrome.runtime.getURL(STYLESHEET_PATH);
+  pipWindow.document.head.appendChild(pipStyles);
+
   const fontLink = pipWindow.document.createElement("link");
   fontLink.href = FONT_LINK;
   fontLink.rel = "stylesheet";
@@ -114,19 +119,31 @@ function injectLyricStyles(pipWindow: Window): void {
 }
 
 function injectStylesheet(pipWindow: Window, stylesheet: string): void {
+  if (!stylesheet) return;
   const style = pipWindow.document.createElement("style");
   style.textContent = stylesheet;
   pipWindow.document.head.appendChild(style);
 }
 
 async function loadStylesheet(): Promise<string> {
-  const response = await fetch(chrome.runtime.getURL(STYLESHEET_PATH));
-  if (!response.ok) throw new Error(`Document Picture-in-Picture stylesheet failed to load: ${response.status}`);
-  return response.text();
+  const url = chrome.runtime.getURL(STYLESHEET_PATH);
+  console.log("[BL-PiP] Loading stylesheet from URL:", url);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`[BL-PiP] Stylesheet fetch HTTP status ${response.status}`, url);
+      return "";
+    }
+    return await response.text();
+  } catch (err) {
+    console.warn("[BL-PiP] Stylesheet fetch via fetch API failed (relying on linked stylesheet):", err);
+    return "";
+  }
 }
 
 function reportFailure(message: string, error: unknown): void {
   const detail = error instanceof Error ? error.message : String(error);
+  console.error(`[BL-PiP Failure] ${message}: ${detail}`, error);
   log(GENERAL_ERROR_LOG, `${message}: ${detail}`);
 }
 
@@ -136,18 +153,28 @@ export const pictureInPictureController = new PictureInPictureController<Window>
   renderLoadingShell,
   injectStylesheet,
   closeWindow: pipWindow => {
+    console.warn("[BL-PiP] closeWindow dependency triggered on pipWindow", {
+      isClosed: pipWindow.closed,
+      stack: new Error().stack,
+    });
     teardownWindow(pipWindow);
     pipWindow.close();
   },
-  observePageHide: (pipWindow, listener) =>
+  observePageHide: (pipWindow, listener) => {
     pipWindow.addEventListener(
       "pagehide",
-      () => {
+      (event: Event) => {
+        console.warn(`[BL-PiP Window Event] pagehide fired on pipWindow!`, {
+          closed: pipWindow.closed,
+          eventTarget: event.target,
+          activeWindowMatches: activeWindow === pipWindow,
+        });
         teardownWindow(pipWindow);
         listener();
       },
       { once: true }
-    ),
+    );
+  },
   reportFailure,
 });
 
