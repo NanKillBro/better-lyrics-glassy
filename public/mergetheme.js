@@ -24,7 +24,6 @@ ytmusic-app {
 /* ============================================== */
 :root {
   /* -- [ WAAPI Scroll & Scale Overrides for GlassyFlow & Custom CSS ] -- */
-  --blyrics-animate-scroll: 0 !important;
   --blyrics-animate-line-scale: 0 !important;
 
   /* -- [ Cấu hình chung ] -- */
