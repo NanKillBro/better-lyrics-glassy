@@ -904,21 +904,14 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
   transition: opacity 0.7s ease-out, filter 0.7s ease-out, transform 1.3s ease-out !important;
 }
 
-/* past lines (fullscreen): vẫn sáng cho đến khi GlassyFlow đánh dấu trong đợt scroll tiếp theo */
-ytmusic-player-page[player-fullscreened] .blyrics-container.blyrics--gf-managed:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--gf-past) {
+/* past lines (fullscreen): vẫn sáng cho đến khi GlassyFlow / SmoothScroll JS đánh dấu .blyrics--gf-past */
+ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--gf-past) {
   opacity: 1;
   filter: blur(0px) !important;
 }
 
-/* past lines (fullscreen): ẩn sau khi GlassyFlow scroll */
+/* past lines (fullscreen): ẩn sau khi GlassyFlow / SmoothScroll JS đánh dấu .blyrics--gf-past */
 ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-past {
-  opacity: 0;
-  filter: blur(5px);
-  transition: opacity 0.7s ease-out, filter 0.7s ease-out, transform 1.3s ease-out !important;
-}
-
-/* past lines (fullscreen, fallback): ẩn ngay khi GlassyFlow không quản lý (no-sync, resize, v.v.) */
-ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling):not(.blyrics--gf-managed)>.blyrics--line:has(~ .blyrics--active) {
   opacity: 0;
   filter: blur(5px);
   transition: opacity 0.7s ease-out, filter 0.7s ease-out, transform 1.3s ease-out !important;
