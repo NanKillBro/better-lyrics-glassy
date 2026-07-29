@@ -1,9 +1,9 @@
 // Dán CSS theme "cucu" của bạn vào giữa 2 dấu huyền (`) ở dưới
 const MY_CUSTOM_CSS = `
 /* =============================================================================================================*/
-/* MERGED THEME V24: Some UI Update                                                                             */
-/* Adds: New fullscreen UI                                                                                      */
-/* Fixes: Artwork frame got stretched                                                                           */
+/* MERGED THEME V25-NewEngine: Dev Branch Animation Engine Compatibility Update                                  */
+/* Adds: Compatibility with Better Lyrics dev branch / v2.4+ animation rewrite (WAAPI & two-clock system)      */
+/* Fixes: Active lyric premature lighting, downward progressive blur, past lines transition syntax errors      */
 /* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),     */
 /*           better-ytm (WolfTheE), blyrics-am-theme (tposejank), Sustain (boidushya)                           */
 /* Made by: Gemini and NanKill                                                                                  */
@@ -23,6 +23,10 @@ ytmusic-app {
 /* 1. BIẾN CẤU HÌNH (ROOT VARIABLES)              */
 /* ============================================== */
 :root {
+  /* -- [ WAAPI Scroll & Scale Overrides for GlassyFlow & Custom CSS ] -- */
+  --blyrics-animate-scroll: 0 !important;
+  --blyrics-animate-line-scale: 0 !important;
+
   /* -- [ Cấu hình chung ] -- */
   --blyrics-lyric-active-color: white;
   --blyrics-lyric-inactive-color: rgba(255, 255, 255, 0.4);
@@ -896,32 +900,29 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
 }
 
 /* past lines (non-fullscreen): chỉ blur nhẹ, không biến mất */
-.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating) {
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active) {
   filter: blur(6px);
-  transition: filter 0.25s 0s, opacity 0.9s,
-    transform 0.166s var((--blyrics-anim-delay, 0s) - 0.3s) !important;
+  transition: opacity 0.7s ease-out, filter 0.7s ease-out, transform 1.3s ease-out !important;
 }
 
 /* past lines (fullscreen): vẫn sáng cho đến khi GlassyFlow đánh dấu trong đợt scroll tiếp theo */
-ytmusic-player-page[player-fullscreened] .blyrics-container.blyrics--gf-managed:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating):not(.blyrics--gf-past) {
+ytmusic-player-page[player-fullscreened] .blyrics-container.blyrics--gf-managed:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--gf-past) {
   opacity: 1;
   filter: blur(0px) !important;
 }
 
 /* past lines (fullscreen): ẩn sau khi GlassyFlow scroll */
-ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-past:not(.blyrics--animating) {
+ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-past {
   opacity: 0;
   filter: blur(5px);
-  transition: filter 0.25s 0s, opacity 0.9s,
-    transform 0.166s var((--blyrics-anim-delay, 0s) - 0.3s) !important;
+  transition: opacity 0.7s ease-out, filter 0.7s ease-out, transform 1.3s ease-out !important;
 }
 
 /* past lines (fullscreen, fallback): ẩn ngay khi GlassyFlow không quản lý (no-sync, resize, v.v.) */
-ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling):not(.blyrics--gf-managed)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--animating) {
+ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling):not(.blyrics--gf-managed)>.blyrics--line:has(~ .blyrics--active) {
   opacity: 0;
   filter: blur(5px);
-  transition: filter 0.25s 0s, opacity 0.9s,
-    transform 0.166s var((--blyrics-anim-delay, 0s) - 0.3s) !important;
+  transition: opacity 0.7s ease-out, filter 0.7s ease-out, transform 1.3s ease-out !important;
 }
 
 /* ===== NO-SYNC MODE: Tắt blur khi lyrics tĩnh/không có sync ===== */

@@ -421,8 +421,12 @@
         if (!container) return;
         if (enabled) {
             container.style.setProperty('--blyrics-lyric-scroll-duration', '0ms', 'important');
+            container.style.setProperty('--blyrics-animate-scroll', '0', 'important');
+            document.documentElement.style.setProperty('--blyrics-animate-scroll', '0', 'important');
         } else {
             container.style.removeProperty('--blyrics-lyric-scroll-duration');
+            container.style.removeProperty('--blyrics-animate-scroll');
+            document.documentElement.style.removeProperty('--blyrics-animate-scroll');
         }
     }
 
@@ -450,15 +454,13 @@
     }
 
     function getRefIndex(lines) {
-        let preAnimIdx = -1, currentIdx = -1;
+        let activeIdx = -1, animIdx = -1;
         for (let i = 0; i < lines.length; i++) {
             const cl = lines[i].classList;
-            if (cl.contains('blyrics--animating')) return i;
-            if (preAnimIdx < 0 && cl.contains('blyrics--pre-animating')) preAnimIdx = i;
-            if (currentIdx < 0 && cl.contains('blyrics-current-lyric')) currentIdx = i;
+            if (cl.contains('blyrics--active')) return i;
+            if (animIdx < 0 && cl.contains('blyrics--animating')) animIdx = i;
         }
-        if (preAnimIdx >= 0) return preAnimIdx;
-        if (currentIdx >= 0) return currentIdx;
+        if (animIdx >= 0) return animIdx;
         return Math.floor(lines.length / 5);
     }
 
@@ -898,14 +900,17 @@
             const y = parseTranslateY(transformVal);
 
             if (Math.abs(y) > CFG.minDelta) {
-                // FLIP Step 2 — BL set offset transform
-                pendingDelta = y;
+                const delta = y;
+                pendingDelta = 0;
                 suppressTransform = true;
-                el.style.transform = 'translate(0px, 0px)';
-                lastTransform = 'translate(0px, 0px)';
+                el.style.transition = 'none';
+                el.style.transform = 'none';
+                lastTransform = 'none';
                 suppressTransform = false;
+
+                handleNewDelta(delta);
+                lastFlipTime = Date.now();
             } else if (pendingDelta !== 0) {
-                // FLIP Step 5 — BL animate to 0
                 const delta = pendingDelta;
                 pendingDelta = 0;
 
@@ -915,7 +920,6 @@
                 lastTransform = 'none';
                 suppressTransform = false;
 
-                // v3: Dùng handleNewDelta thay vì gọi applyStagger trực tiếp
                 handleNewDelta(delta);
                 lastFlipTime = Date.now();
             }
@@ -951,7 +955,6 @@
             if (Date.now() - lastFlipTime < 150) return;
             if (container && container.classList.contains('blyrics-user-scrolling')) return;
 
-            // v3: Dùng handleNewDelta thay vì gọi applyStagger trực tiếp
             if (Math.abs(delta) > CFG.minDelta) {
                 handleNewDelta(delta);
             }

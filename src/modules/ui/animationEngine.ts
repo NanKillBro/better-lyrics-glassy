@@ -184,7 +184,12 @@ function resetPartAnimations(part: PartData): void {
 }
 
 function resetLineAnimations(lineData: LineData): void {
+  // Clear custom CSS delay variables (--blyrics-anim-delay and --blyrics-swipe-delay) when line animation resets
   const children = [lineData, ...lineData.parts];
+  for (const part of children) {
+    part.lyricElement.style.removeProperty("--blyrics-swipe-delay");
+    part.lyricElement.style.removeProperty("--blyrics-anim-delay");
+  }
   children.forEach(resetPartAnimations);
 }
 
@@ -950,6 +955,21 @@ function startWordAnimations(
 
 function startLineAnimations(lineData: LineData, config: AnimationConfig, currentTime: number): void {
   const appliedTimingOffsetMs = learnedAnimationTimingOffsetMs;
+
+  /**
+   * Populate custom CSS variables --blyrics-anim-delay and --blyrics-swipe-delay on line and word DOM elements.
+   * This provides themes (e.g. mergetheme, Big Blurry Slow Lyrics for TV) with exact time delays until lyric playback,
+   * allowing CSS transitions to calculate precise animation start delays via calc(var(--blyrics-anim-delay) - 0.3s).
+   */
+  const children = [lineData, ...lineData.parts];
+  for (const part of children) {
+    const timeDelta = currentTime - part.time;
+    const swipeAnimationDelay = `${-timeDelta - part.duration * 0.1}s`;
+    const everythingElseDelay = `${-timeDelta}s`;
+
+    part.lyricElement.style.setProperty("--blyrics-swipe-delay", swipeAnimationDelay);
+    part.lyricElement.style.setProperty("--blyrics-anim-delay", everythingElseDelay);
+  }
 
   startLineAnimation(lineData, config, currentTime, appliedTimingOffsetMs);
   if (lineData.lyricElement.dataset.instrumental === "true") {
@@ -2364,6 +2384,23 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
                 animationConfig
               );
               animEngineState.nextScrollAllowedTime = animationConfig.scroll.durationMs + Date.now() + 20;
+            } else {
+              /**
+               * Custom Scroll Engine / Theme Interception Mode (e.g., GlassyFlow spring scroll):
+               * When native WAAPI line scroll is disabled (--blyrics-animate-scroll: 0),
+               * synchronously set container FLIP offset `translate(0px, ${scrollDeltaPx}px)` and reflow
+               * BEFORE updating `tabRenderer.scrollTop = scrollTop`.
+               *
+               * Visual Mechanics:
+               * 1. tabRenderer.scrollTop moves +scrollDeltaPx (down).
+               * 2. lyricsElement translates +scrollDeltaPx (down).
+               * 3. Total visual displacement = 0px (zero jump / zero flicker before paint).
+               * 4. External script (GlassyFlow styleObserver) catches the transform mutation in microtask,
+               *    clears the container transform, and spring-animates lines smoothly to target position.
+               */
+              lyricsElement.style.transition = "none";
+              lyricsElement.style.transform = `translate(0px, ${scrollDeltaPx}px)`;
+              reflow(lyricsElement);
             }
           } else {
             cancelPendingLineScroll();
