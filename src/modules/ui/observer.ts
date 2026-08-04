@@ -26,6 +26,7 @@ import {
   noteAnimationVisibilityChange,
 } from "@modules/ui/animationEngine";
 import { adjustLyricOffset, OFFSET_STEP, OFFSET_STEP_LARGE } from "@modules/ui/lyricsDock/offset";
+import { preloadArtwork } from "@modules/ui/pictureInPicture/lyricsView";
 import {
   closePlayerPageIfOpenedForFullscreen,
   isNavigating,
@@ -429,6 +430,9 @@ export function initializeLyrics(): void {
 
           if (next) {
             preloadHighResThumbnail(next.smallThumbnail);
+            // The floating window asks for a square crop, which is a different
+            // cache entry from the one above, so it needs warming separately.
+            if (AppState.isPictureInPictureOpen && next.thumbnail?.url) preloadArtwork(next.thumbnail.url);
             await preFetchLyrics(
               {
                 song: next.title,
