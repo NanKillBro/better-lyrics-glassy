@@ -1,7 +1,7 @@
 // Dán CSS theme "cucu" của bạn vào giữa 2 dấu huyền (`) ở dưới
 const MY_CUSTOM_CSS = `
 /* =============================================================================================================*/
-/* MERGED THEME V24: Some UI Update                                                                             */
+/* MERGED THEME: Some UI Update                                                                                 */
 /* Adds: New fullscreen UI                                                                                      */
 /* Fixes: Artwork frame got stretched                                                                           */
 /* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),     */
