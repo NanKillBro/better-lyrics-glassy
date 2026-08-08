@@ -1,9 +1,9 @@
 // Dán CSS theme "cucu" của bạn vào giữa 2 dấu huyền (`) ở dưới
 const MY_CUSTOM_CSS = `
 /* =============================================================================================================*/
-/* MERGED THEME V25-NewEngine: Dev Branch Animation Engine Compatibility Update                                  */
-/* Adds: Compatibility with Better Lyrics dev branch / v2.4+ animation rewrite (WAAPI & two-clock system)      */
-/* Fixes: Active lyric premature lighting, downward progressive blur, past lines transition syntax errors      */
+/* MERGED THEME NewEngine: Dev Branch Animation Engine Compatibility Update                                     */
+/* Adds: Compatibility with Better Lyrics dev branch / v2.4+ animation rewrite (WAAPI & two-clock system)       */
+/* Fixes: Active lyric premature lighting, downward progressive blur, past lines transition syntax errors       */
 /* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),     */
 /*           better-ytm (WolfTheE), blyrics-am-theme (tposejank), Sustain (boidushya)                           */
 /* Made by: Gemini and NanKill                                                                                  */
