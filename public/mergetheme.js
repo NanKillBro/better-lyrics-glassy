@@ -2,8 +2,6 @@
 const MY_CUSTOM_CSS = `
 /* =============================================================================================================*/
 /* MERGED THEME NewEngine: Dev Branch Animation Engine Compatibility Update                                     */
-/* Adds: Compatibility with Better Lyrics dev branch / v2.4+ animation rewrite (WAAPI & two-clock system)       */
-/* Fixes: Active lyric premature lighting, downward progressive blur, past lines transition syntax errors       */
 /* Based on: Dynamic Background (chengg), Big Blurry Slow Lyrics for TV (zobiron), Luxurious Glass (SKMJi),     */
 /*           better-ytm (WolfTheE), blyrics-am-theme (tposejank), Sustain (boidushya)                           */
 /* Made by: Gemini and NanKill                                                                                  */
@@ -617,6 +615,15 @@ ytmusic-av-toggle,
   z-index: 9999 !important; 
   position: absolute !important;
   overflow: visible !important;
+}
+
+/* Fix Song/Video - misaligned to the right */
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs]) .av.ytmusic-player-page {
+  position: relative !important; 
+  width: fit-content !important;
+  left: 0% !important;
+  transform: translateX(-0%) translateY(150%)!important;
+  padding: 15px !important;
 }
 
 #player.ytmusic-player-page .song-video-switching-controller {
