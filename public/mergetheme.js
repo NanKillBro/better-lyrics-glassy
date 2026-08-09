@@ -535,6 +535,219 @@ ytmusic-multi-page-menu-renderer.ytmusicMultiPageMenuRendererHost yt-multi-page-
 }
 
 /* ============================================== */
+/* MENU MUSIC TOGETHER (GLASSY THEME)             */
+/* ============================================== */
+/* Popup Outer Container */
+.music-together-popup {
+  z-index: 10000 !important;
+  filter: drop-shadow(0 16px 36px rgba(0, 0, 0, 0.5));
+}
+
+/* Glassy Listbox Container */
+.music-together-popup-container,
+tp-yt-paper-listbox.music-together-popup-container {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)), rgba(var(--ytmusic-album-color-dark, 20, 20, 25), 0.75) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
+  padding: 8px !important;
+  color: #ffffff !important;
+  overflow: hidden !important;
+  min-width: 260px;
+}
+
+/* Status Card Glass Panel */
+.music-together-status {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  padding: 14px !important;
+  margin-bottom: 6px !important;
+}
+
+/* Status Container Flex Alignment */
+.music-together-status-container {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+/* User Avatar / Profile Image */
+.music-together-profile {
+  border-radius: 50% !important;
+  border: 2px solid rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 10px rgba(255, 255, 255, 0.1) !important;
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  object-fit: cover !important;
+}
+
+.music-together-profile:hover {
+  transform: scale(1.08) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Status Text Items */
+.music-together-status-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 3px !important;
+  font-size: 13px !important;
+  color: #ffffff !important;
+}
+
+/* Plugin Title Text */
+.music-together-status-item pear-trans[key="plugins.music-together.name"] {
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  letter-spacing: 0.3px !important;
+  color: #ffffff !important;
+}
+
+/* Disconnected / Status Badge */
+#music-together-status-label {
+  display: inline-block !important;
+  padding: 2px 8px !important;
+  border-radius: 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  margin-top: 2px !important;
+}
+
+/* Permission Label Marquee */
+#music-together-permission-label {
+  margin-top: 4px !important;
+  font-size: 11px !important;
+  opacity: 0.85 !important;
+}
+
+#music-together-permission-label pear-trans {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* Connected Users Block */
+.music-together-user-container {
+  padding-top: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.music-together-empty {
+  width: 100% !important;
+  font-size: 12px !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+  font-style: italic !important;
+  text-align: center !important;
+  padding: 6px 10px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-radius: 8px !important;
+  border: 1px dashed rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Glass Dividers */
+.music-together-divider,
+.music-together-divider.horizontal {
+  height: 1px !important;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent) !important;
+  margin: 6px 0 !important;
+  border: none !important;
+}
+
+/* Action Item Rows */
+.music-together-item {
+  display: flex !important;
+  align-items: center !important;
+  height: 42px !important;
+  margin: 3px 0 !important;
+  padding: 0 12px !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease !important;
+  cursor: pointer !important;
+  color: #ffffff !important;
+}
+
+/* Hover Glass Highlight */
+.music-together-item:hover {
+  background: linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12)), rgba(var(--ytmusic-album-color, 100, 100, 100), 0.25) !important;
+  border-radius: 10px !important;
+  transform: translateX(3px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Text inside action item */
+.music-together-item .text,
+.music-together-item .text.ytmusic-menu-service-item-renderer {
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  transition: color 0.2s ease !important;
+}
+
+.music-together-item:hover .text {
+  color: #ffffff !important;
+}
+
+/* Icons inside action item */
+.music-together-item .icon,
+.music-together-item .icon.ytmusic-menu-service-item-renderer,
+.music-together-item svg {
+  margin-right: 10px !important;
+  fill: rgba(255, 255, 255, 0.8) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  transition: fill 0.2s ease, transform 0.2s ease !important;
+}
+
+.music-together-item:hover .icon svg,
+.music-together-item:hover svg {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+  transform: scale(1.1) !important;
+}
+
+/* Topbar Button & Indicators */
+.music-together-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 6px !important;
+  border-radius: 50% !important;
+  transition: background 0.2s ease, transform 0.2s ease !important;
+}
+
+.music-together-button:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  transform: scale(1.05) !important;
+}
+
+.music-together-button svg {
+  fill: rgba(255, 255, 255, 0.75) !important;
+  transition: fill 0.2s ease !important;
+}
+
+.music-together-button:hover svg {
+  fill: #ffffff !important;
+}
+
+.music-together-owner {
+  border-radius: 50% !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+
+.music-together-name {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+/* ============================================== */
 /* 5. KHUNG PLAYER & HIỆU ỨNG (PLAYER & EFFECTS)  */
 /* ============================================== */
 /* Xóa hiệu ứng fade đen */
