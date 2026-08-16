@@ -2401,6 +2401,161 @@ ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed
 ytmusic-player-page[player-fullscreened] .blyrics-dock[data-position="bottom-center"] {
   top: calc(100% - 75px - var(--menu-bar-height, 0px)) !important;
 }
+
+/* ========================================================================== */
+/* TOP-ROW PLAYER BUTTONS - UNIFIED GLASS PILL BAR                            */
+/* ========================================================================== */
+
+/* 1. Container Bar - Thanh capsule kính mờ bảo vệ icon trên artwork sáng */
+.top-row-buttons.ytmusic-player {
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  min-width: unset !important;
+  max-width: calc(100% - 16px) !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  padding: 4px 6px !important;
+  transform-origin: top right !important;
+  
+  /* Nền kính tối mờ chống lóa trên artwork trắng/sáng */
+  background: rgba(0, 0, 0, 0.45) !important;
+  /* Bo góc dạng viên thuốc (Pill/Capsule Bar) */
+  border-radius: 9999px !important;
+  
+  /* Viền khúc xạ sáng nhẹ & đổ bóng chiều sâu */
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35),
+              inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
+  
+  z-index: 10 !important;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+
+/* Hover nhẹ lên cả thanh bar */
+.top-row-buttons.ytmusic-player:hover {
+  background: rgba(0, 0, 0, 0.55) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45),
+              inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Xử lý wrapper div (như player-quality-button nằm trong thẻ div) */
+.top-row-buttons.ytmusic-player > div {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* 2. Từng nút bấm icon bên trong thanh Bar */
+.top-row-buttons.ytmusic-player yt-icon-button {
+  align-items: center !important;
+  justify-content: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+
+/* Hiệu ứng hover cho từng icon: Nổi sáng tròn nhẹ */
+.top-row-buttons.ytmusic-player yt-icon-button:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  transform: scale(1.06) !important;
+}
+
+.top-row-buttons.ytmusic-player yt-icon-button:active {
+  transform: scale(0.92) !important;
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* 3. Reset các thẻ button bên trong yt-icon-button */
+.top-row-buttons.ytmusic-player yt-icon-button button,
+.top-row-buttons.ytmusic-player button#button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  color: inherit !important;
+}
+
+/* 4. Tinh chỉnh Icon SVG: Kích thước chuẩn & độ tương phản cao */
+.top-row-buttons.ytmusic-player yt-icon,
+.top-row-buttons.ytmusic-player .yt-icon-shape,
+.top-row-buttons.ytmusic-player svg {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  fill: currentColor !important;
+  color: inherit !important;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)) !important;
+}
+
+/* Tắt lớp hiệu ứng ripple mặc định gây lệch hoặc đục */
+.top-row-buttons.ytmusic-player yt-interaction {
+  display: none !important;
+}
+
+/* 5. Tối ưu kích thước trong Trình phát thu nhỏ (Miniplayer) & Responsive */
+ytmusic-player[player-ui-state="MINIPLAYER"] .top-row-buttons,
+ytmusic-player[player-ui-state="INACTIVE"] .top-row-buttons,
+ytmusic-app-layout[player-ui-state="MINI_PLAYER"] .top-row-buttons,
+ytmusic-app-layout:not([player-page-open]) .top-row-buttons,
+ytmusic-player-page:not([player-page-open]) .top-row-buttons,
+#player:not([player-page-open]) .top-row-buttons,
+#player[player-ui-state="MINIPLAYER"] .top-row-buttons {
+  top: 8px !important;
+  right: 8px !important;
+  padding: 3px 5px !important;
+  gap: 2px !important;
+  max-width: calc(100% - 16px) !important;
+  transform: none !important; /* Giữ nguyên kích thước icon to rõ, không bị thu bé */
+}
+
+/* Khi cửa sổ ứng dụng bị thu nhỏ màn hình */
+@media (max-width: 768px), (max-height: 600px) {
+  .top-row-buttons.ytmusic-player {
+    top: 8px !important;
+    right: 8px !important;
+    transform: none !important;
+    max-width: calc(100% - 16px) !important;
+  }
+}
+
+/* ẨN HOÀN TOÀN CÁC NÚT KHI Ở CHẾ ĐỘ FULLSCREEN */
+ytmusic-player-page[player-fullscreened] .top-row-buttons,
+ytmusic-player-page[player-fullscreened] ytmusic-player .top-row-buttons,
+[player-fullscreened] .top-row-buttons,
+ytmusic-player[player-ui-state="FULLSCREEN"] .top-row-buttons,
+:fullscreen .top-row-buttons,
+:-webkit-full-screen .top-row-buttons {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 `;
 
 function injectStyles() {
