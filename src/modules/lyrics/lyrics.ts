@@ -27,7 +27,7 @@ import { mainView } from "@modules/ui/mainLyricsView";
 import { resetPlaybackClock, resumeAllAutoscroll } from "@braccato/core";
 import { registerThemeSetting } from "@braccato/core/themeSettings";
 
-const hideInstrumentalOnly = registerThemeSetting("blyrics-hide-instrumental-only", false, true);
+const hideInstrumentalOnly = registerThemeSetting("blyrics-hide-instrumental-only", true, true);
 
 export function seekPlayer(timeS: number): void {
   log(LOG_PREFIX, `Seeking to ${timeS.toFixed(2)}s`);
@@ -36,8 +36,11 @@ export function seekPlayer(timeS: number): void {
 }
 
 function isInstrumentalOnly(lyrics: Lyric[]): boolean {
-  if (lyrics.length !== 1) return false;
-  return /^\[?instrumental\s*only\]?$/i.test(lyrics[0].words.trim());
+  if (!lyrics || lyrics.length === 0) return false;
+  const meaningfulLyrics = lyrics.filter(l => l.words && l.words.trim().length > 0);
+  if (meaningfulLyrics.length === 0) return true;
+  const instrumentalPattern = /^(\[|\(|\♪|\s)*(instrumental(\s*only)?|music)(\]|\)|\♪|\s)*$/i;
+  return meaningfulLyrics.every(l => instrumentalPattern.test(l.words.trim()) || l.isInstrumental === true);
 }
 
 function normalizeArtist(artist: string): string {

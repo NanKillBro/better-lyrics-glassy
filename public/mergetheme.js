@@ -2496,8 +2496,8 @@ ytmusic-player-page[player-fullscreened] .blyrics-dock[data-position="bottom-cen
 .top-row-buttons.ytmusic-player yt-icon-button {
   align-items: center !important;
   justify-content: center !important;
-  width: 32px !important;
-  height: 32px !important;
+  width: 36px !important;
+  height: 36px !important;
   padding: 0 !important;
   margin: 0 !important;
   border-radius: 50% !important;
@@ -2541,8 +2541,8 @@ ytmusic-player-page[player-fullscreened] .blyrics-dock[data-position="bottom-cen
 .top-row-buttons.ytmusic-player .yt-icon-shape,
 .top-row-buttons.ytmusic-player svg {
   display: block !important;
-  width: 18px !important;
-  height: 18px !important;
+  width: 22px !important;
+  height: 22px !important;
   fill: currentColor !important;
   color: inherit !important;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)) !important;
