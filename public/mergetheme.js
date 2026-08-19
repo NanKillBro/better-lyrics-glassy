@@ -1220,13 +1220,6 @@ ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-sc
               transform 1.3s ease calc(var(--blyrics-anim-delay, 0s) - 0.3s);
 }
 
-/* Hover to see Static Lyrics */
-.blyrics-container:hover > div {
-  opacity: 1 !important;
-  filter: blur(0px) !important;
-  transition: opacity 0.3s ease 1s, filter 0.3s ease 1s;
-}
-
 /* Translated & Romanized */
 .blyrics-container > div > span.blyrics--translated,
 .blyrics-container > div > span.blyrics--romanized {
