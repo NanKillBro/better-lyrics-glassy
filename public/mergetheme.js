@@ -222,9 +222,11 @@ ytmusic-player-bar,
 }
 
 /* Tắt Blur KHI VÀ CHỈ KHI Player đang mở --- */
-/* Logic: Kiểm tra nếu body có chứa #layout đang mở player -> thì tắt blur ở bar */
-body:has(#layout[player-ui-state="PLAYER_PAGE_OPEN"]) ytmusic-player-bar,
-body:has(#layout[player-ui-state="PLAYER_PAGE_OPEN"]) #player-bar-background {
+/* Dùng #layout trực tiếp thay cho body:has(): tương đương vì player bar nằm trong
+   #layout (xem rule ngay bên dưới), và tránh :has() neo ở body — Blink phải kiểm
+   tra lại subject đó mỗi khi có bất kỳ thay đổi DOM nào trong trang. */
+#layout[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player-bar,
+#layout[player-ui-state="PLAYER_PAGE_OPEN"] #player-bar-background {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   background: transparent !important;
@@ -1161,14 +1163,19 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
   filter: blur(9.5px) !important;
 }
 
+/* past lines: .blyrics--gf-behind thay cho :has(~ .blyrics--active). Class
+   được stamp bởi PAST-LINE MARKER ở cuối file, đúng tập hợp mà :has() cũ
+   chọn và đúng thời điểm .blyrics--active đổi — xem comment ở
+   setupPastLineMarker(). Các transition ở đây giữ nguyên. */
+
 /* past lines (non-fullscreen): chỉ blur nhẹ, không biến mất */
-.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active) {
+.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-behind {
   filter: blur(6px);
   transition: opacity 0.7s ease-out, filter 0.7s ease-out, transform 1.3s ease-out !important;
 }
 
 /* past lines (fullscreen): vẫn sáng cho đến khi GlassyFlow / SmoothScroll JS đánh dấu .blyrics--gf-past */
-ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line:has(~ .blyrics--active):not(.blyrics--gf-past) {
+ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-behind:not(.blyrics--gf-past) {
   opacity: 1;
   filter: blur(0px) !important;
 }
@@ -2855,11 +2862,227 @@ function setupNoSyncDomObserver() {
   }
 }
 
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *  FULLSCREEN CURSOR HIDING — Gate rule `*` theo state fullscreen
+ *
+ *  Rule ẩn con trỏ buộc phải dùng subject `*`: `cursor` là inherited
+ *  property, nhưng element nào tự khai `cursor` sẽ luôn thắng giá trị
+ *  inherit — kể cả khi cha khai `!important`. Extension khai `cursor` ở
+ *  ~20 chỗ, nên đặt `cursor: none` riêng trên #layout là KHÔNG đủ.
+ *
+ *  Vấn đề: subject `*` không có bucket key (id/class/tag/attribute), nên
+ *  Blink phải thử lại rule này với MỌI element trong MỌI lần recalc
+ *  style — kể cả khi không hề fullscreen. Trong profile: ~9.5k lượt thử
+ *  mỗi lần recalc, 0 match.
+ *
+ *  Cách xử lý: giữ nguyên rule y hệt, nhưng chỉ cho nó CÓ MẶT trong
+ *  stylesheet khi #layout[player-fullscreened]. Ngoài fullscreen rule
+ *  không tồn tại → chi phí 0; trong fullscreen → hành vi giống hệt cũ.
+ *
+ *  Chọn [player-fullscreened] làm gate vì nó chỉ đổi khi vào/ra
+ *  fullscreen. KHÔNG gate theo [cursor-hidden]: settings.ts bật/tắt
+ *  attribute đó theo mousemove + timer 3s, gate theo nó sẽ thêm/xoá
+ *  stylesheet liên tục, mà mỗi lần thêm/xoá sheet = 1 full recalc.
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+const NANKILL_FS_CURSOR_STYLE_ID = 'nankill-fullscreen-cursor';
+const NANKILL_FS_CURSOR_CSS = `
+#layout[player-fullscreened]:not([blyrics-dfs])[cursor-hidden]:not([show-fullscreen-controls]) * {
+  cursor: none !important;
+}
+`;
+
+let nankillFsCursorObserver = null;
+
+function syncFullscreenCursorStyle() {
+  const layout = document.getElementById('layout');
+  const wanted = Boolean(layout && layout.hasAttribute('player-fullscreened'));
+  const existing = document.getElementById(NANKILL_FS_CURSOR_STYLE_ID);
+
+  if (wanted === Boolean(existing)) {
+    return;
+  }
+
+  if (!wanted) {
+    existing.remove();
+    return;
+  }
+
+  const style = document.createElement('style');
+  style.id = NANKILL_FS_CURSOR_STYLE_ID;
+  style.type = 'text/css';
+  style.textContent = NANKILL_FS_CURSOR_CSS;
+  (document.head || document.documentElement).appendChild(style);
+}
+
+function setupFullscreenCursorObserver() {
+  syncFullscreenCursorStyle();
+
+  if (nankillFsCursorObserver) {
+    return;
+  }
+
+  console.info('[GlassyUI] Gating fullscreen cursor rule on [player-fullscreened]...');
+
+  // attributeFilter làm observer này gần như miễn phí: Blink chỉ notify khi
+  // đúng attribute đó đổi, chứ không phải mọi mutation trong subtree.
+  nankillFsCursorObserver = new MutationObserver(syncFullscreenCursorStyle);
+  nankillFsCursorObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['player-fullscreened'],
+    subtree: true,
+  });
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *  PAST-LINE MARKER — stamp .blyrics--gf-behind thay cho :has(~ .blyrics--active)
+ *
+ *  Hai rule blur dòng đã hát trước đây dùng
+ *      .blyrics--line:has(~ .blyrics--active)
+ *  Đo được: mỗi lần .blyrics--active nhảy sang dòng mới, một :has() có
+ *  argument khớp class đó buộc Blink invalidate cả dải sibling thay vì 1
+ *  element — amplification 474-1060x. Positive control: tắt hết stylesheet
+ *  của app rồi inject đúng 1 rule :has() đó, không đổi gì khác trong trang
+ *  → chi phí một lần .blyrics--active đổi chỗ nhảy từ 0.00ms lên 0.80ms.
+ *
+ *  Lưu ý: dạng ancestor :has(.x) > y đo được CÒN TỆ HƠN dạng sibling
+ *  (1.00ms vs 0.80ms), nên viết lại thành :has(.x) sẽ không giải quyết gì.
+ *  Class phải rời khỏi argument của :has() hoàn toàn — nên phải stamp bằng JS.
+ *
+ *  KHÁC .blyrics--gf-past: gf-past do engine scroll stamp theo đợt scroll và
+ *  CỐ TÌNH trễ, để dòng past còn sáng qua animation rồi mới mờ đi.
+ *  gf-behind stamp NGAY khi .blyrics--active đổi, nên khớp đúng hành vi
+ *  :has() cũ. Hai class độc lập → hiệu ứng 2 tầng ở fullscreen
+ *  (rule .blyrics--gf-behind:not(.blyrics--gf-past)) giữ nguyên.
+ *
+ *  Đặt ở mergetheme.js để độc lập với việc engine scroll nào đang chạy
+ *  (GlassyFlow hay SmoothScroll) hoặc có engine nào đang chạy hay không.
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+const NANKILL_BEHIND_CLASS = 'blyrics--gf-behind';
+
+let nankillBehindHostObserver = null;
+let nankillBehindLineObserver = null;
+let nankillBehindContainer = null;
+let nankillBehindLastActive = -1;
+let nankillBehindLineCount = -1;
+
+/* Chỉ ghi khi state thực sự khác. Nhờ vậy khi observer bị gọi lại vì chính
+ * write của hàm này, nó ra về sau đúng 1 vòng quét ngược và 0 attribute
+ * write — không cần cờ chống tái nhập (cờ đó cũng không dùng được, vì
+ * callback của MutationObserver chạy sau khi code đồng bộ đã xong).       */
+function syncBehindClasses(force) {
+  const container = nankillBehindContainer;
+  if (!container || !container.isConnected) return;
+
+  const children = container.children;
+
+  // :has(~ .blyrics--active) khớp mọi dòng đứng TRƯỚC dòng active xa nhất về
+  // phía sau. Nhiều dòng có thể mang .blyrics--active cùng lúc do overlap
+  // timing, nên phải quét từ cuối lên.
+  let lastActive = -1;
+  for (let i = children.length - 1; i >= 0; i--) {
+    if (children[i].classList.contains('blyrics--active')) {
+      lastActive = i;
+      break;
+    }
+  }
+
+  if (!force && lastActive === nankillBehindLastActive && children.length === nankillBehindLineCount) {
+    return;
+  }
+  nankillBehindLastActive = lastActive;
+  nankillBehindLineCount = children.length;
+
+  for (let i = 0; i < children.length; i++) {
+    const line = children[i];
+    if (!line.classList.contains('blyrics--line')) continue;
+    // lastActive < 0 → không dòng nào active → :has() cũ không khớp gì → xoá hết
+    const want = lastActive >= 0 && i < lastActive;
+    if (line.classList.contains(NANKILL_BEHIND_CLASS) !== want) {
+      line.classList.toggle(NANKILL_BEHIND_CLASS, want);
+    }
+  }
+}
+
+function attachBehindObserver(container) {
+  if (nankillBehindContainer === container && nankillBehindLineObserver) return;
+
+  if (nankillBehindLineObserver) {
+    nankillBehindLineObserver.disconnect();
+  }
+  nankillBehindContainer = container;
+  nankillBehindLastActive = -1;
+  nankillBehindLineCount = -1;
+
+  // attributeFilter ['class'] + lọc theo con trực tiếp: .blyrics--active chỉ
+  // nằm trên con trực tiếp của container, nên class đổi ở word level (hàng
+  // trăm lần mỗi 10s trong census) không kéo theo việc quét lại.
+  nankillBehindLineObserver = new MutationObserver((records) => {
+    let relevant = false;
+    let structural = false;
+    for (const r of records) {
+      if (r.type === 'childList') {
+        structural = true;
+        relevant = true;
+      } else if (r.target.parentElement === container) {
+        relevant = true;
+      }
+    }
+    // childList → lyrics vừa render lại, index cũ vô nghĩa → bắt buộc stamp lại
+    if (relevant) {
+      syncBehindClasses(structural);
+    }
+  });
+
+  nankillBehindLineObserver.observe(container, {
+    attributes: true,
+    attributeFilter: ['class'],
+    childList: true,
+    subtree: true,
+  });
+
+  syncBehindClasses(true);
+}
+
+function setupPastLineMarker() {
+  const existing = document.querySelector('.blyrics-container');
+  if (existing) {
+    attachBehindObserver(existing);
+  }
+
+  // document.body có thể chưa tồn tại ở lần gọi ngay lập tức; các lần gọi
+  // sau (DOMContentLoaded / load) sẽ dựng observer.
+  if (nankillBehindHostObserver || !document.body) {
+    return;
+  }
+
+  console.info('[GlassyUI] Stamping .blyrics--gf-behind in place of :has(~ .blyrics--active)...');
+
+  let queued = false;
+  nankillBehindHostObserver = new MutationObserver(() => {
+    if (queued) return;
+    queued = true;
+    queueMicrotask(() => {
+      queued = false;
+      const container = document.querySelector('.blyrics-container');
+      if (container) {
+        attachBehindObserver(container);
+      }
+    });
+  });
+
+  nankillBehindHostObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+}
+
 // Chèn ngay lập tức
 injectStyles();
 dockBetterLyricsFooterToTabs();
 setupFooterDockingObserver();
 setupNoSyncDomObserver();
+setupFullscreenCursorObserver();
+setupPastLineMarker();
 
 // Chèn lại lần nữa khi trang load xong (đề phòng bị extension ghi đè)
 window.addEventListener('DOMContentLoaded', () => {
@@ -2867,6 +3090,8 @@ window.addEventListener('DOMContentLoaded', () => {
   dockBetterLyricsFooterToTabs();
   setupFooterDockingObserver();
   setupNoSyncDomObserver();
+  setupFullscreenCursorObserver();
+  setupPastLineMarker();
 });
 
 window.addEventListener('load', () => {
@@ -2874,4 +3099,6 @@ window.addEventListener('load', () => {
   dockBetterLyricsFooterToTabs();
   setupFooterDockingObserver();
   setupNoSyncDomObserver();
+  setupFullscreenCursorObserver();
+  setupPastLineMarker();
 });

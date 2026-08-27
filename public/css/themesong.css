@@ -58,7 +58,11 @@
       background-color: var(--ts-navbar-color) !important;
     }
 
-    [style*="--blyrics-background-img"] {
+    /* Only #layout ever receives this as an inline style (modules/ui/dom.ts), so
+       match it directly. `[style*=...]` is an attribute-substring test with no
+       bucket key, so Blink retried it against every element on every recalc — and
+       on every inline-style write, which the lyric scroller does per frame. */
+    & #layout {
       --blyrics-background-img: unset !important;
     }
 
