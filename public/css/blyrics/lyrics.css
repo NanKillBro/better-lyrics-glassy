@@ -30,10 +30,11 @@
 	cursor: default;
 }
 
-:not(.blyrics-background-lyric) {
-	order: 0;
-}
-
+/* `order: 0` is already the initial value, and these are the only two `order`
+   declarations in the whole extension — so the bare `:not()` that used to sit here
+   did nothing except land in Blink's universal-rules bucket, get tested against
+   every element on every style recalculation, and stamp an `order` declaration
+   onto ~6k of them. Background vocals still sort last via `order: 2` below. */
 .blyrics-background-lyric {
 	order: 2;
 }

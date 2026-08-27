@@ -1,6 +1,8 @@
-#layout[player-fullscreened]:not([blyrics-dfs])[cursor-hidden]:not([show-fullscreen-controls]) * {
-  cursor: none !important;
-}
+/* Rule ẩn con trỏ (`... * { cursor: none }`) đã chuyển sang mergetheme.js —
+   xem NANKILL_FS_CURSOR_CSS. Subject `*` không có bucket key nên Blink phải
+   thử lại nó với mọi element trong mọi lần recalc style, kể cả khi không hề
+   fullscreen. Giờ stylesheet đó chỉ được chèn khi #layout[player-fullscreened],
+   nên ngoài fullscreen chi phí bằng 0 và trong fullscreen hành vi y như cũ. */
 
 ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs])
 #player.ytmusic-player-page {
