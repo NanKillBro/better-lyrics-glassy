@@ -235,11 +235,27 @@ ytmusic-player-bar[player-fullscreened]:not([blyrics-dfs]) #play-pause-button>.y
     height: 32px;
 }
 
-/* Fix YTM A/B test: player bar not auto-hiding */
-
+/* Fix YTM A/B test: player bar not auto-hiding. YTM's is-player-bar-slide-up-animation-enabled
+   animates the bar with fill: both, and a forwards fill outranks author declarations — including
+   YTM's own opacity: 0 — so the bar stopped auto-hiding. Suppressing the animation fixes that,
+   but it also removed the only thing that raised the bar, so both states are stated below. */
 ytmusic-app-layout[player-fullscreened]:not([blyrics-dfs]) > [slot="player-bar"] {
   animation: none !important;
   width: 100%;
+}
+
+/* Reveal: YTM still toggles show-fullscreen-controls on mousemove, and the 0.3s opacity
+   transition comes from YTM's own base rule. No !important, so YTM keeps the final say. */
+ytmusic-app-layout[player-fullscreened]:not([blyrics-dfs])[show-fullscreen-controls]
+  > [slot="player-bar"] {
+  opacity: 1;
+}
+
+/* Hidden means hidden — the bar was invisible but still taking clicks. YTM reveals on document
+   mousemove, which still fires with the bar out of the hit-test, so this cannot block it. */
+ytmusic-app-layout[player-fullscreened]:not([blyrics-dfs]):not([show-fullscreen-controls])
+  > [slot="player-bar"] {
+  pointer-events: none;
 }
 
 /* Top-anchored Unison dock: tab header is hidden in fullscreen, so no 48px buffer needed */
