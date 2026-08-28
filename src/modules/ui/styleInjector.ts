@@ -1,4 +1,3 @@
-import { GENERAL_ERROR_LOG, LOG_PREFIX } from "@constants";
 import { reloadLyrics } from "@core/appState";
 import { decompressString, isCompressed } from "@core/compression";
 import {
@@ -8,9 +7,9 @@ import {
   getSyncStorage,
   loadChunkedStyles,
 } from "@core/storage";
-import { log } from "@utils";
 import { mainView } from "./mainLyricsView";
 import { publishPictureInPictureLyrics } from "./pictureInPicture/lyricsPublisher";
+import { logCore, logError } from "@core/logger";
 
 let hasSubscribedToStyles = false;
 
@@ -84,13 +83,13 @@ export async function getAndApplyCustomStyles(retryContext?: { attempt: number; 
     if (retryContext && retryContext.attempt < retryContext.maxAttempts) {
       const nextAttempt = retryContext.attempt + 1;
       const delay = retryContext.delays[retryContext.attempt] || 5000;
-      log(LOG_PREFIX, `No custom CSS found (attempt ${retryContext.attempt + 1}/${retryContext.maxAttempts}), retrying in ${delay}ms`);
+      logCore(`No custom CSS found (attempt ${retryContext.attempt + 1}/${retryContext.maxAttempts}), retrying in ${delay}ms`);
       setTimeout(() => {
         getAndApplyCustomStyles({ ...retryContext, attempt: nextAttempt });
       }, delay);
     }
   } catch (error) {
-    log(GENERAL_ERROR_LOG, error);
+    logError(error);
     try {
       const { activePearTheme } = await getLocalStorage<{ activePearTheme?: string }>(["activePearTheme"]);
       if (activePearTheme === "glassy-merge-theme") {
@@ -136,13 +135,13 @@ export async function getAndApplyCustomStyles(retryContext?: { attempt: number; 
       if (retryContext && retryContext.attempt < retryContext.maxAttempts) {
         const nextAttempt = retryContext.attempt + 1;
         const delay = retryContext.delays[retryContext.attempt] || 5000;
-        log(LOG_PREFIX, `All fallbacks failed (attempt ${retryContext.attempt + 1}/${retryContext.maxAttempts}), retrying in ${delay}ms`);
+        logCore(`All fallbacks failed (attempt ${retryContext.attempt + 1}/${retryContext.maxAttempts}), retrying in ${delay}ms`);
         setTimeout(() => {
           getAndApplyCustomStyles({ ...retryContext, attempt: nextAttempt });
         }, delay);
       }
     } catch (fallbackError) {
-      log(GENERAL_ERROR_LOG, fallbackError);
+      logError(fallbackError);
     }
   }
 }
@@ -157,7 +156,7 @@ async function handleStoreThemeChange(key: string, change: { oldValue?: any; new
 
   if (change.oldValue?.css === theme.css && change.oldValue?.version === theme.version) return;
 
-  log(LOG_PREFIX, "Store theme updated:", theme.title || themeId);
+  logCore("Store theme updated:", theme.title || themeId);
   applyCustomStyles(compileRicsToStyles(theme.css));
 }
 
