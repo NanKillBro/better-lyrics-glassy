@@ -142,7 +142,7 @@
 
         // Fast Transition Dynamic Config (Gap ngắn)
         fastTransitionEnabled: true,
-        fastTransitionThreshold: 1.5, // giây
+        fastTransitionThreshold: 1.7, // giây
         fastStaggerStep: 30,          // Stagger nhanh hơn
         fastStiffness: 120,           // Lò xo cứng hơn
         fastDamping: 18,              // Ít ma sát hơn
