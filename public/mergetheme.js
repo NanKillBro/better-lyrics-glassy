@@ -270,33 +270,11 @@ ytmusic-app-layout.content-scrolled #nav-bar-divider {
 }
 
 /* THANH ĐIỀU HƯỚNG BÊN TRÁI (SIDEBAR / GUIDE DRAWER) */
-tp-yt-app-drawer#guide,
-tp-yt-app-drawer#guide #contentContainer,
-tp-yt-app-drawer#guide #contentContainer.tp-yt-app-drawer,
-#guide.tp-yt-app-drawer #contentContainer,
-#guide-wrapper,
-#guide-wrapper.ytmusic-app,
-ytmusic-app #guide-wrapper,
-#guide-content,
-#guide-content.ytmusic-app,
-ytmusic-guide-renderer,
-ytmusic-guide-renderer#guide-renderer,
-ytmusic-guide-renderer.ytmusic-app,
-.guide-nav.ytmusic-guide-renderer,
-#sections.ytmusic-guide-renderer,
-ytmusic-guide-section-renderer,
-ytmusic-guide-section-renderer #items,
-ytmusic-guide-section-renderer #buttons,
-#mini-guide-background,
-#mini-guide-background.ytmusic-app-layout,
-ytmusic-app-layout #mini-guide-background,
-ytmusic-app #mini-guide-background {
+#guide-wrapper {
   background: transparent !important;
   background-color: transparent !important;
-  border-right: none !important;
   border-color: transparent !important;
   box-shadow: none !important;
-  padding: 2px;
 }
 
 tp-yt-app-drawer#guide #scrim {
@@ -319,12 +297,20 @@ ytmusic-guide-entry-renderer[active] tp-yt-paper-item {
   background: rgba(255, 255, 255, 0.15) !important;
 }
 
-#divider,
-#guide #divider,
-ytmusic-guide-section-renderer #divider {
+#divider {
   border: 0 !important;
   border-color: transparent !important;
   background-color: transparent !important;
+}
+
+tp-yt-app-drawer#guide #guide-spacer {
+  height: 25px !important; /* Thay đổi chiều cao theo nhu cầu */
+  display: block !important;
+}
+
+ytmusic-guide-section-renderer[is-collapsed][is-primary] {
+  padding-top: 25px !important;
+  box-sizing: border-box !important;
 }
 
 /* THANH TÌM KIẾM (SEARCH BOX) MỚI */
