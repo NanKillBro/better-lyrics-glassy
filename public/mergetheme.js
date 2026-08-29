@@ -1176,20 +1176,15 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
   filter: blur(6px);
 }
 
-/* past lines (fullscreen): vẫn sáng cho đến khi GlassyFlow đánh dấu trong đợt scroll tiếp theo */
-ytmusic-player-page[player-fullscreened] .blyrics-container.blyrics--gf-managed:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-behind:not(.blyrics--animating):not(.blyrics--gf-past) {
-  opacity: 1;
-  filter: blur(0px) !important;
-}
-
-/* past lines (fullscreen): ẩn sau khi GlassyFlow scroll */
-ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-past:not(.blyrics--animating) {
-  opacity: 0;
-  filter: blur(5px);
-}
-
-/* past lines (fullscreen, fallback): ẩn ngay khi GlassyFlow không quản lý (no-sync, resize, v.v.) */
-ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling):not(.blyrics--gf-managed)>.blyrics--line.blyrics--gf-behind:not(.blyrics--animating) {
+/* past lines (fullscreen): ẩn ngay khi dòng đã hát xong.
+   Một rule duy nhất trên .blyrics--gf-behind. Trước đây ở đây có 3 rule: một
+   rule giữ opacity 1 cho .blyrics--gf-behind:not(.blyrics--gf-past), một rule
+   ẩn theo .blyrics--gf-past, và một rule fallback theo :not(.blyrics--gf-managed).
+   gf-past do glassyflow stamp theo đợt scroll nên tới TRỄ hơn gf-behind, và
+   khoảng trễ đó chính là lúc dòng vừa hát xong còn sáng nguyên. gf-behind
+   stamp ngay khi .blyrics--active đổi và có mặt dù engine scroll nào đang chạy
+   hay không, nên nó phủ đúng cả 3 trường hợp. */
+ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-behind:not(.blyrics--animating) {
   opacity: 0;
   filter: blur(5px);
 }
@@ -2956,15 +2951,13 @@ function setupFullscreenCursorObserver() {
  *  (1.00ms vs 0.80ms), nên viết lại thành :has(.x) sẽ không giải quyết gì.
  *  Class phải rời khỏi argument của :has() hoàn toàn — nên phải stamp bằng JS.
  *
- *  KHÁC .blyrics--gf-past: gf-past do glassyflow.js stamp theo đợt scroll và
- *  CỐ TÌNH trễ, để dòng past còn sáng qua animation rồi mới mờ đi (xem
- *  markPastLines). gf-behind stamp NGAY khi .blyrics--active đổi, nên khớp
- *  đúng hành vi :has() cũ. Hai class độc lập → hiệu ứng 2 tầng ở fullscreen
- *  (rule .blyrics--gf-behind:not(.blyrics--gf-past)) giữ nguyên.
+ *  Đây là class past-line DUY NHẤT. .blyrics--gf-past cũ (glassyflow stamp
+ *  theo đợt scroll, cố tình trễ để dòng past còn sáng qua animation) đã bị bỏ
+ *  cùng với tầng rule thứ hai ở fullscreen.
  *
- *  Đặt ở mergetheme.js chứ không phải glassyflow.js vì rule fallback
- *  :not(.blyrics--gf-managed) phải hoạt động cả khi GlassyFlow KHÔNG quản lý
- *  container — lúc đó glassyflow không stamp gì cả.
+ *  Đặt ở mergetheme.js chứ không phải glassyflow.js vì rule phải hoạt động cả
+ *  khi GlassyFlow KHÔNG quản lý container (no-sync, resize, lyrics tĩnh) —
+ *  lúc đó glassyflow không stamp gì cả.
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const NANKILL_BEHIND_CLASS = 'blyrics--gf-behind';
 
