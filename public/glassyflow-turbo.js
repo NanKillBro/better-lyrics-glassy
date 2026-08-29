@@ -54,12 +54,12 @@
  *  Everything else — CFG constants, dynamic lookBehind/lookAhead, viewport
  *  measurement, Delta-Adaptive LookAhead, Fast Transition, scroll delay
  *  debounce, deferred-delta busy gating, Dynamic Speedup, container
- *  compensation, past-line marking, no-sync detection, resize recovery — is
- *  carried over unchanged from glassyflow.js.
+ *  compensation, no-sync detection, resize recovery — is carried over
+ *  unchanged from glassyflow.js.
  *
- *  NOTE: .blyrics--gf-managed is load-bearing. mergetheme.js gates its
- *  past-line fallback rule on :not(.blyrics--gf-managed), so this marker must
- *  be present whenever a GlassyFlow-family script is driving the scroll.
+ *  NOTE: past-line fading is not this file's business. mergetheme.js stamps
+ *  .blyrics--gf-behind the moment .blyrics--active moves and hides the line
+ *  from CSS, whether or not a GlassyFlow-family script is driving the scroll.
  * ════════════════════════════════════════════════════════════════════════
  */
 
@@ -665,49 +665,6 @@
         }
 
         isAnimationBusy = activeLines.size > 0;
-
-        // Mark past lines — deferred hiding until scroll occurs
-        markPastLines(lines, ref);
-    }
-
-    /* ── Past Lines Marker ──
-     * Gắn class blyrics--gf-past lên các dòng đã hát xong.
-     * Chỉ được gọi từ applyStagger() → chỉ đánh dấu khi scroll thực sự xảy ra.
-     * CSS sẽ target class này để ẩn dòng past với transition mượt.
-     *
-     * Incremental: chỉ update dòng thay đổi giữa boundary cũ và mới.
-     */
-    let _lastMarkedActive = -1;
-
-    function markPastLines(lines, ref) {
-        // Tìm dòng active cuối cùng (dòng mới nhất đang hát)
-        let lastActive = -1;
-        for (let i = lines.length - 1; i >= 0; i--) {
-            if (lines[i].classList.contains('blyrics--active')) {
-                lastActive = i;
-                break;
-            }
-        }
-
-        // Nếu không có dòng active nào → không mark
-        if (lastActive < 0) return;
-        // Boundary không thay đổi → skip
-        if (lastActive === _lastMarkedActive) return;
-
-        // Chỉ update dòng trong vùng thay đổi giữa old và new boundary
-        const from = _lastMarkedActive < 0 ? 0 : Math.min(_lastMarkedActive, lastActive);
-        const to = _lastMarkedActive < 0 ? lines.length - 1 : Math.max(_lastMarkedActive, lastActive);
-        for (let i = from; i <= to; i++) {
-            const line = lines[i];
-            if (!line.classList.contains('blyrics--line')) continue;
-            if (i < lastActive) {
-                line.classList.add('blyrics--gf-past');
-            } else {
-                line.classList.remove('blyrics--gf-past');
-            }
-        }
-
-        _lastMarkedActive = lastActive;
     }
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1026,7 +983,6 @@
      * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     function cleanupAllSprings() {
         _linesCache = { lines: null, ts: 0 };
-        _lastMarkedActive = -1;
 
         for (const line of activeLines) {
             const data = lineState.get(line);
@@ -1053,13 +1009,6 @@
         timeScale = 1.0;
         lastRefIndex = -1;
         setContainerCompensation(0);
-
-        // Clean up GlassyFlow past markers
-        if (container) {
-            container.querySelectorAll('.blyrics--gf-past').forEach(el => {
-                el.classList.remove('blyrics--gf-past');
-            });
-        }
     }
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1175,11 +1124,6 @@
             setScrollOverride(true);
             if (container && !isNoSyncMode) {
                 container.classList.add('blyrics--gf-managed');
-                // Re-mark past lines ngay lập tức để tránh flash sáng
-                const lines = getLines();
-                if (lines.length) {
-                    markPastLines(lines, getRefIndex(lines));
-                }
             }
             console.info('[GlassyFlow Turbo] Re-enabled after resize.');
         }, 1500);

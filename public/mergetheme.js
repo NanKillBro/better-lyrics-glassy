@@ -1174,14 +1174,14 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
   transition: opacity 0.7s ease-out, filter 0.7s ease-out, transform 1.3s ease-out !important;
 }
 
-/* past lines (fullscreen): vẫn sáng cho đến khi GlassyFlow / SmoothScroll JS đánh dấu .blyrics--gf-past */
-ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-behind:not(.blyrics--gf-past) {
-  opacity: 1;
-  filter: blur(0px) !important;
-}
-
-/* past lines (fullscreen): ẩn sau khi GlassyFlow / SmoothScroll JS đánh dấu .blyrics--gf-past */
-ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-past {
+/* past lines (fullscreen): ẩn ngay khi dòng đã hát xong.
+   Một rule duy nhất trên .blyrics--gf-behind. Trước đây ở đây có 2 rule: một
+   rule giữ opacity 1 cho .blyrics--gf-behind:not(.blyrics--gf-past) và một rule
+   ẩn theo .blyrics--gf-past. gf-past do engine scroll stamp theo đợt scroll nên
+   tới TRỄ hơn gf-behind, và khoảng trễ đó chính là lúc dòng vừa hát xong còn
+   sáng nguyên. gf-behind stamp ngay khi .blyrics--active đổi và có mặt dù engine
+   scroll nào đang chạy hay không. */
+ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-behind {
   opacity: 0;
   filter: blur(5px);
   transition: opacity 0.7s ease-out, filter 0.7s ease-out, transform 1.3s ease-out !important;
@@ -2948,11 +2948,9 @@ function setupFullscreenCursorObserver() {
  *  (1.00ms vs 0.80ms), nên viết lại thành :has(.x) sẽ không giải quyết gì.
  *  Class phải rời khỏi argument của :has() hoàn toàn — nên phải stamp bằng JS.
  *
- *  KHÁC .blyrics--gf-past: gf-past do engine scroll stamp theo đợt scroll và
- *  CỐ TÌNH trễ, để dòng past còn sáng qua animation rồi mới mờ đi.
- *  gf-behind stamp NGAY khi .blyrics--active đổi, nên khớp đúng hành vi
- *  :has() cũ. Hai class độc lập → hiệu ứng 2 tầng ở fullscreen
- *  (rule .blyrics--gf-behind:not(.blyrics--gf-past)) giữ nguyên.
+ *  Đây là class past-line DUY NHẤT. .blyrics--gf-past cũ (engine scroll stamp
+ *  theo đợt scroll, cố tình trễ để dòng past còn sáng qua animation) đã bị bỏ
+ *  cùng với tầng rule thứ hai ở fullscreen.
  *
  *  Đặt ở mergetheme.js để độc lập với việc engine scroll nào đang chạy
  *  (GlassyFlow hay SmoothScroll) hoặc có engine nào đang chạy hay không.
