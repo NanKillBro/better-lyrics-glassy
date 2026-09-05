@@ -2340,17 +2340,7 @@ tp-yt-paper-ripple.tp-yt-paper-tab {
   border: 0;
   background: transparent;
 }
-
-/* Smooth Progress Bar */
-#primaryProgress.tp-yt-paper-progress,
-#secondaryProgress.tp-yt-paper-progress {
-  transition: transform 1s linear;
-}
-ytmusic-app-layout[is-mweb-modernization-enabled][player-ui-state="PLAYER_PAGE_OPEN"] .slider-knob.tp-yt-paper-slider,
-ytmusic-app-layout:not([is-mweb-modernization-enabled]) .slider-knob.tp-yt-paper-slider:not(.dragging) {
-  transition: left 1s linear;
-}
-
+  
 /* 1. Baseline Collapsed State (only showing icon) */
 ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .nankill-blyrics-footer-in-tabs,
 ytmusic-player-page tp-yt-paper-tabs.tab-header-container.blyrics-dock-collapsed .blyrics-footer__container {
