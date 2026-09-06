@@ -4,6 +4,7 @@ import {
   DOCK_CONTROL_ORDER_DEFAULT,
   DOCK_DEFAULT_POSITION,
   LYRICS_DISABLED_ATTR,
+  SMOOTH_PROGRESS_BAR_STYLE_ID,
 } from "@constants";
 import { AppState, reloadLyrics } from "@core/appState";
 import { clearCache, compileRicsToStyles, getStorage } from "@core/storage";
@@ -69,6 +70,21 @@ export function handleSettings(): void {
       }
     }
   );
+
+  onSmoothProgressBarEnabled(
+    async () => {
+      if (document.getElementById(SMOOTH_PROGRESS_BAR_STYLE_ID)) {
+        return;
+      }
+      const styleElem = document.createElement("style");
+      styleElem.id = SMOOTH_PROGRESS_BAR_STYLE_ID;
+      styleElem.textContent = await fetch(chrome.runtime.getURL("css/smoothprogressbar.css")).then(res => res.text());
+      document.head.appendChild(styleElem);
+    },
+    () => {
+      document.getElementById(SMOOTH_PROGRESS_BAR_STYLE_ID)?.remove();
+    }
+  );
 }
 
 export function onAutoSwitchEnabled(enableAutoSwitch: EnableDisableCallback): void {
@@ -111,6 +127,20 @@ function onStylizedAnimationsEnabled(
       enableAnimations();
     } else {
       disableAnimations();
+    }
+  });
+}
+
+function onSmoothProgressBarEnabled(
+  enableSmoothProgressBar: EnableDisableCallback,
+  disableSmoothProgressBar: EnableDisableCallback
+): void {
+  // Opt-in: animating the knob's `left` costs layout every frame, so the default stays off.
+  getStorage({ isSmoothProgressBarEnabled: false }, items => {
+    if (items.isSmoothProgressBarEnabled) {
+      enableSmoothProgressBar();
+    } else {
+      disableSmoothProgressBar();
     }
   });
 }
