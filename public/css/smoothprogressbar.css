@@ -1,0 +1,23 @@
+/**
+    Interpolates the seek bar between YouTube Music's position updates.
+
+    YTM moves the progress bar and its knob once a second, so by default they step rather than
+    glide. A one-second linear transition on each carries them the rest of the way, which reads
+    as a continuously moving bar.
+
+    Off by default, and deliberately a setting rather than part of the theme. The knob animates
+    `left`, which is a laid-out property: every frame of it costs layout on the player DOM, and
+    that cost lands on the same main thread the lyrics engine needs for its own work. That is why
+    this was pulled back out of mergetheme.js — it is a real trade, not a free polish, so it is
+    left to whoever wants to spend the CPU on it.
+ */
+
+#primaryProgress.tp-yt-paper-progress,
+#secondaryProgress.tp-yt-paper-progress {
+	transition: transform 1s linear;
+}
+
+ytmusic-app-layout[is-mweb-modernization-enabled][player-ui-state="PLAYER_PAGE_OPEN"] .slider-knob.tp-yt-paper-slider,
+ytmusic-app-layout:not([is-mweb-modernization-enabled]) .slider-knob.tp-yt-paper-slider:not(.dragging) {
+	transition: left 1s linear;
+}
