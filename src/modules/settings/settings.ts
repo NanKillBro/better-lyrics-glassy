@@ -65,6 +65,25 @@ export function handleSettings(): void {
       }
     }
   );
+
+  onSmoothProgressBarEnabled(
+    async () => {
+      let styleElem = document.getElementById("blyrics-smooth-progress-bar");
+      if (!styleElem) {
+        styleElem = document.createElement("style");
+        styleElem.id = "blyrics-smooth-progress-bar";
+
+        styleElem.textContent = await fetch(chrome.runtime.getURL("css/smoothprogressbar.css")).then(res => res.text());
+        document.head.appendChild(styleElem);
+      }
+    },
+    () => {
+      const styleElm = document.getElementById("blyrics-smooth-progress-bar");
+      if (styleElm) {
+        styleElm.remove();
+      }
+    }
+  );
 }
 
 export function onAutoSwitchEnabled(enableAutoSwitch: EnableDisableCallback): void {
@@ -94,6 +113,20 @@ export function onAlbumArtEnabled(enableAlbumArt: EnableDisableCallback, disable
       enableAlbumArt();
     } else {
       disableAlbumArt();
+    }
+  });
+}
+
+function onSmoothProgressBarEnabled(
+  enableSmoothProgressBar: EnableDisableCallback,
+  disableSmoothProgressBar: EnableDisableCallback
+): void {
+  // Opt-in: animating the knob's `left` costs layout every frame, so the default stays off.
+  getStorage({ isSmoothProgressBarEnabled: false }, items => {
+    if (items.isSmoothProgressBarEnabled) {
+      enableSmoothProgressBar();
+    } else {
+      disableSmoothProgressBar();
     }
   });
 }
