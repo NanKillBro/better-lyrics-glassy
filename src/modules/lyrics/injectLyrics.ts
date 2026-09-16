@@ -43,6 +43,7 @@ import {
   createLyricsWrapper,
   flushLoader,
   renderLoader,
+  setFullscreenNoLyricsState,
   setExtraHeight,
 } from "@modules/ui/dom";
 import { getRelativeBounds, langCodesMatch, languageMatchesAny, log } from "@utils";
@@ -602,7 +603,10 @@ function injectLyrics(data: LyricSourceResultWithMeta, keepLoaderVisible = false
     applySegmentMapToLyrics(lyricsData, data.segmentMap);
   }
 
-  if (lyrics[0].words !== t("lyrics_notFound")) {
+  const noLyrics = lyrics[0].words === t("lyrics_notFound");
+  setFullscreenNoLyricsState(noLyrics);
+
+  if (!noLyrics) {
     // Set before addFooter so the dock controls read the current song's lyric data.
     AppState.lyricData = lyricsData;
     const unisonData =

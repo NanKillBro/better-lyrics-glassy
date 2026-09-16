@@ -440,7 +440,7 @@
 	background-color: hsla(0, 0%, 100%, 0.08);
 }
 
-ytmusic-player-page:not([is-mweb-modernization-enabled]) #side-panel:has(.blyrics-dock) {
+ytmusic-player-page:not([is-mweb-modernization-enabled]) #side-panel.blyrics-has-dock {
 	position: relative;
 }
 
@@ -522,6 +522,10 @@ ytmusic-player-page:not([is-mweb-modernization-enabled]) #side-panel:has(.blyric
 .blyrics-dock__inner .blyrics-footer__vote {
 	width: 32px;
 	height: 32px;
+}
+
+.blyrics-dock--off-page {
+	display: none !important;
 }
 
 .blyrics-dock--hidden .blyrics-dock__inner,
