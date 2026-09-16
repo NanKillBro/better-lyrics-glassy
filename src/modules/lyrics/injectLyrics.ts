@@ -43,8 +43,10 @@ import {
   createLyricsWrapper,
   flushLoader,
   renderLoader,
+  setFullscreenNoLyricsState,
   setExtraHeight,
 } from "@modules/ui/dom";
+import { disableNativeLyricsFocus } from "@modules/ui/nativeLyricsFocus";
 import { getRelativeBounds, langCodesMatch, languageMatchesAny, log } from "@utils";
 
 let disableRichsync = registerThemeSetting("blyrics-disable-richsync", false, true);
@@ -395,6 +397,7 @@ function injectLyrics(data: LyricSourceResultWithMeta, keepLoaderVisible = false
 
   const lyrics = data.lyrics!;
   cleanup();
+  disableNativeLyricsFocus();
 
   let lyricsWrapper = createLyricsWrapper();
 
@@ -602,7 +605,10 @@ function injectLyrics(data: LyricSourceResultWithMeta, keepLoaderVisible = false
     applySegmentMapToLyrics(lyricsData, data.segmentMap);
   }
 
-  if (lyrics[0].words !== t("lyrics_notFound")) {
+  const noLyrics = lyrics[0].words === t("lyrics_notFound");
+  setFullscreenNoLyricsState(noLyrics);
+
+  if (!noLyrics) {
     // Set before addFooter so the dock controls read the current song's lyric data.
     AppState.lyricData = lyricsData;
     const unisonData =
@@ -666,8 +672,13 @@ async function processBatchTranslationsAndRomanizations(
     const lineData = linesData[index];
     const lyricElement = lineData.lyricElement;
 
+    // Authoring tools stamp a default xml:lang on every file, so a language the script contradicts cannot veto.
+    const scriptLanguage = detectNonLatinLanguage(item.words);
+    const trustedLanguage =
+      sourceLanguage && scriptLanguage && !langCodesMatch(sourceLanguage, scriptLanguage) ? undefined : sourceLanguage;
+
     // --- Romanization ---
-    const isLanguageDisabledForRomanization = sourceLanguage && isRomanizationDisabledForLang(sourceLanguage);
+    const isLanguageDisabledForRomanization = !!trustedLanguage && isRomanizationDisabledForLang(trustedLanguage);
     if (isRomanizationEnabled && !isLanguageDisabledForRomanization) {
       let romanizedResult: string | null = null;
       let timedRomanization: LyricPart[] | null = null;
@@ -695,7 +706,7 @@ async function processBatchTranslationsAndRomanizations(
     }
 
     // --- Translation ---
-    const isSourceLangDisabled = !!sourceLanguage && isTranslationDisabledForLang(sourceLanguage);
+    const isSourceLangDisabled = !!trustedLanguage && isTranslationDisabledForLang(trustedLanguage);
 
     if (isTranslateEnabled && !isSourceLangDisabled) {
       let translationResult: string | null = null;
@@ -729,7 +740,9 @@ async function processBatchTranslationsAndRomanizations(
       (async () => {
         const response = await romanizeBatch({
           lines: romanizationBatch.map(b => b.text),
-          sourceLanguage: sourceLanguage || "auto",
+          targetLanguage: targetTranslationLang,
+          sourceLanguage: sourceLanguage || undefined,
+          videoId: data.videoId,
           signal,
         });
         if (isStale()) return;
@@ -758,6 +771,8 @@ async function processBatchTranslationsAndRomanizations(
         const response = await translateBatch({
           lines: translationBatch.map(b => b.text),
           targetLanguage: targetTranslationLang,
+          sourceLanguage: sourceLanguage || undefined,
+          videoId: data.videoId,
           signal,
         });
         if (isStale()) return;

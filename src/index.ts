@@ -15,7 +15,7 @@ import {
   loadTranslationSettings,
   onAlbumArtEnabled,
 } from "@modules/settings/settings";
-import { injectHeadTags, reloadAlbumArt, setupAdObserver } from "@modules/ui/dom";
+import { injectHeadTags, observeLyricsPageType, reloadAlbumArt, setupAdObserver } from "@modules/ui/dom";
 import {
   disableInertWhenFullscreen,
   enableLyricsTab,
@@ -42,6 +42,7 @@ async function modify(): Promise<void> {
   subscribeToLocaleChanges();
   setupAdObserver();
   enableLyricsTab();
+  observeLyricsPageType();
   setupHomepageFullscreenHandler();
   hideCursorOnIdle();
   handleSettings();

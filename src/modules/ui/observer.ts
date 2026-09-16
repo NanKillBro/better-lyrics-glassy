@@ -25,6 +25,7 @@ import {
   resetActiveAnimations,
 } from "@modules/ui/animationEngine";
 import { adjustLyricOffset, OFFSET_STEP, OFFSET_STEP_LARGE } from "@modules/ui/lyricsDock/offset";
+import { revealQueueAutoplaySection } from "@modules/ui/queueAutoplay";
 import {
   closePlayerPageIfOpenedForFullscreen,
   isNavigating,
@@ -267,6 +268,7 @@ export function lyricReloader(): void {
     };
 
     tab1.addEventListener("click", onNonLyricTabClick);
+    tab1.addEventListener("click", revealQueueAutoplaySection);
     tab3.addEventListener("click", onNonLyricTabClick);
   } else {
     setTimeout(() => lyricReloader(), 1000);
@@ -655,15 +657,8 @@ export function setUpAvButtonListener(): void {
   }
 
   let handleAVSwitch = (isVideo: boolean) => {
-    let playerPage = document.querySelector("#player-page");
-
-    if (playerPage) {
-      if (isVideo) {
-        playerPage.setAttribute("blyrics-video-mode", "");
-      } else {
-        playerPage.removeAttribute("blyrics-video-mode");
-      }
-    }
+    document.querySelector("#player-page")?.toggleAttribute("blyrics-video-mode", isVideo);
+    document.querySelector("ytmusic-app-layout")?.toggleAttribute("blyrics-video-mode", isVideo);
   };
   const observerCallback = (mutationsList: MutationRecord[]) => {
     for (const mutation of mutationsList) {
