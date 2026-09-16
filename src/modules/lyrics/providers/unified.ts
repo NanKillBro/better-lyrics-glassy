@@ -233,6 +233,7 @@ async function startStream(providerParameters: ProviderParameters, retryCount = 
   if (isrc) body.append("isrc", isrc);
   body.append("token", jwt);
 
+  let completedNormally = false;
   try {
     const response = await fetch(CUBEY_LYRICS_API_URL + "v2/lyrics", {
       method: "POST",
@@ -282,6 +283,7 @@ async function startStream(providerParameters: ProviderParameters, retryCount = 
         if (buffer.trim()) {
           await parseSSEMessage(buffer, providerParameters);
         }
+        completedNormally = true;
         break;
       }
     }
@@ -294,7 +296,7 @@ async function startStream(providerParameters: ProviderParameters, retryCount = 
   } finally {
     // Ensure all waiters are resolved (cleared) when stream ends
     MANAGED_KEYS.forEach(key => {
-      if (!providerParameters.sourceMap[key].filled) {
+      if (completedNormally && !providerParameters.sourceMap[key].filled) {
         providerParameters.sourceMap[key].filled = true;
       }
       resolveWaiter(providerParameters, key);
