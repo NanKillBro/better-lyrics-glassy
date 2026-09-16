@@ -46,6 +46,7 @@ import {
   setFullscreenNoLyricsState,
   setExtraHeight,
 } from "@modules/ui/dom";
+import { disableNativeLyricsFocus } from "@modules/ui/nativeLyricsFocus";
 import { getRelativeBounds, langCodesMatch, languageMatchesAny, log } from "@utils";
 
 let disableRichsync = registerThemeSetting("blyrics-disable-richsync", false, true);
@@ -396,6 +397,7 @@ function injectLyrics(data: LyricSourceResultWithMeta, keepLoaderVisible = false
 
   const lyrics = data.lyrics!;
   cleanup();
+  disableNativeLyricsFocus();
 
   let lyricsWrapper = createLyricsWrapper();
 
