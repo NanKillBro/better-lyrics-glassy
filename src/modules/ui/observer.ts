@@ -25,6 +25,7 @@ import {
   resetActiveAnimations,
 } from "@modules/ui/animationEngine";
 import { adjustLyricOffset, OFFSET_STEP, OFFSET_STEP_LARGE } from "@modules/ui/lyricsDock/offset";
+import { revealQueueAutoplaySection } from "@modules/ui/queueAutoplay";
 import {
   closePlayerPageIfOpenedForFullscreen,
   isNavigating,
@@ -267,6 +268,7 @@ export function lyricReloader(): void {
     };
 
     tab1.addEventListener("click", onNonLyricTabClick);
+    tab1.addEventListener("click", revealQueueAutoplaySection);
     tab3.addEventListener("click", onNonLyricTabClick);
   } else {
     setTimeout(() => lyricReloader(), 1000);
