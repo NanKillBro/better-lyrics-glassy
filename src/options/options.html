@@ -11,7 +11,7 @@
 	<nav id="navbar">
 		<h1>
 			<img src="/images/icons/icon-48.png" alt="Better Lyrics" width="24" height="24">
-			<div class="heading">Better Lyrics Glassy<span>2.4.0 5-NanKill</span></div>
+			<div class="heading">Better Lyrics Glassy <span>2.4.0 8-NanKill</span></div>
 		</h1>
 		<div class="nav-container">
 			<a href="https://github.com/NanKillBro/better-lyrics-glassy" target="_blank">
@@ -130,11 +130,28 @@
 					</label>
 				</div>
 				<div class="container">
+					<span>__MSG_options_display_fullscreenControls__</span>
+					<label>
+						<input type="checkbox" id="isFullscreenControlsEnabled">
+						<span class="checkmark"></span>
+					</label>
+				</div>
+				<div class="container">
 					<span>Lyrics glow &amp; wobble (uses more CPU)</span>
 					<label>
 						<input type="checkbox" id="isStylizedAnimationsEnabled">
 						<span class="checkmark"></span>
 					</label>
+				</div>
+				<div class="container">
+					<div class="setting-row__text">
+						<div class="setting-row__title-line">
+							<span id="letterWaveLabel">__MSG_options_display_letterWave__</span>
+							<span class="setting-badge">__MSG_options_display_letterWaveBadge__</span>
+							<span class="setting-help" tabindex="0" data-tooltip="__MSG_options_display_letterWaveTooltip__ __MSG_options_display_letterWaveTooltipStates__" aria-label="__MSG_options_display_letterWaveTooltip__ __MSG_options_display_letterWaveTooltipStates__">?</span>
+						</div>
+					</div>
+					<button type="button" class="triswitch" id="letterWaveSwitch" role="slider" aria-labelledby="letterWaveLabel" aria-valuemin="0" aria-valuemax="2" aria-valuenow="1"></button>
 				</div>
 				<div class="container">
 					<span>Smooth progress bar (uses more CPU)</span>
@@ -508,6 +525,10 @@
 					</button>
 					<div id="your-themes-dropdown"></div>
 				</div>
+				<div class="container container--small" id="identity-stats-container" hidden="">
+					<p class="text-group__title">__MSG_options_identity_unisonStats__</p>
+					<div id="identity-stats"></div>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -802,64 +823,17 @@
 							<span class="checkmark"></span>
 						</label>
 					</div>
+					<div class="container pip-modal-row--dependent">
+						<span>__MSG_options_display_pipProgressBar__</span>
+						<label>
+							<input type="checkbox" id="pipProgressBarEnabled">
+							<span class="checkmark"></span>
+						</label>
+					</div>
 				</div>
 			</div>
 		</div>
 
-		<div id="pip-modal-overlay" class="modal-overlay">
-			<div class="modal">
-				<div class="modal-header">
-					<h3 class="modal-title">__MSG_options_display_pipWindow__</h3>
-					<button id="pip-modal-close" class="modal-close-btn" aria-label="Close">
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-							<path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"></path>
-						</svg>
-					</button>
-				</div>
-				<div class="modal-body">
-					<div class="container">
-						<div class="setting-row__text">
-							<div class="setting-row__title-line">
-								<span>__MSG_options_display_pipAutoRestore__</span>
-								<span class="setting-help" tabindex="0" data-tooltip="__MSG_options_display_pipAutoRestoreTooltip__" aria-label="__MSG_options_display_pipAutoRestoreTooltip__">?</span>
-							</div>
-						</div>
-						<label>
-							<input type="checkbox" id="isPictureInPictureAutoRestoreEnabled">
-							<span class="checkmark"></span>
-						</label>
-					</div>
-					<div class="container">
-						<span>__MSG_options_display_pipArtworkTransition__</span>
-						<div class="select">
-							<select id="pipArtworkTransition">
-								<option value="shuffle">__MSG_options_pipTransition_shuffle__</option>
-								<option value="flip">__MSG_options_pipTransition_flip__</option>
-								<option value="push">__MSG_options_pipTransition_push__</option>
-								<option value="crossfade">__MSG_options_pipTransition_crossfade__</option>
-							</select>
-						</div>
-					</div>
-					<div class="container">
-						<span>__MSG_options_display_pipTextTransition__</span>
-						<div class="select">
-							<select id="pipTextTransition">
-								<option value="spring">__MSG_options_pipTransition_spring__</option>
-								<option value="push">__MSG_options_pipTransition_push__</option>
-								<option value="crossfade">__MSG_options_pipTransition_crossfade__</option>
-							</select>
-						</div>
-					</div>
-					<div class="container">
-						<span>__MSG_options_display_pipMarquee__</span>
-						<label>
-							<input type="checkbox" id="pipMarqueeEnabled">
-							<span class="checkmark"></span>
-						</label>
-					</div>
-				</div>
-			</div>
-		</div>
 
 	<div id="offset-modal-overlay" class="modal-overlay">
 		<div class="modal">
@@ -1189,7 +1163,7 @@
 				<svg class="rics-footer-sep" viewBox="0 0 4 4">
 					<circle cx="2" cy="2" r="1.5" fill="currentColor"></circle>
 				</svg>
-				<a href="https://rics.boidu.dev" target="_blank">Playground</a>
+				<a href="https://rics.betterlyrics.org" target="_blank">Playground</a>
 				<svg class="rics-footer-sep" viewBox="0 0 4 4">
 					<circle cx="2" cy="2" r="1.5" fill="currentColor"></circle>
 				</svg>

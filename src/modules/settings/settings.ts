@@ -3,6 +3,7 @@ import {
   DOCK_CLASS,
   DOCK_CONTROL_ORDER_DEFAULT,
   DOCK_DEFAULT_POSITION,
+  FULLSCREEN_CONTROLS_DISABLED_ATTR,
   LYRICS_DISABLED_ATTR,
   SMOOTH_PROGRESS_BAR_STYLE_ID,
 } from "@constants";
@@ -51,6 +52,11 @@ export function handleSettings(): void {
         playerPage.removeAttribute(LYRICS_DISABLED_ATTR);
       }
     }
+  );
+
+  onFullscreenControlsEnabled(
+    () => document.documentElement.removeAttribute(FULLSCREEN_CONTROLS_DISABLED_ATTR),
+    () => document.documentElement.setAttribute(FULLSCREEN_CONTROLS_DISABLED_ATTR, "")
   );
 
   onStylizedAnimationsEnabled(
@@ -114,6 +120,19 @@ export function onAlbumArtEnabled(enableAlbumArt: EnableDisableCallback, disable
       enableAlbumArt();
     } else {
       disableAlbumArt();
+    }
+  });
+}
+
+function onFullscreenControlsEnabled(
+  enableControls: EnableDisableCallback,
+  disableControls: EnableDisableCallback
+): void {
+  getStorage({ isFullscreenControlsEnabled: true }, items => {
+    if (items.isFullscreenControlsEnabled) {
+      enableControls();
+    } else {
+      disableControls();
     }
   });
 }
@@ -279,6 +298,7 @@ export function listenForPopupMessages(): void {
           reloadAlbumArt();
         }
       );
+      getAndApplyCustomStyles();
       reloadLyrics();
     } else if (request.action === "clearCache") {
       try {
@@ -443,6 +463,12 @@ export function loadTranslationSettings(): void {
       AppState.translationDisabledLanguages = items.translationDisabledLanguages || [];
     }
   );
+}
+
+export function loadEndTimeModeSetting(): void {
+  getStorage({ endTimeMode: "total" }, items => {
+    AppState.endTimeMode = items.endTimeMode === "remaining" ? "remaining" : "total";
+  });
 }
 
 /**

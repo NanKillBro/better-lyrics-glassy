@@ -8,9 +8,18 @@ import {
 } from "@constants";
 import { attachHoldRepeat } from "@core/holdRepeat";
 import { getLanguageDisplayName, initI18n, loadLocaleOverride, SUPPORTED_LOCALES, t } from "@core/i18n";
-import { exportIdentity, getDisplayName, importIdentity, invalidateDisplayName, signPayload } from "@core/keyIdentity";
+import {
+  exportIdentity,
+  getDisplayName,
+  getResolvedDisplayName,
+  importIdentity,
+  invalidateDisplayName,
+  signPayload,
+} from "@core/keyIdentity";
 import { clearAllOffsets, getOffsetInfo } from "@core/storage";
 import { parseSvgString, syncTypeColors } from "@modules/ui/lyricsDock/icons";
+import { migrateLetterWavePref, type LetterWavePref } from "@modules/settings/letterWave";
+import { fetchOwnGamification, renderIdentityStats } from "@modules/unison/gamificationRender";
 import Sortable from "sortablejs";
 import { showModal } from "./editor/ui/feedback";
 import { initStoreUI, setupYourThemesButton } from "./store/store";
@@ -22,14 +31,17 @@ interface Options {
   isAlbumArtEnabled: boolean;
   isShadersPromoEnabled: boolean;
   isFullScreenDisabled: boolean;
+  isFullscreenControlsEnabled: boolean;
   isStylizedAnimationsEnabled: boolean;
   isSmoothProgressBarEnabled: boolean;
+  letterWavePref: LetterWavePref;
   isPassiveScrollEnabled: boolean;
   isPictureInPictureEnabled: boolean;
   isPictureInPictureAutoRestoreEnabled: boolean;
   pipArtworkTransition: string;
   pipTextTransition: string;
   pipMarqueeEnabled: boolean;
+  pipProgressBarEnabled: boolean;
   isTranslateEnabled: boolean;
   translationLanguage: string;
   isCursorAutoHideEnabled: boolean;
@@ -84,8 +96,10 @@ const getOptionsFromForm = (): Options => {
     isAlbumArtEnabled: (document.getElementById("albumArt") as HTMLInputElement).checked,
     isShadersPromoEnabled: (document.getElementById("isShadersPromoEnabled") as HTMLInputElement).checked,
     isFullScreenDisabled: (document.getElementById("isFullScreenDisabled") as HTMLInputElement).checked,
+    isFullscreenControlsEnabled: (document.getElementById("isFullscreenControlsEnabled") as HTMLInputElement).checked,
     isStylizedAnimationsEnabled: (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked,
     isSmoothProgressBarEnabled: (document.getElementById("isSmoothProgressBarEnabled") as HTMLInputElement).checked,
+    letterWavePref: getLetterWaveSwitchState(),
     isPassiveScrollEnabled: (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked,
     isPictureInPictureEnabled: (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked,
     isPictureInPictureAutoRestoreEnabled: (
@@ -94,6 +108,7 @@ const getOptionsFromForm = (): Options => {
     pipArtworkTransition: (document.getElementById("pipArtworkTransition") as HTMLSelectElement).value,
     pipTextTransition: (document.getElementById("pipTextTransition") as HTMLSelectElement).value,
     pipMarqueeEnabled: (document.getElementById("pipMarqueeEnabled") as HTMLInputElement).checked,
+    pipProgressBarEnabled: (document.getElementById("pipProgressBarEnabled") as HTMLInputElement).checked,
     isTranslateEnabled: (document.getElementById("translate") as HTMLInputElement).checked,
     translationLanguage: (document.getElementById("translationLanguage") as HTMLInputElement).value,
     isCursorAutoHideEnabled: (document.getElementById("cursorAutoHide") as HTMLInputElement).checked,
@@ -275,14 +290,17 @@ const restoreOptions = (): void => {
     isShadersPromoEnabled: true,
     isCursorAutoHideEnabled: true,
     isFullScreenDisabled: false,
+    isFullscreenControlsEnabled: true,
     isStylizedAnimationsEnabled: true,
     isSmoothProgressBarEnabled: false,
+    letterWavePref: "auto",
     isPassiveScrollEnabled: true,
     isPictureInPictureEnabled: true,
     isPictureInPictureAutoRestoreEnabled: false,
     pipArtworkTransition: "shuffle",
     pipTextTransition: "spring",
     pipMarqueeEnabled: true,
+    pipProgressBarEnabled: true,
     isTranslateEnabled: false,
     translationLanguage: "en",
     isRomanizationEnabled: false,
@@ -323,12 +341,27 @@ const restoreOptions = (): void => {
 
   const readKeys = [
     ...Object.keys(defaultOptions),
+    "isLetterWaveEnabled",
     "isUnisonPinnedDockEnabled",
     "unisonPinnedDockPosition",
     "isUnisonAutoHideInFullscreenEnabled",
   ];
 
-  chrome.storage.local.get(defaultOptions, setOptionsInForm);
+  chrome.storage.local.get(readKeys, (raw: { [key: string]: any }) => {
+    setOptionsInForm({
+      ...defaultOptions,
+      ...(raw as Options),
+      letterWavePref: migrateLetterWavePref(raw),
+      isControlsDockEnabled:
+        raw.isControlsDockEnabled ?? raw.isUnisonPinnedDockEnabled ?? defaultOptions.isControlsDockEnabled,
+      controlsDockPosition:
+        raw.controlsDockPosition ?? raw.unisonPinnedDockPosition ?? defaultOptions.controlsDockPosition,
+      isControlsDockAutoHideInFullscreenEnabled:
+        raw.isControlsDockAutoHideInFullscreenEnabled ??
+        raw.isUnisonAutoHideInFullscreenEnabled ??
+        defaultOptions.isControlsDockAutoHideInFullscreenEnabled,
+    });
+  });
 
   document.getElementById("clear-cache")!.addEventListener("click", () => clearTransientLyrics());
   setupUnisonActionsModal();
@@ -344,10 +377,13 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("autoSwitch") as HTMLInputElement).checked = items.isAutoSwitchEnabled;
   (document.getElementById("cursorAutoHide") as HTMLInputElement).checked = items.isCursorAutoHideEnabled;
   (document.getElementById("isFullScreenDisabled") as HTMLInputElement).checked = items.isFullScreenDisabled;
+  (document.getElementById("isFullscreenControlsEnabled") as HTMLInputElement).checked =
+    items.isFullscreenControlsEnabled;
   (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked =
     items.isStylizedAnimationsEnabled;
   (document.getElementById("isSmoothProgressBarEnabled") as HTMLInputElement).checked =
     items.isSmoothProgressBarEnabled;
+  setLetterWaveSwitchState(items.letterWavePref);
   (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked = items.isPassiveScrollEnabled;
   (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked = items.isPictureInPictureEnabled;
   (document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement).checked =
@@ -355,6 +391,7 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("pipArtworkTransition") as HTMLSelectElement).value = items.pipArtworkTransition;
   (document.getElementById("pipTextTransition") as HTMLSelectElement).value = items.pipTextTransition;
   (document.getElementById("pipMarqueeEnabled") as HTMLInputElement).checked = items.pipMarqueeEnabled;
+  (document.getElementById("pipProgressBarEnabled") as HTMLInputElement).checked = items.pipProgressBarEnabled;
   (document.getElementById("translate") as HTMLInputElement).checked = items.isTranslateEnabled;
   (document.getElementById("translationLanguage") as HTMLInputElement).value = items.translationLanguage;
   (document.getElementById("isRomanizationEnabled") as HTMLInputElement).checked = items.isRomanizationEnabled;
@@ -557,6 +594,56 @@ function createProviderElem(providerId: string, checked = true): HTMLLIElement |
   return liElem;
 }
 
+// -- Letter wave switch --------------------------
+
+const LETTER_WAVE_ORDER: LetterWavePref[] = ["off", "auto", "on"];
+
+const LETTER_WAVE_STATE_LABELS: Record<LetterWavePref, string> = {
+  off: "Off",
+  auto: "Auto",
+  on: "On",
+};
+
+function getLetterWaveSwitchState(): LetterWavePref {
+  const state = document.getElementById("letterWaveSwitch")?.dataset.state;
+  return state === "on" || state === "off" || state === "auto" ? state : "auto";
+}
+
+function setLetterWaveSwitchState(pref: LetterWavePref): void {
+  const el = document.getElementById("letterWaveSwitch");
+  if (!el) return;
+  el.dataset.state = pref;
+  el.setAttribute("aria-valuenow", String(LETTER_WAVE_ORDER.indexOf(pref)));
+  el.setAttribute("aria-valuetext", LETTER_WAVE_STATE_LABELS[pref]);
+}
+
+function initLetterWaveSwitch(): void {
+  const el = document.getElementById("letterWaveSwitch");
+  if (!el) return;
+
+  const step = (delta: number, wrap: boolean): void => {
+    const count = LETTER_WAVE_ORDER.length;
+    const current = LETTER_WAVE_ORDER.indexOf(getLetterWaveSwitchState());
+    const next = wrap ? (current + delta + count) % count : Math.min(count - 1, Math.max(0, current + delta));
+    setLetterWaveSwitchState(LETTER_WAVE_ORDER[next]);
+    saveOptions();
+  };
+
+  el.addEventListener("click", () => step(1, true));
+  el.addEventListener("keydown", event => {
+    if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+      step(1, false);
+      event.preventDefault();
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+      step(-1, false);
+      event.preventDefault();
+    } else if (event.key === " " || event.key === "Enter") {
+      step(1, true);
+      event.preventDefault();
+    }
+  });
+}
+
 // -- Display Language Dropdown --------------------------
 
 function populateLanguageDropdown(): void {
@@ -604,6 +691,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   populateLanguageDropdown();
   initTabScrollIndicators();
   initSettingHelpTooltips();
+  initLetterWaveSwitch();
   restoreOptions();
   restoreActiveTab();
 });
@@ -748,6 +836,15 @@ async function initIdentityUI(): Promise<void> {
     errorCore("Failed to load identity:", error);
     displayNameEl.textContent = t("options_alert_identityLoadError");
   }
+
+  void fetchOwnGamification().then(async user => {
+    const statsEl = document.getElementById("identity-stats");
+    const statsWrap = document.getElementById("identity-stats-container");
+    if (!user || !statsEl || !statsWrap) return;
+    const handle = (await getResolvedDisplayName().catch(() => null)) ?? undefined;
+    await renderIdentityStats(statsEl, user, handle);
+    statsWrap.hidden = false;
+  });
 
   document.getElementById("export-identity-btn")?.addEventListener("click", handleExportIdentity);
   document.getElementById("import-identity-btn")?.addEventListener("click", handleImportIdentity);

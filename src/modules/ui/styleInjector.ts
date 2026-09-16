@@ -10,8 +10,24 @@ import {
 import { mainView } from "./mainLyricsView";
 import { publishPictureInPictureLyrics } from "./pictureInPicture/lyricsPublisher";
 import { logCore, logError } from "@core/logger";
+import { migrateLetterWavePref, type LetterWavePref } from "@modules/settings/letterWave";
 
 let hasSubscribedToStyles = false;
+let letterWavePref: LetterWavePref = "auto";
+
+// Position decides precedence: parseThemeConfig is last-wins. "auto" sits before
+// the theme so the theme can override it (today's behaviour); "on"/"off" sit
+// after, so the user's choice is the last word.
+function withLetterWaveSetting(css: string): string {
+  switch (letterWavePref) {
+    case "on":
+      return `${css}\n/* blyrics-letter-wave = true; */`;
+    case "off":
+      return `${css}\n/* blyrics-letter-wave = false; */`;
+    default:
+      return `/* blyrics-letter-wave = false; */\n${css}`;
+  }
+}
 
 /**
  * Hands a compiled theme to the side panel's view, which parses the `blyrics-*` config out of it,
@@ -20,7 +36,7 @@ let hasSubscribedToStyles = false;
  * compressed, and compiling the RICS source it is written in.
  */
 export function applyCustomStyles(css: string): void {
-  const needsLyricReload = mainView.setTheme(css);
+  const needsLyricReload = mainView.setTheme(withLetterWaveSetting(css));
   publishPictureInPictureLyrics();
 
   if (needsLyricReload) {
@@ -39,6 +55,12 @@ function decompressStyles(css: string): string {
 }
 
 export async function getAndApplyCustomStyles(retryContext?: { attempt: number; maxAttempts: number; delays: number[] }): Promise<void> {
+  const raw = await getSyncStorage<{ letterWavePref?: string; isLetterWaveEnabled?: boolean }>([
+    "letterWavePref",
+    "isLetterWaveEnabled",
+  ]);
+  letterWavePref = migrateLetterWavePref(raw);
+
   try {
     const syncData = await getSyncStorage<CSSStorageData & { activePearTheme?: string }>([
       "cssStorageType",
@@ -87,6 +109,8 @@ export async function getAndApplyCustomStyles(retryContext?: { attempt: number; 
       setTimeout(() => {
         getAndApplyCustomStyles({ ...retryContext, attempt: nextAttempt });
       }, delay);
+    } else {
+      applyCustomStyles("");
     }
   } catch (error) {
     logError(error);

@@ -62,7 +62,7 @@
        match it directly. `[style*=...]` is an attribute-substring test with no
        bucket key, so Blink retried it against every element on every recalc — and
        on every inline-style write, which the lyric scroller does per frame. */
-    & #layout {
+    #layout {
       --blyrics-background-img: unset !important;
     }
 
