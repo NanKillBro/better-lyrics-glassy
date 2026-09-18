@@ -11,5 +11,5 @@ export function migrateLetterWavePref(raw: {
 }): LetterWavePref {
   const pref = raw.letterWavePref;
   if (pref === "auto" || pref === "on" || pref === "off") return pref;
-  return raw.isLetterWaveEnabled === true ? "on" : "auto";
+  return raw.isLetterWaveEnabled === false ? "off" : "on";
 }

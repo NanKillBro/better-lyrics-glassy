@@ -13,7 +13,7 @@ import { logCore, logError } from "@core/logger";
 import { migrateLetterWavePref, type LetterWavePref } from "@modules/settings/letterWave";
 
 let hasSubscribedToStyles = false;
-let letterWavePref: LetterWavePref = "auto";
+let letterWavePref: LetterWavePref = "on";
 
 // Position decides precedence: parseThemeConfig is last-wins. "auto" sits before
 // the theme so the theme can override it (today's behaviour); "on"/"off" sit
@@ -75,6 +75,7 @@ export async function getAndApplyCustomStyles(retryContext?: { attempt: number; 
       if (existing) {
         existing.remove();
       }
+      applyCustomStyles("");
       return;
     }
 
@@ -121,6 +122,7 @@ export async function getAndApplyCustomStyles(retryContext?: { attempt: number; 
         if (existing) {
           existing.remove();
         }
+        applyCustomStyles("");
         return;
       }
 
@@ -191,14 +193,8 @@ export function subscribeToCustomStyles(): void {
   hasSubscribedToStyles = true;
 
   chrome.storage.onChanged.addListener(async (changes, area) => {
-    if (area === "local" && changes.customCSS) {
-      if (changes.customCSS.newValue) {
-        let css = changes.customCSS.newValue as string;
-        if (isCompressed(css)) {
-          css = decompressStyles(css);
-        }
-        applyCustomStyles(compileRicsToStyles(css));
-      }
+    if (area === "local" && (changes.customCSS || changes.letterWavePref || changes.activePearTheme)) {
+      await getAndApplyCustomStyles();
     }
 
     if (area === "local") {

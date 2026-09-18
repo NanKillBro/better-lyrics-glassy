@@ -165,14 +165,22 @@ function setDockControlsOrderInForm(order: string[]): void {
 // Function to save options to Chrome storage
 const saveOptionsToStorage = (options: Options): void => {
   chrome.storage.local.set(options, () => {
-    chrome.tabs.query({ url: "https://music.youtube.com/*" }, tabs => {
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id!, {
-          action: "updateSettings",
-          settings: options,
+    try {
+      chrome.tabs?.query({ url: "https://music.youtube.com/*" }, tabs => {
+        tabs?.forEach(tab => {
+          if (tab.id != null) {
+            chrome.tabs
+              .sendMessage(tab.id, {
+                action: "updateSettings",
+                settings: options,
+              })
+              .catch(() => {});
+          }
         });
       });
-    });
+    } catch {
+      // Ignore tabs errors in Electron or contexts where chrome.tabs is unavailable
+    }
   });
 };
 
@@ -294,9 +302,9 @@ const restoreOptions = (): void => {
     isFullscreenControlsEnabled: true,
     isStylizedAnimationsEnabled: true,
     isSmoothProgressBarEnabled: false,
-    letterWavePref: "auto",
+    letterWavePref: "on",
     isPassiveScrollEnabled: true,
-    isPictureInPictureEnabled: true,
+    isPictureInPictureEnabled: false,
     isPictureInPictureAutoRestoreEnabled: false,
     pipArtworkTransition: "shuffle",
     pipTextTransition: "spring",
@@ -334,7 +342,7 @@ const restoreOptions = (): void => {
     isDockRomanizeEnabled: true,
     isDockOffsetEnabled: true,
     isDockRefreshEnabled: false,
-    isDockPictureInPictureEnabled: true,
+    isDockPictureInPictureEnabled: false,
     dockControlsOrder: [...DOCK_CONTROL_ORDER_DEFAULT],
     globalLyricOffset: 0,
     richsyncOffsetTrim: 0,
@@ -1567,7 +1575,7 @@ function resetDockSettings(): void {
   (document.getElementById("isDockRomanizeEnabled") as HTMLInputElement).checked = true;
   (document.getElementById("isDockOffsetEnabled") as HTMLInputElement).checked = true;
   (document.getElementById("isDockRefreshEnabled") as HTMLInputElement).checked = false;
-  (document.getElementById("isDockPictureInPictureEnabled") as HTMLInputElement).checked = true;
+  (document.getElementById("isDockPictureInPictureEnabled") as HTMLInputElement).checked = false;
   setUnisonPositionInForm(DOCK_DEFAULT_POSITION);
   setDockControlsOrderInForm([...DOCK_CONTROL_ORDER_DEFAULT]);
   syncUnisonModalDependentState(true);

@@ -362,7 +362,7 @@ export function loadDockSettings(callback?: () => void): void {
       AppState.isDockRomanizeEnabled = items.isDockRomanizeEnabled ?? true;
       AppState.isDockOffsetEnabled = items.isDockOffsetEnabled ?? true;
       AppState.isDockRefreshEnabled = items.isDockRefreshEnabled ?? false;
-      AppState.isDockPictureInPictureEnabled = items.isDockPictureInPictureEnabled ?? true;
+      AppState.isDockPictureInPictureEnabled = items.isDockPictureInPictureEnabled ?? false;
       AppState.dockControlsOrder = normalizeDockControlsOrder(items.dockControlsOrder);
       callback?.();
     }

@@ -100,14 +100,10 @@ async function saveChunkedCSS(css: string): Promise<void> {
   await chrome.storage.local.set({
     customCSS_chunked: true,
     customCSS_chunkCount: chunks.length,
-  });
-  await chrome.storage.sync.set({
     cssStorageType: "chunked",
-    customCSS_chunkCount: chunks.length,
   });
 
   await chrome.storage.local.remove(["customCSS", "cssCompressed"]);
-  await chrome.storage.sync.remove("customCSS");
 
   if (oldChunkCount > chunks.length) {
     const extraChunkKeys = Array.from(
@@ -121,12 +117,12 @@ async function saveChunkedCSS(css: string): Promise<void> {
   logCore(`Storage usage after save: ${finalUsage.used} / ${finalUsage.total} bytes`);
 }
 
-function getStorageStrategy(css: string): "local" | "sync" | "chunked" {
+function getStorageStrategy(css: string): "local" | "chunked" {
   const cssSize = new Blob([css]).size;
   if (cssSize > LOCAL_STORAGE_SAFE_LIMIT) {
     return "chunked";
   }
-  return cssSize > SYNC_STORAGE_LIMIT ? "local" : "sync";
+  return "local";
 }
 
 export async function saveCustomCss(css: string, retryCount = 0): Promise<SaveResult> {
@@ -148,23 +144,14 @@ export async function saveCustomCss(css: string, retryCount = 0): Promise<SaveRe
 
     if (strategy === "chunked") {
       await saveChunkedCSS(cssToStore);
-      await chrome.storage.sync.set({ cssCompressed: shouldCompress });
+      await chrome.storage.local.set({ cssCompressed: shouldCompress });
       return { success: true, strategy: "chunked" };
     }
 
-    if (strategy === "local") {
-      await clearLyricsCacheIfNeeded(compressedSize * SPACE_HEADROOM);
-      await chrome.storage.local.set({ customCSS: cssToStore, cssCompressed: shouldCompress });
-      await chrome.storage.sync.set({ cssStorageType: "local", cssCompressed: shouldCompress });
-      await clearCSSChunks();
-      await chrome.storage.sync.remove("customCSS");
-      logCore("Saved to local storage");
-    } else {
-      await chrome.storage.sync.set({ customCSS: cssToStore, cssStorageType: "sync", cssCompressed: shouldCompress });
-      await clearCSSChunks();
-      await chrome.storage.local.remove(["customCSS", "cssCompressed"]);
-      logCore("Saved to sync storage");
-    }
+    await clearLyricsCacheIfNeeded(compressedSize * SPACE_HEADROOM);
+    await chrome.storage.local.set({ customCSS: cssToStore, cssStorageType: "local", cssCompressed: shouldCompress });
+    await clearCSSChunks();
+    logCore("Saved to local storage");
 
     return { success: true, strategy };
   } catch (error: any) {
@@ -178,7 +165,7 @@ export async function saveCustomCss(css: string, retryCount = 0): Promise<SaveRe
         const cssToStore = shouldCompress ? compressString(css) : css;
 
         await saveChunkedCSS(cssToStore);
-        await chrome.storage.sync.set({ cssCompressed: shouldCompress });
+        await chrome.storage.local.set({ cssCompressed: shouldCompress });
         return { success: true, strategy: "chunked", wasRetry: true };
       } catch (chunkError) {
         errorCore("Chunked storage fallback failed:", chunkError);

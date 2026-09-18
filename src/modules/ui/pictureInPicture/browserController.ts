@@ -40,10 +40,10 @@ let storedArtworkTransition: unknown = DEFAULT_ARTWORK_TRANSITION;
 let storedTextTransition: unknown = DEFAULT_TEXT_TRANSITION;
 let storedMarqueeEnabled: unknown = true;
 let storedProgressBarEnabled: unknown = true;
-let isPictureInPictureEnabled = true;
+let isPictureInPictureEnabled = false;
 
 const PIP_SETTING_DEFAULTS = {
-  isPictureInPictureEnabled: true,
+  isPictureInPictureEnabled: false,
   isPictureInPictureAutoRestoreEnabled: false,
   pipArtworkTransition: DEFAULT_ARTWORK_TRANSITION,
   pipTextTransition: DEFAULT_TEXT_TRANSITION,
@@ -162,7 +162,7 @@ export function publishPictureInPictureResources(): void {
       lyricsStylesheetUrl: chrome.runtime.getURL(LYRIC_STYLESHEET_PATH),
       pipStylesheetUrl: chrome.runtime.getURL(STYLESHEET_PATH),
       fontUrls: [FONT_LINK, NOTO_SANS_UNIVERSAL_LINK],
-      enabled: items.isPictureInPictureEnabled !== false,
+      enabled: Boolean(items.isPictureInPictureEnabled),
       autoRestoreEnabled: Boolean(items.isPictureInPictureAutoRestoreEnabled),
       artworkTransition: String(items.pipArtworkTransition),
       textTransition: String(items.pipTextTransition),
@@ -221,13 +221,13 @@ export function initializePictureInPictureAutoRestore(): void {
 
   if (delegatesToPageWorld) {
     getStorage(PIP_SETTING_DEFAULTS, items => {
-      isPictureInPictureEnabled = items.isPictureInPictureEnabled !== false;
+      isPictureInPictureEnabled = Boolean(items.isPictureInPictureEnabled);
     });
 
     storageChangeListener = (changes, areaName) => {
-      if (areaName !== "sync") return;
+      if (areaName !== "local" && areaName !== "sync") return;
       if (changes.isPictureInPictureEnabled) {
-        isPictureInPictureEnabled = changes.isPictureInPictureEnabled.newValue !== false;
+        isPictureInPictureEnabled = Boolean(changes.isPictureInPictureEnabled.newValue);
       }
       if (Object.keys(PIP_SETTING_DEFAULTS).some(key => changes[key])) {
         publishPictureInPictureResources();
@@ -238,7 +238,7 @@ export function initializePictureInPictureAutoRestore(): void {
   }
 
   getStorage(PIP_SETTING_DEFAULTS, items => {
-    isPictureInPictureEnabled = items.isPictureInPictureEnabled !== false;
+    isPictureInPictureEnabled = Boolean(items.isPictureInPictureEnabled);
     if (items.isPictureInPictureAutoRestoreEnabled) armAutoRestore();
     storedArtworkTransition = items.pipArtworkTransition;
     storedTextTransition = items.pipTextTransition;
@@ -247,10 +247,10 @@ export function initializePictureInPictureAutoRestore(): void {
   });
 
   storageChangeListener = (changes, areaName) => {
-    if (areaName !== "sync") return;
+    if (areaName !== "local" && areaName !== "sync") return;
 
     if (changes.isPictureInPictureEnabled) {
-      isPictureInPictureEnabled = changes.isPictureInPictureEnabled.newValue !== false;
+      isPictureInPictureEnabled = Boolean(changes.isPictureInPictureEnabled.newValue);
       if (!isPictureInPictureEnabled) {
         disarmAutoRestore();
         if (activeController.isOpen()) activeController.toggle();

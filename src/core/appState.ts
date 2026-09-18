@@ -112,7 +112,7 @@ export const AppState: AppStateType = {
   isDockRomanizeEnabled: true,
   isDockOffsetEnabled: true,
   isDockRefreshEnabled: false,
-  isDockPictureInPictureEnabled: true,
+  isDockPictureInPictureEnabled: false,
   dockControlsOrder: [...DOCK_CONTROL_ORDER_DEFAULT],
   currentUnisonData: null,
   isPictureInPictureOpen: false,
