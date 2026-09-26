@@ -1,7 +1,6 @@
 /**
  * YOUTUBE MUSIC CUSTOM ENHANCEMENTS
- * Tệp JavaScript tổng hợp các tinh chỉnh giao diện cho YouTube Music
- * Made by NanKill, Gemini 3.1 Pro, Claude Opus 4.6, Claude Haiku 4.5, GPT 5.3-Codex
+ * Tệp JavaScript tổng hợp các tinh chỉnh giao diện cho Glassy Music
  */
 
 // =========================================================================
@@ -187,10 +186,23 @@
 (function () {
   'use strict';
 
-  let lastState = null;   // Cache thông tin bài hát hiện tại
+  let normalState = null;      // Cache thông tin bài hát — player bar mode thường
+  let fullscreenState = null;  // Cache thông tin bài hát — player bar trong fullscreen
   let fadeOverlay = null;  // Overlay đang fade
   let fadeTimer = null;    // Timer dọn dẹp
   let resizeTimer = null;  // Debounce resize
+
+  // YTM đánh dấu fullscreen player UI bằng attribute riêng
+  // (tin được cho cả fullscreen thật lẫn fullscreen giả — không phụ thuộc window resize)
+  function isPlayerFullscreen(el) {
+    const bar = el ? el.closest('ytmusic-player-bar') : document.querySelector('ytmusic-player-bar');
+    return !!bar && bar.hasAttribute('player-fullscreened');
+  }
+
+  // Cache tương ứng mode hiện tại của player bar
+  function getCache() {
+    return isPlayerFullscreen() ? fullscreenState : normalState;
+  }
 
   // Cache trạng thái bài hát hiện tại (chỉ khi có dữ liệu)
   function captureState() {
@@ -217,7 +229,7 @@
     const titleCS = getComputedStyle(title);
     const bylineCS = byline ? getComputedStyle(byline) : null;
 
-    lastState = {
+    const st = {
       imgSrc: img?.src || '',
       titleText: title?.textContent?.trim() || '',
       bylineText: byline?.title || byline?.textContent?.trim() || '',
@@ -238,6 +250,7 @@
       bylineLineHeight: bylineCS?.lineHeight || '20px',
       bylineColor: bylineCS?.color || 'rgba(255,255,255,0.7)'
     };
+    if (isPlayerFullscreen(mc)) fullscreenState = st; else normalState = st;
   }
 
   // Dọn dẹp overlay
@@ -248,6 +261,7 @@
 
   // Tạo overlay snapshot với thông tin bài cũ
   function createOverlay(middleControls) {
+    const lastState = getCache();
     if (!lastState || !lastState.titleText) return null;
     killOverlay();
 
@@ -357,6 +371,14 @@
       if (mut.type !== 'attributes') continue;
 
       const el = mut.target;
+
+      // === CASE 0: bật/tắt fullscreen player UI → capture lại geometry cho mode hiện tại ===
+      if (mut.attributeName === 'player-fullscreened') {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(captureState, 300);
+        continue;
+      }
+
       if (!el.matches || !el.matches('yt-formatted-string.title.ytmusic-player-bar')) continue;
 
       const mc = el.closest('.middle-controls');
@@ -400,12 +422,12 @@
     if (playerBar) {
       observer.observe(playerBar, {
         attributes: true,
-        attributeFilter: ['is-empty', 'title'],
+        attributeFilter: ['is-empty', 'title', 'player-fullscreened'],
         attributeOldValue: true,
         subtree: true
       });
       captureState();
-      if (!lastState) setTimeout(captureState, 2000);
+      if (!getCache()) setTimeout(captureState, 2000);
 
       // Recapture khi resize cửa sổ (debounce 300ms)
       window.addEventListener('resize', () => {
