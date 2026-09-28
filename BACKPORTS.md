@@ -81,3 +81,29 @@ Evaluation range: upstream `57c9dfe..upstream/master` at `9b3496c` (50 commits).
 - **PiP (policy)**: PR 888, PR 891.
 - **i18n syncs (strings for unbackported features)**: PR 896, PR 877, PR 860.
 - **Bots/release/chore/ci/docs/deps**: harmonizer auto-fix/release commits, dependabot bumps, braccato chores, releases, Edge publishing, docs, ci.
+
+---
+
+## Batch 3
+
+Evaluation range: upstream `9b3496c..1b8dd13e` (~130 commits; verified current 2026-09-28). 3 items backported, the rest skipped.
+
+### Backported
+
+1. **Render Extension Pages in Standards Mode (`af2c4c05`)** — clean
+   - Adds `<!DOCTYPE html>` to `pages/marketplace.html`, `pages/unison.html`, and `pages/standalone-editor.html` (the editor also gets `height: 100%` on `<html>`), plus `display: block` on `.store-card-cover` in `src/options/store/store.css`.
+2. **Expire Unison No-Lyrics Cache Entries Sooner (`ed9c0155`)** — adapted
+   - Adds `UNISON_NEGATIVE_CACHE_TTL_MS = 5 * 60 * 1000` and uses it in `saveLyricsToCache` for `unison*` providers, keeping the glassy negative-cache log line. No upstream PR number (unison-revisions branch); reference hash only.
+   - Adds `src/core/constants.selfcheck.ts`; adapted with a chrome manifest stub + dynamic import because this engine's `constants.ts` reads `chrome.runtime` at module scope.
+3. **Judge Translation and Romanization Language Per Line (PR 868: `63632ad6`, `678e3bc3`, `6ee1328b`, `07fb2ea0`, `a4b83e2f`, `1dc4d77c`)** — adapted, squashed into one commit
+   - `translation.ts`: `resolveRomanizationLanguage` / `chooseRomanizationSeparator` helpers, collision-free `0000`-based romanization separator with strict split-length check (replaces the semicolon/newline fallback), Latin-only lines skipped in romanization, script-grouped translation chunks with per-line `originalLanguage` detection, `unisonLatinFallback` cache map for Latin lines resolved after the Google pass.
+   - `injectLyrics.ts`: cached translations gated per line by `originalLanguage`, batch-level source-language early return removed in favor of per-line exclusion on `result.originalLanguage`.
+   - Uses this repo's vendored `containsNonLatin` / `detectNonLatinLanguage` (`lyricParseUtils.ts`), `languageMatchesAny` (`@utils`), `ROMANIZATION_LANGUAGES` (`@constants`), and `log` instead of `@braccato/core/text` + `logCore`. Dropped upstream's `recordLyricDecoration` calls and the `translationLanguage` plumbing (absent in this engine's `injectTranslation`).
+
+### Skipped (~127)
+
+- **Unison revisions/editor/multi-video-linking series (~90 commits)**: new UI infra (`revisions.ts`, `devFixtures.ts`, editor views, video-link API) absent in this repo.
+- **PR 912 (`41d2fd6c`, `b92abb61`)**: `renderSuggestedVideoList` / other-versions toggle absent in old `unisonPage.ts`.
+- **`2fe886ed` share relative time formatting**: refactor feeding the unison feature; this repo has its own `formatTimeAgo` in `store.ts`.
+- **i18n syncs (PR 909 + ~25 `chore(i18n)`)**: strings for unbackported features.
+- **Deps/bots/release/CI**: `66cda1d4`, `7d27af41`, `87e37ecb`, `a071d7a2`, `285ab03e` (release 3.0.0.2), `1b8dd13e` (auto-fix), `ad441650` (CI), merge commits.
