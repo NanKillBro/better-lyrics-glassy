@@ -5,13 +5,14 @@ import {
   DOCK_DEFAULT_POSITION,
   ROMANIZATION_LANGUAGES,
   UNISON_API_BASE_URL,
+  UNISON_PICTURE_URL,
 } from "@constants";
 import { attachHoldRepeat } from "@core/holdRepeat";
 import { getLanguageDisplayName, initI18n, loadLocaleOverride, SUPPORTED_LOCALES, t } from "@core/i18n";
 import {
   exportIdentity,
   getDisplayName,
-  getResolvedDisplayName,
+  getResolvedProfile,
   importIdentity,
   invalidateDisplayName,
   signPayload,
@@ -24,6 +25,7 @@ import { fetchOwnGamification, renderIdentityStats } from "@modules/unison/gamif
 import Sortable from "sortablejs";
 import { showModal } from "./editor/ui/feedback";
 import { initStoreUI, setupYourThemesButton } from "./store/store";
+import { checkForStableRelease } from "./updateNotice";
 import { errorCore, warnCore } from "@core/logger";
 
 interface Options {
@@ -39,6 +41,7 @@ interface Options {
   isPassiveScrollEnabled: boolean;
   isPictureInPictureEnabled: boolean;
   isPictureInPictureAutoRestoreEnabled: boolean;
+  pipWindowLayout: string;
   pipArtworkTransition: string;
   pipTextTransition: string;
   pipMarqueeEnabled: boolean;
@@ -106,6 +109,7 @@ const getOptionsFromForm = (): Options => {
     isPictureInPictureAutoRestoreEnabled: (
       document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement
     ).checked,
+    pipWindowLayout: (document.getElementById("pipWindowLayout") as HTMLSelectElement).value,
     pipArtworkTransition: (document.getElementById("pipArtworkTransition") as HTMLSelectElement).value,
     pipTextTransition: (document.getElementById("pipTextTransition") as HTMLSelectElement).value,
     pipMarqueeEnabled: (document.getElementById("pipMarqueeEnabled") as HTMLInputElement).checked,
@@ -306,6 +310,7 @@ const restoreOptions = (): void => {
     isPassiveScrollEnabled: true,
     isPictureInPictureEnabled: false,
     isPictureInPictureAutoRestoreEnabled: false,
+    pipWindowLayout: "horizontal",
     pipArtworkTransition: "shuffle",
     pipTextTransition: "spring",
     pipMarqueeEnabled: true,
@@ -398,6 +403,7 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked = items.isPictureInPictureEnabled;
   (document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement).checked =
     items.isPictureInPictureAutoRestoreEnabled;
+  (document.getElementById("pipWindowLayout") as HTMLSelectElement).value = items.pipWindowLayout;
   (document.getElementById("pipArtworkTransition") as HTMLSelectElement).value = items.pipArtworkTransition;
   (document.getElementById("pipTextTransition") as HTMLSelectElement).value = items.pipTextTransition;
   (document.getElementById("pipMarqueeEnabled") as HTMLInputElement).checked = items.pipMarqueeEnabled;
@@ -696,6 +702,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initLetterWaveSwitch();
   restoreOptions();
   restoreActiveTab();
+  checkForStableRelease();
 });
 document.querySelectorAll("#options input, #options select").forEach(element => {
   element.addEventListener("change", saveOptions);
@@ -839,14 +846,8 @@ async function initIdentityUI(): Promise<void> {
     displayNameEl.textContent = t("options_alert_identityLoadError");
   }
 
-  void fetchOwnGamification().then(async user => {
-    const statsEl = document.getElementById("identity-stats");
-    const statsWrap = document.getElementById("identity-stats-container");
-    if (!user || !statsEl || !statsWrap) return;
-    const handle = (await getResolvedDisplayName().catch(() => null)) ?? undefined;
-    await renderIdentityStats(statsEl, user, handle);
-    statsWrap.hidden = false;
-  });
+  void renderOwnIdentityStats();
+  watchPictureChanges();
 
   document.getElementById("export-identity-btn")?.addEventListener("click", handleExportIdentity);
   document.getElementById("import-identity-btn")?.addEventListener("click", handleImportIdentity);
@@ -1297,6 +1298,35 @@ async function updateIdentityDisplay(): Promise<void> {
   if (displayNameEl) {
     displayNameEl.textContent = await getDisplayName();
   }
+  await renderOwnIdentityStats();
+}
+
+let identityStatsRender = 0;
+
+async function renderOwnIdentityStats(): Promise<void> {
+  const statsEl = document.getElementById("identity-stats");
+  const statsWrap = document.getElementById("identity-stats-container");
+  if (!statsEl || !statsWrap) return;
+  const render = ++identityStatsRender;
+  const [user, profile] = await Promise.all([fetchOwnGamification(), getResolvedProfile()]);
+  const next = document.createElement("div");
+  if (user) await renderIdentityStats(next, user, profile?.displayName, profile?.avatarUrl ?? null);
+  if (render !== identityStatsRender) return;
+  statsEl.replaceChildren(...next.childNodes);
+  statsWrap.hidden = !user;
+}
+
+function watchPictureChanges(): void {
+  let refreshOnReturn = false;
+  document.getElementById("identity-stats")?.addEventListener("click", event => {
+    if ((event.target as HTMLElement).closest(`a[href="${UNISON_PICTURE_URL}"]`)) refreshOnReturn = true;
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !refreshOnReturn) return;
+    refreshOnReturn = false;
+    invalidateDisplayName();
+    void updateIdentityDisplay();
+  });
 }
 
 // -- Language Exclusions Modal --------------------------
