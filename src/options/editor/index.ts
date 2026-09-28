@@ -1,6 +1,7 @@
 import { openSearchPanel } from "@codemirror/search";
 
 import { initI18n, loadLocaleOverride } from "@core/i18n";
+import { errorEditor, logEditor } from "@core/logger";
 import { createEditorState, createEditorView } from "./core/editor";
 import { editorStateManager } from "./core/state";
 import { generateDefaultFilename, importManager, saveCSSToFile } from "./features/import";
@@ -28,7 +29,6 @@ import {
   themeSelectorBtn,
 } from "./ui/dom";
 import { showAlert, showModal } from "./ui/feedback";
-import { errorEditor, logEditor } from "@core/logger";
 
 // Helper to open extension pages - falls back to window.open in Electron
 function openEditorExtensionPage(pagePath: string): void {
@@ -180,9 +180,7 @@ async function initializeEditor() {
   editorStateManager.setEditor(initialEditor);
 
   const openStandaloneEditor = () => {
-    chrome.tabs.create({
-      url: chrome.runtime.getURL("pages/standalone-editor.html"),
-    });
+    openEditorExtensionPage("pages/standalone-editor.html");
   };
 
   document.getElementById("editor-popout-button")?.addEventListener("click", openStandaloneEditor);
