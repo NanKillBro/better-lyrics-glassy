@@ -178,9 +178,7 @@ async function initializeEditor() {
   editorStateManager.setEditor(initialEditor);
 
   const openStandaloneEditor = () => {
-    chrome.tabs.create({
-      url: chrome.runtime.getURL("pages/standalone-editor.html"),
-    });
+    openEditorExtensionPage("pages/standalone-editor.html");
   };
 
   document.getElementById("editor-popout-button")?.addEventListener("click", openStandaloneEditor);
