@@ -12,6 +12,7 @@ import { getLanguageDisplayName, initI18n, loadLocaleOverride, SUPPORTED_LOCALES
 import { exportIdentity, getDisplayName, importIdentity, invalidateDisplayName, signPayload } from "@core/keyIdentity";
 import { clearAllOffsets, getOffsetInfo } from "@core/storage";
 import { parseSvgString, syncTypeColors } from "@modules/ui/lyricsDock/icons";
+import { mergePreferredProviders } from "@modules/lyrics/providers/providerList";
 import Sortable from "sortablejs";
 import { showModal } from "./editor/ui/feedback";
 import { initStoreUI, setupYourThemesButton } from "./store/store";
@@ -263,6 +264,7 @@ const restoreOptions = (): void => {
       "bLyrics-richsynced",
       "unison-richsynced",
       "binimum-richsynced",
+      "unison-wordsynced",
       "portato-richsynced",
       "musixmatch-richsync",
       "yt-captions",
@@ -345,11 +347,11 @@ const setOptionsInForm = (items: Options): void => {
   const providersListElem = document.getElementById("providers-list")!;
   providersListElem.replaceChildren();
 
-  // Always recreate in the default order to make sure no items go missing
-  let unseenProviders = [
+  const defaultProviderOrder = [
     "bLyrics-richsynced",
     "unison-richsynced",
     "binimum-richsynced",
+    "unison-wordsynced",
     "portato-richsynced",
     "musixmatch-richsync",
     "yt-captions",
@@ -364,23 +366,14 @@ const setOptionsInForm = (items: Options): void => {
     "lrclib-plain",
   ];
 
-  for (let i = 0; i < items.preferredProviderList.length; i++) {
-    const providerId = items.preferredProviderList[i];
-
+  for (const providerId of mergePreferredProviders(items.preferredProviderList, defaultProviderOrder)) {
     const disabled = providerId.startsWith("d_");
     const rawProviderId = disabled ? providerId.slice(2) : providerId;
     const providerElem = createProviderElem(rawProviderId, !disabled);
 
     if (providerElem === null) continue;
     providersListElem.appendChild(providerElem);
-    unseenProviders = unseenProviders.filter(p => p !== rawProviderId);
   }
-
-  unseenProviders.forEach(p => {
-    const providerElem = createProviderElem(p);
-    if (providerElem === null) return;
-    providersListElem.appendChild(providerElem);
-  });
 };
 type SyncType = "syllable" | "word" | "line" | "unsynced";
 
@@ -401,6 +394,7 @@ const getProviderIdToInfoMap = (): { [key: string]: ProviderInfo } => ({
     syncType: "line",
   },
   "unison-richsynced": { name: t("options_provider_betterLyricsUnison"), syncType: "syllable" },
+  "unison-wordsynced": { name: t("options_provider_betterLyricsUnison"), syncType: "word" },
   "unison-synced": { name: t("options_provider_betterLyricsUnison"), syncType: "line" },
   "unison-plain": { name: t("options_provider_betterLyricsUnison"), syncType: "unsynced" },
   "yt-captions": {
