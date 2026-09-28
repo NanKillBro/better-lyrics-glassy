@@ -1,6 +1,6 @@
 # Upstream Backport Summary
 
-This document details the upstream commits backported from better-lyrics (evaluating 117 upstream commits between 8ec28ef and 57c9dfe4) into the old-engine repository (better-lyrics-glassy).
+This document details the upstream commits backported from better-lyrics (evaluating 117 upstream commits between 8ec28ef and 57c9dfe4, plus 50 commits between 57c9dfe and 9b3496c) into the old-engine repository (better-lyrics-glassy).
 
 ---
 
@@ -55,3 +55,29 @@ All backported commits were selected to enhance stability, performance, accessib
    - **Reason**: Pear Desktop provides native OS window management and miniplayer capabilities.
 5. **Upstream Telemetry & Survey Prompts**:
    - **Reason**: Excluded to maintain a minimal, privacy-focused experience.
+
+---
+
+## Batch 2
+
+Evaluation range: upstream `57c9dfe..upstream/master` at `9b3496c` (50 commits). 3 commits backported, 47 skipped.
+
+### Backported
+
+1. **Correct Sync Badge for Unison Lyrics (PR 864)** — adapted
+   - Adds the `unison-wordsynced` provider tier (syncType `word`, priority 3) so word-synced Unison lyrics carry the correct sync badge in options and in the provider list.
+   - Adds `providerList.ts` with `mergePreferredProviders` and its selfcheck; a stored custom `preferredProviderList` now gets missing default providers inserted at their natural position instead of being reset to defaults.
+   - Dropped: braccato dependency bumps (README, package files) — not used by this engine. The background-vocals half of the fix lives in the braccato parser packages and is not portable.
+2. **Parse Dock Icons Through a Trusted Types Policy (PR 867)** — partial
+   - Wraps SVG strings passed to `DOMParser.parseFromString` in a `blyrics-svg` trusted types policy (`icons.ts`, new `trusted-types.d.ts`).
+   - Dropped: the manifest/auth hunks that add the `unison.boidu.dev` origin (new-engine Unison endpoint; this engine uses betterlyrics.org per the PR 843 backport).
+3. **Clear Side-Panel Background Without Lyrics (PR 899)** — clean
+   - Makes `#side-panel` background/shadow transparent in fullscreen no-lyrics mode so the re-centered album art is not flanked by a stray panel box.
+
+### Skipped (47)
+
+- **WAAPI/Braccato-coupled**: PR 901 (songwriter credits, rendering in braccato core), PR 902 (metadata via braccato parsers 0.3.0), PR 860-adjacent CJK regional fonts (CSS is dead code without the new engine's per-line `lang` plumbing).
+- **Missing UI infra**: PR 908 (fullscreen-controls overlap — feature absent here), PR 903/PR 904 (gamification avatar ring CSS absent), PR 874 (`layoutWidth`/`playerControls` absent), PR 870 (`blyrics-fs-controls` absent), PR 861 (`options/updateNotice/` absent), PR 873 (touches `layoutWidth`, `updateNotice`, `core/browser.ts` — all absent).
+- **PiP (policy)**: PR 888, PR 891.
+- **i18n syncs (strings for unbackported features)**: PR 896, PR 877, PR 860.
+- **Bots/release/chore/ci/docs/deps**: harmonizer auto-fix/release commits, dependabot bumps, braccato chores, releases, Edge publishing, docs, ci.
