@@ -212,7 +212,7 @@ export function lrcFixers(lyrics: LyricsArray): void {
     }
   }
   if (durationCount > 0 && shortDurationCount / durationCount > 0.5) {
-    log("Found a lot of short duration lyrics, fudging durations");
+    log(LOG_PREFIX, "Found a lot of short duration lyrics, fudging durations");
     for (let i = 0; i < lyrics.length; i++) {
       let lyric = lyrics[i];
       if (!lyric.parts || lyric.parts.length === 0) {

@@ -11,6 +11,7 @@ import { stringSimilarity } from "@modules/lyrics/lyricParseUtils";
 import { registerThemeSetting } from "@modules/settings/themeOptions";
 import { flushLoader, renderLoader } from "@modules/ui/dom";
 import { log } from "@utils";
+import { LyricsLoadTimer } from "./lyricsLoadTimings";
 import type { Lyric, LyricSourceResult, ProviderParameters } from "./providers/shared";
 import { getLyrics, newSourceMap, providerPriority } from "./providers/shared";
 import type { YTLyricSourceResult } from "./providers/yt";
@@ -95,11 +96,14 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
   }
 
   let shouldCleanupLoader = false;
+  const lyricsTimer = new LyricsLoadTimer();
 
   try {
     // We should get recalled if we were executed without a valid song/artist and aren't able to get lyrics
 
+    lyricsTimer.begin("song-metadata(initial)");
     let matchingSong = await getSongMetadata(videoId, 1, signal);
+    lyricsTimer.end("song-metadata(initial)");
     let swappedVideoId = false;
     let isAVSwitch =
       (matchingSong &&
@@ -115,19 +119,21 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       applySegmentMapToLyrics(AppState.lyricData, segmentMap);
       AppState.suppressZeroTime = Date.now() + 5000;
       AppState.areLyricsTicking = true; // Keep lyrics ticking while new lyrics are fetched.
-      log("Switching between audio/video: Skipping Loader", segmentMap);
+      log(LOG_PREFIX, "Switching between audio/video: Skipping Loader", segmentMap);
     } else if (isSoftReload) {
       // Same-song reload (provider switch or translation/romanization toggle): keep the
       // current lyrics on screen and swap them in once the new ones are ready, no loader.
       AppState.suppressZeroTime = Date.now() + 5000;
       AppState.areLyricsTicking = true;
-      log("Soft reload: keeping current lyrics, skipping loader");
+      log(LOG_PREFIX, "Soft reload: keeping current lyrics, skipping loader");
     } else {
-      log("Not Switching between audio/video", isAVSwitch, segmentMap);
+      log(LOG_PREFIX, "Not Switching between audio/video", isAVSwitch, segmentMap);
       renderLoader();
       shouldCleanupLoader = true;
       clearTranslationCache();
+      lyricsTimer.begin("song-metadata(settled)");
       matchingSong = await getSongMetadata(videoId, 250, signal);
+      lyricsTimer.end("song-metadata(settled)");
       segmentMap = matchingSong?.segmentMap || null;
       AppState.areLyricsLoaded = false;
       AppState.areLyricsTicking = false;
@@ -142,7 +148,7 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       artist = matchingSong.artist || artist;
 
       if (isMusicVideo && matchingSong.counterpartVideoId && matchingSong.segmentMap) {
-        log("Switching VideoId to Audio Id");
+        log(LOG_PREFIX, "Switching VideoId to Audio Id");
         swappedVideoId = true;
         videoId = matchingSong.counterpartVideoId;
       }
@@ -160,7 +166,9 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
 
     song = song.trim();
     artist = normalizeArtist(artist);
+    lyricsTimer.begin("song-album");
     let album = await getSongAlbum(videoId, signal);
+    lyricsTimer.end("song-album");
     if (!album) {
       album = "";
     }
@@ -194,7 +202,9 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
     };
     let ytLyricsEarlyInjectAbortController = new AbortController();
 
+    const ytLyricsStart = performance.now();
     let ytLyricsPromise = getLyrics(providerParameters, "yt-lyrics").then(lyrics => {
+      lyricsTimer.add("yt-lyrics", performance.now() - ytLyricsStart, true);
       if (!AppState.areLyricsLoaded && lyrics && !signal.aborted) {
         if (!ytLyricsEarlyInjectAbortController.signal.aborted) {
           log(LOG_PREFIX, "Temporarily Using YT Music Lyrics while we wait for synced lyrics to load");
@@ -215,22 +225,24 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
     });
 
     try {
+      lyricsTimer.begin("provider:metadata");
       let meta = await getLyrics(providerParameters, "metadata");
+      lyricsTimer.end("provider:metadata");
       if (meta && meta.album && meta.album.length > 0) {
         providerParameters.album = meta.album;
       }
       if (meta && meta.song && meta.song.length > 0 && song !== meta.song) {
-        log("Using '" + meta.song + "' for song instead of '" + song + "'");
+        log(LOG_PREFIX, "Using '" + meta.song + "' for song instead of '" + song + "'");
         providerParameters.song = meta.song;
       }
 
       if (meta && meta.artist && meta.artist.length > 0 && artist !== meta.artist) {
-        log("Using '" + meta.artist + "' for artist instead of '" + artist + "'");
+        log(LOG_PREFIX, "Using '" + meta.artist + "' for artist instead of '" + artist + "'");
         providerParameters.artist = meta.artist;
       }
 
       if (meta && meta.duration && duration !== meta.duration) {
-        log("Using '" + meta.duration + "' for duration instead of '" + duration + "'");
+        log(LOG_PREFIX, "Using '" + meta.duration + "' for duration instead of '" + duration + "'");
         providerParameters.duration = meta.duration;
       }
     } catch (err) {
@@ -251,7 +263,9 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       }
 
       try {
+        lyricsTimer.begin(`provider:${provider}`);
         let sourceLyrics = await getLyrics(providerParameters, provider);
+        lyricsTimer.end(`provider:${provider}`);
 
         if (sourceLyrics && sourceLyrics.lyrics && sourceLyrics.lyrics.length > 0) {
           if (hideInstrumentalOnly.getBooleanValue() && isInstrumentalOnly(sourceLyrics.lyrics)) {
@@ -307,7 +321,7 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       segmentMap = null; // The timing matches, we don't need to apply a segment map!
     }
 
-    log("Got Lyrics from " + lyrics.source);
+    log(LOG_PREFIX, "Got Lyrics from " + lyrics.source);
 
     // Preserve song and artist information in the lyrics data for the "Add Lyrics" button
 
@@ -337,9 +351,19 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
     if (signal.aborted) {
       return;
     }
+    lyricsTimer.begin("process-lyrics");
     processLyrics(lyricsWithMeta, false, signal);
+    lyricsTimer.end("process-lyrics");
+    lyricsTimer.complete({
+      source: lyrics.source,
+      provider: selectedProvider,
+      fromCache: selectedProvider
+        ? providerParameters.sourceMap[selectedProvider as keyof typeof providerParameters.sourceMap]?.lastLoadFromCache
+        : undefined,
+    });
     shouldCleanupLoader = false;
   } finally {
+    lyricsTimer.incomplete();
     if (shouldCleanupLoader) {
       flushLoader();
     }
@@ -357,6 +381,7 @@ export async function preFetchLyrics(
   isMusicVideo: boolean
 ): Promise<void> {
   log(LOG_PREFIX, "Prefetching next song", detail, isMusicVideo);
+  const prefetchStart = performance.now();
   let song = detail.song;
   let artist = detail.artist;
   let videoId = detail.videoId;
@@ -383,7 +408,7 @@ export async function preFetchLyrics(
     album = "";
   }
 
-  log("Prefetching for: ", song, artist);
+  log(LOG_PREFIX, "Prefetching for: ", song, artist);
 
   let sourceMap = newSourceMap();
   // We depend on the cubey lyrics to fetch certain metadata, so we always call it even if it isn't the top priority
@@ -434,4 +459,6 @@ export async function preFetchLyrics(
       log(err);
     }
   }
+
+  log(LOG_PREFIX, `Prefetch completed in ${Math.round(performance.now() - prefetchStart)}ms`);
 }

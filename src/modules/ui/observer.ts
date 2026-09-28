@@ -304,7 +304,7 @@ export function initializeLyrics(): void {
       AppState.lastVideoDetails = currentVideoDetails;
       resetThumbnailState();
       if (!detail.song || !detail.artist) {
-        log("Lyrics switched: Still waiting for metadata ", detail.videoId);
+        log(LOG_PREFIX, "Lyrics switched: Still waiting for metadata ", detail.videoId);
         return;
       }
       log(SONG_SWITCHED_LOG, detail.videoId);
@@ -381,7 +381,9 @@ export function initializeLyrics(): void {
           }
 
           if (!tryApplyThumbnail(delayedMetadata?.smallThumbnail || null) && !resolved) {
-            console.warn(`[Image] Failed to resolve any new thumbnail for ${detail.videoId}, falling back to showYtThumbnail`);
+            console.warn(
+              `[Image] Failed to resolve any new thumbnail for ${detail.videoId}, falling back to showYtThumbnail`
+            );
             showYtThumbnail();
           }
         });

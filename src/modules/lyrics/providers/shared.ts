@@ -1,4 +1,5 @@
 import {
+  LOG_PREFIX,
   LYRIC_SOURCE_KEYS,
   LYRICS_CACHE_TTL_MS,
   LYRICS_NEGATIVE_CACHE_TTL_MS,
@@ -49,6 +50,7 @@ interface AudioTrackData {
 interface LyricSource {
   filled: boolean;
   resultCached: boolean;
+  lastLoadFromCache?: boolean;
   lyricSourceResult: LyricSourceResult | UnisonLyricSourceResult | YTLyricSourceResult | null;
   lyricSourceFiller: (providerParameters: ProviderParameters) => Promise<void>;
 }
@@ -192,6 +194,7 @@ export async function saveLyricsToCache(providerParameters: ProviderParameters, 
       JSON.stringify({ version: LYRIC_CACHE_VERSION, missing: true }),
       LYRICS_NEGATIVE_CACHE_TTL_MS
     );
+    log(LOG_PREFIX, "Lyrics cache SAVE", provider, "negative");
     return;
   }
 
@@ -208,6 +211,7 @@ export async function saveLyricsToCache(providerParameters: ProviderParameters, 
       ...source.lyricSourceResult,
     };
     await setTransientStorage(cacheKey, JSON.stringify(versionedData), LYRICS_CACHE_TTL_MS);
+    log(LOG_PREFIX, "Lyrics cache SAVE", provider, "positive");
   }
 }
 
@@ -229,6 +233,14 @@ export async function getLyrics(
       if (data && data.version && data.version === LYRIC_CACHE_VERSION) {
         lyricSource.filled = true;
         lyricSource.resultCached = true;
+        log(
+          LOG_PREFIX,
+          "Lyrics cache HIT",
+          sourceName,
+          providerParameters.videoId,
+          data.missing === true ? "(negative)" : ""
+        );
+        lyricSource.lastLoadFromCache = true;
         if (data.missing === true) {
           lyricSource.lyricSourceResult = null;
           return null;
@@ -238,6 +250,8 @@ export async function getLyrics(
       }
     }
 
+    log(LOG_PREFIX, "Lyrics cache MISS", sourceName, providerParameters.videoId);
+    lyricSource.lastLoadFromCache = false;
     await lyricSource.lyricSourceFiller(providerParameters);
   }
 
@@ -250,4 +264,3 @@ export async function getLyrics(
 
   return lyricSource.lyricSourceResult;
 }
-
