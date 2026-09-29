@@ -216,8 +216,10 @@ ytmusic-fullbleed-thumbnail-renderer[is-background] .image {
 
 /* Bật Blur mặc định cho TẤT CẢ trường hợp --- */
 ytmusic-player-bar,
+ytmusic-miniplayer,
 #player-bar-background {
   backdrop-filter: blur(var(--blyrics-blur-amount)) !important;
+  -webkit-backdrop-filter: blur(var(--blyrics-blur-amount)) !important;
   background: transparent !important; /* Đảm bảo nền trong suốt để thấy blur */
 }
 
@@ -226,6 +228,7 @@ ytmusic-player-bar,
    #layout (xem rule ngay bên dưới), và tránh :has() neo ở body — Blink phải kiểm
    tra lại subject đó mỗi khi có bất kỳ thay đổi DOM nào trong trang. */
 #layout[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player-bar,
+#layout[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-miniplayer,
 #layout[player-ui-state="PLAYER_PAGE_OPEN"] #player-bar-background {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -1969,6 +1972,27 @@ ytmusic-multi-row-list-item-renderer.ytmusic-shelf-renderer {
 .middle-controls.ytmusic-player-bar:has(.title[is-empty]) > .thumbnail-image-wrapper,
 .middle-controls.ytmusic-player-bar:has(.title[is-empty]) > .content-info-wrapper,
 .middle-controls.ytmusic-player-bar:has(.title[is-empty]) > .middle-controls-buttons {
+  opacity: 0 !important;
+  transform: translateY(5px) !important;
+  pointer-events: none !important;
+}
+
+/* Bar mới (ytmusic-miniplayer): container anchor + transitions.
+   :has() bị tránh ở đây vì đắt; trạng thái loading do fix.js gắn class. */
+.ytMusicMiniPlayerLeftSection {
+  position: relative;
+}
+
+.ytMusicMiniPlayerLeftSection .ytmusicTrackInfoThumbnailWrapper,
+.ytMusicMiniPlayerLeftSection .ytmusicTrackInfoContentInfoWrapper {
+  transition: opacity 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+              transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  will-change: opacity, transform;
+}
+
+/* Loading state (title attribute rỗng) — class do fix.js gắn */
+ytmusic-miniplayer.blyrics-track-loading .ytmusicTrackInfoThumbnailWrapper,
+ytmusic-miniplayer.blyrics-track-loading .ytmusicTrackInfoContentInfoWrapper {
   opacity: 0 !important;
   transform: translateY(5px) !important;
   pointer-events: none !important;

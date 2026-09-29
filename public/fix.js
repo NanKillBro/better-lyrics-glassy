@@ -191,50 +191,122 @@
   let fadeOverlay = null;  // Overlay đang fade
   let fadeTimer = null;    // Timer dọn dẹp
   let resizeTimer = null;  // Debounce resize
+  let currentBar = null;   // Bar host đang được theo dõi (cũ hoặc mới)
+  let layoutObserver = null; // Theo dõi player-fullscreened trên #layout (chỉ bar mới)
+
+  // YTM đang A/B test 2 phiên bản bar: bar cũ (ytmusic-player-bar) và bar mới
+  // (ytmusic-miniplayer). Ưu tiên bar mới khi cả hai cùng tồn tại.
+  function findBar() {
+    return document.querySelector('ytmusic-miniplayer') || document.querySelector('ytmusic-player-bar');
+  }
+
+  function isNewBar(bar) {
+    return !!bar && bar.tagName.toLowerCase() === 'ytmusic-miniplayer';
+  }
 
   // YTM đánh dấu fullscreen player UI bằng attribute riêng
+  // - Bar cũ: player-fullscreened nằm trên chính bar
+  // - Bar mới: player-fullscreened nằm trên ytmusic-app-layout#layout
   // (tin được cho cả fullscreen thật lẫn fullscreen giả — không phụ thuộc window resize)
   function isPlayerFullscreen(el) {
-    const bar = el ? el.closest('ytmusic-player-bar') : document.querySelector('ytmusic-player-bar');
+    const bar = el ? el.closest('ytmusic-miniplayer, ytmusic-player-bar') : (currentBar && currentBar.isConnected ? currentBar : findBar());
+    if (isNewBar(bar)) return !!document.querySelector('ytmusic-app-layout[player-fullscreened]');
     return !!bar && bar.hasAttribute('player-fullscreened');
   }
 
   // Cache tương ứng mode hiện tại của player bar
-  function getCache() {
-    return isPlayerFullscreen() ? fullscreenState : normalState;
+  function getCache(bar) {
+    return isPlayerFullscreen(bar || currentBar) ? fullscreenState : normalState;
+  }
+
+  // Descriptor UI hiện tại — trừu tượng hóa khác biệt giữa 2 phiên bản bar.
+  // Dựng lại mỗi lần gọi để luôn trỏ tới node còn sống.
+  function getUi(bar) {
+    const host = bar || (currentBar && currentBar.isConnected ? currentBar : findBar());
+    if (!host) return null;
+
+    if (isNewBar(host)) {
+      const container = host.querySelector('.ytMusicMiniPlayerLeftSection');
+      if (!container) return null;
+      return {
+        host: host,
+        isNew: true,
+        container: container,
+        title: container.querySelector('.ytmusicTrackInfoTitle'),
+        byline: container.querySelector('.ytmusicTrackInfoBylineItem'),
+        img: container.querySelector('img.ytmusicTrackInfoThumbnail'),
+        thumbWrapper: container.querySelector('.ytmusicTrackInfoThumbnailWrapper'),
+        contentWrapper: container.querySelector('.ytmusicTrackInfoContentInfoWrapper'),
+        fadeTargets: '.ytmusicTrackInfoThumbnailWrapper, .ytmusicTrackInfoContentInfoWrapper'
+      };
+    }
+
+    const container = host.querySelector('.middle-controls.ytmusic-player-bar');
+    if (!container) return null;
+    return {
+      host: host,
+      isNew: false,
+      container: container,
+      title: container.querySelector('yt-formatted-string.title.ytmusic-player-bar'),
+      byline: container.querySelector('yt-formatted-string.byline'),
+      img: container.querySelector('.thumbnail-image-wrapper img.image'),
+      thumbWrapper: container.querySelector('.thumbnail-image-wrapper'),
+      contentWrapper: container.querySelector('.content-info-wrapper'),
+      fadeTargets: ':scope > .thumbnail-image-wrapper, :scope > .content-info-wrapper, :scope > .middle-controls-buttons'
+    };
+  }
+
+  // Trạng thái rỗng/đang tải của title — bar cũ dùng attribute is-empty,
+  // bar mới để trống attribute title trong lúc tải bài/quảng cáo.
+  function isTitleEmpty(ui) {
+    if (!ui.title) return true;
+    if (ui.isNew) {
+      const v = ui.title.getAttribute('title');
+      return v === null || v === '';
+    }
+    return ui.title.hasAttribute('is-empty');
   }
 
   // Cache trạng thái bài hát hiện tại (chỉ khi có dữ liệu)
-  function captureState() {
-    const mc = document.querySelector('.middle-controls.ytmusic-player-bar');
-    if (!mc) return;
+  function captureState(bar) {
+    const ui = getUi(bar);
+    if (!ui) return;
 
-    const title = mc.querySelector('yt-formatted-string.title.ytmusic-player-bar');
-    if (!title || title.hasAttribute('is-empty')) return;
+    // Bar mới: đồng bộ class loading với trạng thái title (belt-and-braces)
+    if (ui.isNew) ui.host.classList.toggle('blyrics-track-loading', isTitleEmpty(ui));
 
-    const img = mc.querySelector('.thumbnail-image-wrapper img.image');
-    const byline = mc.querySelector('yt-formatted-string.byline');
-    const wrapper = mc.querySelector('.thumbnail-image-wrapper');
-    const cw = mc.querySelector('.content-info-wrapper');
+    if (!ui.title || isTitleEmpty(ui)) return;
 
-    // Tính vị trí thực tế so với .middle-controls
-    const mcRect = mc.getBoundingClientRect();
-    const wrapperRect = wrapper?.getBoundingClientRect();
-    const cwRect = cw?.getBoundingClientRect();
+    // Bar cũ: text nằm trong DOM; bar mới: metadata nằm ở attribute title
+    const titleText = ui.isNew
+      ? (ui.title.getAttribute('title') || '').trim()
+      : (ui.title.textContent || '').trim();
+    if (!titleText) return;
 
-    const thumbLeft = wrapperRect ? (wrapperRect.left - mcRect.left) : 0;
+    const bylineText = ui.isNew
+      ? (ui.byline?.getAttribute('title') || ui.byline?.textContent?.trim() || '')
+      : (ui.byline?.title || ui.byline?.textContent?.trim() || '');
+
+    const container = ui.container;
+
+    // Tính vị trí thực tế so với container (overlay được gắn vào container)
+    const containerRect = container.getBoundingClientRect();
+    const wrapperRect = ui.thumbWrapper?.getBoundingClientRect();
+    const cwRect = ui.contentWrapper?.getBoundingClientRect();
+
+    const thumbLeft = wrapperRect ? (wrapperRect.left - containerRect.left) : 0;
     const gap = (wrapperRect && cwRect) ? (cwRect.left - wrapperRect.right) : 12;
 
     // Capture computed font styles để overlay khớp pixel-perfect
-    const titleCS = getComputedStyle(title);
-    const bylineCS = byline ? getComputedStyle(byline) : null;
+    const titleCS = getComputedStyle(ui.title);
+    const bylineCS = ui.byline ? getComputedStyle(ui.byline) : null;
 
     const st = {
-      imgSrc: img?.src || '',
-      titleText: title?.textContent?.trim() || '',
-      bylineText: byline?.title || byline?.textContent?.trim() || '',
-      thumbW: wrapper?.offsetWidth || 48,
-      thumbH: wrapper?.offsetHeight || 48,
+      imgSrc: ui.img?.src || '',
+      titleText: titleText,
+      bylineText: bylineText,
+      thumbW: ui.thumbWrapper?.offsetWidth || 48,
+      thumbH: ui.thumbWrapper?.offsetHeight || 48,
       thumbLeft: thumbLeft,
       gap: gap,
       // Font styles cho title
@@ -250,7 +322,7 @@
       bylineLineHeight: bylineCS?.lineHeight || '20px',
       bylineColor: bylineCS?.color || 'rgba(255,255,255,0.7)'
     };
-    if (isPlayerFullscreen(mc)) fullscreenState = st; else normalState = st;
+    if (isPlayerFullscreen(container)) fullscreenState = st; else normalState = st;
   }
 
   // Dọn dẹp overlay
@@ -260,10 +332,15 @@
   }
 
   // Tạo overlay snapshot với thông tin bài cũ
-  function createOverlay(middleControls) {
-    const lastState = getCache();
+  function createOverlay(container, lastState) {
+    lastState = lastState || getCache();
     if (!lastState || !lastState.titleText) return null;
     killOverlay();
+
+    // Đảm bảo container là containing block cho overlay absolute (belt-and-braces với CSS)
+    if (getComputedStyle(container).position === 'static') {
+      container.style.position = 'relative';
+    }
 
     const ov = document.createElement('div');
     ov.className = 'ytm-songinfo-fade-overlay';
@@ -324,13 +401,13 @@
     }
 
     ov.appendChild(txt);
-    middleControls.appendChild(ov);
+    container.appendChild(ov);
     return ov;
   }
 
   // Helper: tạo overlay rồi fade out
-  function triggerFadeOut(mc) {
-    fadeOverlay = createOverlay(mc);
+  function triggerFadeOut(ui) {
+    fadeOverlay = createOverlay(ui.container, getCache(ui.host));
     if (fadeOverlay) {
       void fadeOverlay.offsetWidth; // force reflow
       console.info('[GlassyUI: Player] 💨 Fading out old track info...');
@@ -342,8 +419,8 @@
 
   // Helper: ẩn children tức thì rồi fade in (dùng cho bài cached)
   // Tạo hiệu ứng crossfade: overlay (bài cũ) fade out ↔ children (bài mới) fade in
-  function fadeInChildren(mc) {
-    const children = mc.querySelectorAll(':scope > .thumbnail-image-wrapper, :scope > .content-info-wrapper, :scope > .middle-controls-buttons');
+  function fadeInChildren(ui) {
+    const children = ui.container.querySelectorAll(ui.fadeTargets);
 
     // Bước 1: Ẩn tức thì (tắt transition)
     children.forEach(child => {
@@ -353,7 +430,7 @@
     });
 
     // Bước 2: Force reflow để browser ghi nhận state opacity:0
-    void mc.offsetWidth;
+    void ui.container.offsetWidth;
 
     // Bước 3: Gỡ inline → CSS transition kicks in → fade from 0→1
     requestAnimationFrame(() => {
@@ -365,6 +442,45 @@
     });
   }
 
+  // === Bar mới (ytmusic-miniplayer): title attribute là nguồn dữ liệu chính ===
+  function handleNewBarMutation(mut, el) {
+    // Node bị re-render/thay thế → descriptor cũ vô hiệu, dựng lại rồi capture
+    if (!el.isConnected) {
+      const ui = getUi();
+      if (ui && ui.title && !isTitleEmpty(ui)) ui.host.classList.remove('blyrics-track-loading');
+      setTimeout(captureState, 50);
+      return;
+    }
+
+    if (mut.attributeName !== 'title') return; // src chỉ có trong filter làm lưới an toàn
+
+    const ui = getUi();
+    if (!ui || !ui.isNew || !ui.title || el !== ui.title) return;
+
+    const oldTitle = mut.oldValue;
+    const newTitle = el.getAttribute('title');
+
+    if (oldTitle && newTitle && oldTitle !== newTitle) {
+      // Bài cached/đổi trực tiếp → crossfade
+      console.info('[GlassyUI: Player] 🔄 Crossfading cached track info...');
+      triggerFadeOut(ui);
+      fadeInChildren(ui);
+      // Cache state mới ngay (nội dung đã sẵn sàng)
+      setTimeout(captureState, 50);
+    } else if (oldTitle && !newTitle) {
+      // Đang tải bài mới / quảng cáo → giữ overlay bài cũ fade out, ẩn info gốc
+      console.info('[GlassyUI: Player] ⏳ Track loading — fading out old info...');
+      ui.host.classList.add('blyrics-track-loading');
+      triggerFadeOut(ui);
+    } else if (!oldTitle && newTitle) {
+      // Metadata bài mới đã về → hiện info mới
+      console.info('[GlassyUI: Player] ✅ New track metadata arrived.');
+      ui.host.classList.remove('blyrics-track-loading');
+      killOverlay();
+      setTimeout(captureState, 200);
+    }
+  }
+
   // Observer: theo dõi cả is-empty (non-cached) VÀ title attribute (cached)
   const observer = new MutationObserver((mutations) => {
     for (const mut of mutations) {
@@ -372,23 +488,29 @@
 
       const el = mut.target;
 
-      // === CASE 0: bật/tắt fullscreen player UI → capture lại geometry cho mode hiện tại ===
+      // === CASE 0: bật/tắt fullscreen player UI (bar cũ) → capture lại geometry ===
       if (mut.attributeName === 'player-fullscreened') {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(captureState, 300);
         continue;
       }
 
+      // === Bar mới: luồng riêng theo title attribute ===
+      if (currentBar && isNewBar(currentBar)) {
+        handleNewBarMutation(mut, el);
+        continue;
+      }
+
       if (!el.matches || !el.matches('yt-formatted-string.title.ytmusic-player-bar')) continue;
 
-      const mc = el.closest('.middle-controls');
-      if (!mc) continue;
+      const ui = getUi();
+      if (!ui || ui.isNew) continue;
 
       // === CASE 1: is-empty thay đổi (bài CHƯA cache — có loading) ===
       if (mut.attributeName === 'is-empty') {
         if (el.hasAttribute('is-empty')) {
           // Bắt đầu chuyển bài → fade out overlay
-          triggerFadeOut(mc);
+          triggerFadeOut(ui);
         } else {
           // Bài mới đã load xong → dọn overlay, cache state mới
           killOverlay();
@@ -408,8 +530,8 @@
         if (oldTitle && newTitle && oldTitle !== newTitle) {
           console.info('[GlassyUI: Player] 🔄 Crossfading cached track info...');
           // Bài cached → Overlay (bài cũ) fade out + Children (bài mới) fade in = crossfade
-          triggerFadeOut(mc);
-          fadeInChildren(mc);
+          triggerFadeOut(ui);
+          fadeInChildren(ui);
           // Cache state mới ngay (nội dung đã sẵn sàng)
           setTimeout(captureState, 50);
         }
@@ -417,28 +539,68 @@
     }
   });
 
-  function init() {
-    const playerBar = document.querySelector('ytmusic-player-bar');
-    if (playerBar) {
-      observer.observe(playerBar, {
+  // Bar mới báo fullscreen qua attribute trên #layout (bar cũ báo trên chính bar)
+  function startLayoutObserver() {
+    if (layoutObserver) return;
+    const layout = document.querySelector('ytmusic-app-layout');
+    if (!layout) return;
+    layoutObserver = new MutationObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(captureState, 300);
+    });
+    layoutObserver.observe(layout, { attributes: true, attributeFilter: ['player-fullscreened'] });
+  }
+
+  // Gắn observer vào bar hiện tại (tự nhận biết bar cũ/mới)
+  function bind() {
+    const bar = findBar();
+    if (!bar) return false;
+    if (bar === currentBar) return true;
+
+    currentBar = bar;
+    observer.disconnect();
+    killOverlay();
+
+    if (isNewBar(bar)) {
+      observer.observe(bar, {
+        attributes: true,
+        // Chỉ title + src: lọc bỏ churn mỗi giây của progress bar
+        attributeFilter: ['title', 'src'],
+        attributeOldValue: true,
+        subtree: true
+      });
+      startLayoutObserver();
+      console.info('[GlassyUI: Player] Observer started (ytmusic-miniplayer). Smooth track transitions enabled.');
+    } else {
+      observer.observe(bar, {
         attributes: true,
         attributeFilter: ['is-empty', 'title', 'player-fullscreened'],
         attributeOldValue: true,
         subtree: true
       });
-      captureState();
-      if (!getCache()) setTimeout(captureState, 2000);
-
-      // Recapture khi resize cửa sổ (debounce 300ms)
-      window.addEventListener('resize', () => {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(captureState, 300);
-      });
-
-      console.info('[GlassyUI: Player] Observer started. Smooth track transitions enabled.');
-    } else {
-      setTimeout(init, 1000);
+      console.info('[GlassyUI: Player] Observer started (ytmusic-player-bar). Smooth track transitions enabled.');
     }
+
+    captureState(bar);
+    if (!getCache(bar)) setTimeout(() => captureState(bar), 2000);
+
+    return true;
+  }
+
+  // Recapture khi resize cửa sổ (debounce 300ms)
+  // — backup cho fullscreen ở bar mới khi #layout chưa kịp có attribute
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(captureState, 300);
+  });
+
+  // Bar có thể được render lại sau khi điều hướng → gắn lại observer
+  document.addEventListener('yt-navigate-finish', () => {
+    if (!bind()) setTimeout(bind, 1000);
+  });
+
+  function init() {
+    if (!bind()) setTimeout(init, 1000);
   }
 
   init();
