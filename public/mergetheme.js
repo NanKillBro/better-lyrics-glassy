@@ -1998,6 +1998,16 @@ ytmusic-miniplayer.blyrics-track-loading .ytmusicTrackInfoContentInfoWrapper {
   pointer-events: none !important;
 }
 
+/* Bo góc ảnh bìa bài hát trong miniplayer mới */
+.ytmusicTrackInfoThumbnailWrapper {
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+
+.ytmusicTrackInfoThumbnail {
+  border-radius: 8px !important;
+}
+
 /* Thêm padding trái cho nút no-lyrics/LYRIC_FOOTER khi KHÔNG fullscreen */
 ytmusic-player-page:not([player-fullscreened]) .blyrics-no-lyrics-button-container {
   padding-left: 18px;
