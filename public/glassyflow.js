@@ -271,7 +271,7 @@
         // ── Count lines that fit in viewport ──
         // Sample lines around current ref → accumulate their ACTUAL heights
         // until we exceed the viewport. This correctly handles long/wrapped lines.
-        const lines = container.querySelectorAll('.blyrics--line, .blyrics-footer');
+        const lines = container.querySelectorAll('.blyrics--line, .blyrics-footer, .blyrics-credits');
         if (!lines.length) return _viewportCache.visibleLines;
 
         const allLines = Array.from(lines);
@@ -444,7 +444,7 @@
             return _linesCache.lines;
         }
         if (!container) return [];
-        const lines = Array.from(container.querySelectorAll('.blyrics--line, .blyrics-footer'));
+        const lines = Array.from(container.querySelectorAll('.blyrics--line, .blyrics-footer, .blyrics-credits'));
         _linesCache = { lines, ts: now };
         return lines;
     }
