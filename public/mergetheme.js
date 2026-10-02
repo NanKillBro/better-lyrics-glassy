@@ -1396,7 +1396,7 @@ ytmusic-tabs#tabs {
     /* Thu gọn và căn giữa (Giữ nguyên của bạn) */
     width: 50% !important;  
     margin: 10px auto 0 auto !important;      
-    top: calc(var(--menu-bar-height, 0px) + 100px) !important;
+    top: calc(var(--menu-bar-height, 0px) + 50px) !important;
 
     /* Bo tròn và padding (Giữ nguyên) */
     border-radius: 16px !important; 
@@ -2633,6 +2633,38 @@ function injectStyles() {
   (document.head || document.documentElement).appendChild(style);
 }
 
+let nankillMiniPlayerBlockerInstalled = false;
+
+function setupFullscreenMiniPlayerBlocker() {
+  if (nankillMiniPlayerBlockerInstalled) {
+    return;
+  }
+
+  nankillMiniPlayerBlockerInstalled = true;
+  const blockMiniPlayerSurfaceEvent = (event) => {
+    if (!document.querySelector('ytmusic-player-page[player-fullscreened], #layout[player-fullscreened], ytmusic-player[player-ui-state="FULLSCREEN"]')) {
+      return;
+    }
+
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const miniPlayer = target.closest('ytmusic-miniplayer');
+    if (!miniPlayer || target.closest('button')) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+
+  for (const eventName of ['pointerdown', 'mousedown', 'click']) {
+    document.addEventListener(eventName, blockMiniPlayerSurfaceEvent, true);
+  }
+}
+
 const NANKILL_BLYRICS_SOURCE_LINK_ID = 'betterLyricsFooterLink';
 
 function getSourceLinkInContainer(container) {
@@ -3094,6 +3126,7 @@ dockBetterLyricsFooterToTabs();
 setupFooterDockingObserver();
 setupNoSyncDomObserver();
 setupFullscreenCursorObserver();
+setupFullscreenMiniPlayerBlocker();
 setupPastLineMarker();
 
 // Chèn lại lần nữa khi trang load xong (đề phòng bị extension ghi đè)
@@ -3103,6 +3136,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setupFooterDockingObserver();
   setupNoSyncDomObserver();
   setupFullscreenCursorObserver();
+  setupFullscreenMiniPlayerBlocker();
   setupPastLineMarker();
 });
 
@@ -3112,5 +3146,6 @@ window.addEventListener('load', () => {
   setupFooterDockingObserver();
   setupNoSyncDomObserver();
   setupFullscreenCursorObserver();
+  setupFullscreenMiniPlayerBlocker();
   setupPastLineMarker();
 });
