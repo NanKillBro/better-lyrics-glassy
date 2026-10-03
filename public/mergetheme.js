@@ -2616,6 +2616,14 @@ function injectStyles() {
 }
 
 
+const NANKILL_MINI_PLAYER_INTERACTIVE_SELECTOR = [
+  'button',
+  'input[type="range"]',
+  'slider-shape',
+  '.ytMusicMiniPlayerProgressBarWrapper',
+  '.ytMusicMiniPlayerVolumePopup',
+].join(', ');
+
 let nankillMiniPlayerBlockerInstalled = false;
 
 function setupFullscreenMiniPlayerBlocker() {
@@ -2635,7 +2643,7 @@ function setupFullscreenMiniPlayerBlocker() {
     }
 
     const miniPlayer = target.closest('ytmusic-miniplayer');
-    if (!miniPlayer || target.closest('button')) {
+    if (!miniPlayer || target.closest(NANKILL_MINI_PLAYER_INTERACTIVE_SELECTOR)) {
       return;
     }
 
