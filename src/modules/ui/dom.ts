@@ -1534,6 +1534,7 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
     }
     const thumbElm = document.getElementById("thumbnail");
     if (!thumbElm) return;
+    thumbnailResizeObserver?.disconnect();
     thumbnailResizeObserver = new ResizeObserver(() => {
       if (getContainerSize() !== containerSize) {
         thumbnailResizeObserver?.disconnect();
@@ -1545,12 +1546,15 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
 
   // ── Load high-res image ──
   let resolved = false;
+  let fallbackApplied = false;
+  let highResUpgraded = false;
 
   // Helper to load fallback image fully before applying it
   const loadAndApplyFallback = (fallbackUrl: string) => {
     const fallbackImg = new Image();
     const onFallbackReady = () => {
-      if (signal.aborted) return;
+      if (signal.aborted || highResUpgraded) return;
+      fallbackApplied = true;
       console.info(`[Image] Fallback image loaded & verified: ${fallbackUrl}`);
       applyImage(fallbackUrl);
     };
@@ -1560,7 +1564,7 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
     }
     fallbackImg.onload = onFallbackReady;
     fallbackImg.onerror = () => {
-      if (signal.aborted) return;
+      if (signal.aborted || highResUpgraded) return;
       console.warn(`[Image] Fallback image failed to load: ${fallbackUrl}`);
       applyImage(fallbackUrl);
     };
@@ -1619,10 +1623,16 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
 
     // If high-res loads after timeout, silently upgrade src
     proxy.onload = () => {
-      if (signal.aborted) return;
+      if (signal.aborted || highResUpgraded) return;
+      highResUpgraded = true;
       console.info(`[Image] Silent upgrade post-timeout: ${proxy.src}`);
-      imgElm.src = proxy.src;
-      setBackgroundImage(proxy.src);
+      if (fallbackApplied) {
+        imgElm.src = proxy.src;
+        setBackgroundImage(proxy.src);
+      } else {
+        // Upgrade won the race: fallback never showed, so do the full apply
+        applyImage(proxy.src);
+      }
     };
     proxy.onerror = null;
   }, CROSSFADE_TIMEOUT_MS);
