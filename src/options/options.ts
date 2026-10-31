@@ -11,8 +11,8 @@ import { attachHoldRepeat } from "@core/holdRepeat";
 import { getLanguageDisplayName, initI18n, loadLocaleOverride, SUPPORTED_LOCALES, t } from "@core/i18n";
 import { exportIdentity, getDisplayName, importIdentity, invalidateDisplayName, signPayload } from "@core/keyIdentity";
 import { clearAllOffsets, getOffsetInfo } from "@core/storage";
-import { parseSvgString, syncTypeColors } from "@modules/ui/lyricsDock/icons";
 import { mergePreferredProviders } from "@modules/lyrics/providers/providerList";
+import { parseSvgString, syncTypeColors } from "@modules/ui/lyricsDock/icons";
 import Sortable from "sortablejs";
 import { showModal } from "./editor/ui/feedback";
 import { initStoreUI, setupYourThemesButton } from "./store/store";
@@ -26,6 +26,10 @@ interface Options {
   isStylizedAnimationsEnabled: boolean;
   isSmoothProgressBarEnabled: boolean;
   isPassiveScrollEnabled: boolean;
+  isWillChangeEnabled: boolean;
+  lyricsTickMs: number;
+  isAdCheckEnabled: boolean;
+  isFastTabRendererLookupEnabled: boolean;
   isTranslateEnabled: boolean;
   translationLanguage: string;
   isCursorAutoHideEnabled: boolean;
@@ -81,6 +85,11 @@ const getOptionsFromForm = (): Options => {
     isStylizedAnimationsEnabled: (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked,
     isSmoothProgressBarEnabled: (document.getElementById("isSmoothProgressBarEnabled") as HTMLInputElement).checked,
     isPassiveScrollEnabled: (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked,
+    isWillChangeEnabled: (document.getElementById("isWillChangeEnabled") as HTMLInputElement).checked,
+    lyricsTickMs: Number((document.getElementById("lyricsTickMs") as HTMLSelectElement).value) || 20,
+    isAdCheckEnabled: (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked,
+    isFastTabRendererLookupEnabled: (document.getElementById("isFastTabRendererLookupEnabled") as HTMLInputElement)
+      .checked,
     isTranslateEnabled: (document.getElementById("translate") as HTMLInputElement).checked,
     translationLanguage: (document.getElementById("translationLanguage") as HTMLInputElement).value,
     isCursorAutoHideEnabled: (document.getElementById("cursorAutoHide") as HTMLInputElement).checked,
@@ -257,6 +266,10 @@ const restoreOptions = (): void => {
     isStylizedAnimationsEnabled: true,
     isSmoothProgressBarEnabled: false,
     isPassiveScrollEnabled: true,
+    isWillChangeEnabled: false,
+    lyricsTickMs: 20,
+    isAdCheckEnabled: true,
+    isFastTabRendererLookupEnabled: true,
     isTranslateEnabled: false,
     translationLanguage: "en",
     isRomanizationEnabled: false,
@@ -321,6 +334,11 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isSmoothProgressBarEnabled") as HTMLInputElement).checked =
     items.isSmoothProgressBarEnabled;
   (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked = items.isPassiveScrollEnabled;
+  (document.getElementById("isWillChangeEnabled") as HTMLInputElement).checked = items.isWillChangeEnabled;
+  (document.getElementById("lyricsTickMs") as HTMLSelectElement).value = String(items.lyricsTickMs);
+  (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked = items.isAdCheckEnabled;
+  (document.getElementById("isFastTabRendererLookupEnabled") as HTMLInputElement).checked =
+    items.isFastTabRendererLookupEnabled;
   (document.getElementById("translate") as HTMLInputElement).checked = items.isTranslateEnabled;
   (document.getElementById("translationLanguage") as HTMLInputElement).value = items.translationLanguage;
   (document.getElementById("isRomanizationEnabled") as HTMLInputElement).checked = items.isRomanizationEnabled;

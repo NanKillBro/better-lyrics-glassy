@@ -1236,6 +1236,9 @@ export function isLoaderActive(): boolean {
  * @returns True if an ad is playing
  */
 export function isAdPlaying(): boolean {
+  if (!AppState.isAdCheckEnabled) {
+    return false;
+  }
   const playerBar = document.querySelector(PLAYER_BAR_SELECTOR);
   return playerBar?.hasAttribute(AD_PLAYING_ATTR) ?? false;
 }
@@ -1444,7 +1447,9 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
 
   const containerSize = getContainerSize();
   const highResUrl = getHighResImageUrl(smallThumbnail);
-  console.info(`[Image] Start addThumbnail | mode=${isReload ? "reload" : isCrossfade ? "crossfade" : "first"} | lowRes=${smallThumbnail.url} | highRes=${highResUrl}`);
+  console.info(
+    `[Image] Start addThumbnail | mode=${isReload ? "reload" : isCrossfade ? "crossfade" : "first"} | lowRes=${smallThumbnail.url} | highRes=${highResUrl}`
+  );
 
   let imgElm: HTMLImageElement;
 
@@ -1586,7 +1591,9 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
   const onError = () => {
     if (signal.aborted || resolved) return;
     resolved = true;
-    console.info(`[Image] Proxy failed to load high-res (${proxy.src}), falling back to low-res: ${smallThumbnail.url}`);
+    console.info(
+      `[Image] Proxy failed to load high-res (${proxy.src}), falling back to low-res: ${smallThumbnail.url}`
+    );
     loadAndApplyFallback(smallThumbnail.url);
   };
 
@@ -1618,7 +1625,9 @@ export function addThumbnail(smallThumbnail: ThumbnailElement): void {
   setTimeout(() => {
     if (signal.aborted || resolved) return;
     resolved = true;
-    console.info(`[Image] 2000ms timeout reached before high-res loaded. Verifying and applying low-res fallback: ${smallThumbnail.url}`);
+    console.info(
+      `[Image] 2000ms timeout reached before high-res loaded. Verifying and applying low-res fallback: ${smallThumbnail.url}`
+    );
     loadAndApplyFallback(smallThumbnail.url);
 
     // If high-res loads after timeout, silently upgrade src

@@ -2492,3 +2492,61 @@ input.cm-textfield:focus-visible {
         corner-shape: superellipse(1.6);
     }
 }
+
+/* Info icon with hover tooltip, used by the Performance tab. */
+.info-tip {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.05rem;
+	height: 1.05rem;
+	margin-left: 0.4rem;
+	border: 1px solid rgba(255, 255, 255, 0.35);
+	border-radius: 50%;
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 0.7rem;
+	font-weight: 700;
+	line-height: 1;
+	cursor: help;
+	flex: 0 0 auto;
+	vertical-align: middle;
+}
+
+.info-tip::after {
+	--ease: ease-out;
+	content: attr(data-tooltip);
+	position: absolute;
+	bottom: calc(100% + 8px);
+	left: 0;
+	transform: translateY(4px);
+	padding: 6px 10px;
+	background-color: hsl(0, 0%, 20%);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 6px;
+	color: #fff;
+	font-size: 0.75rem;
+	font-weight: 500;
+	letter-spacing: normal;
+	line-height: 1.35;
+	max-width: 24em;
+	width: max-content;
+	white-space: normal;
+	text-transform: none;
+	pointer-events: none;
+	opacity: 0;
+	visibility: hidden;
+	z-index: 100;
+	transition:
+		opacity 0.15s var(--ease),
+		visibility 0.15s var(--ease),
+		transform 0.15s var(--ease);
+}
+
+.info-tip:hover::after,
+.info-tip:focus-visible::after {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0);
+	transition-delay: 0.25s;
+}

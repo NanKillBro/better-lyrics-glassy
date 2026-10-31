@@ -84,6 +84,71 @@ export function handleSettings(): void {
       }
     }
   );
+
+  loadPerformanceSettings();
+}
+
+const WILL_CHANGE_STYLE_ID = "blyrics-disable-will-change";
+
+function applyWillChangeSetting(enabled: boolean): void {
+  let styleElm = document.getElementById(WILL_CHANGE_STYLE_ID) as HTMLStyleElement | null;
+  if (enabled) {
+    styleElm?.remove();
+    return;
+  }
+  if (!styleElm) {
+    styleElm = document.createElement("style");
+    styleElm.id = WILL_CHANGE_STYLE_ID;
+    styleElm.textContent = ".blyrics--word, .blyrics--word::after { will-change: auto !important; }";
+    document.head.appendChild(styleElm);
+  }
+}
+
+function applyLyricsTickMs(tickMs: number): void {
+  const value = Number.isFinite(tickMs) ? Math.min(200, Math.max(20, Math.round(tickMs))) : 20;
+  document.documentElement.setAttribute("blyrics-tick-ms", String(value));
+}
+
+let hasInitializedPerformanceListener = false;
+
+export function loadPerformanceSettings(): void {
+  getStorage(
+    {
+      isAdCheckEnabled: true,
+      lyricsTickMs: 20,
+      isWillChangeEnabled: false,
+      isFastTabRendererLookupEnabled: true,
+    },
+    items => {
+      AppState.isAdCheckEnabled = items.isAdCheckEnabled !== false;
+      AppState.isFastTabRendererLookupEnabled = items.isFastTabRendererLookupEnabled !== false;
+      applyLyricsTickMs(Number(items.lyricsTickMs));
+      applyWillChangeSetting(items.isWillChangeEnabled === true);
+    }
+  );
+
+  if (hasInitializedPerformanceListener) {
+    return;
+  }
+  hasInitializedPerformanceListener = true;
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") {
+      return;
+    }
+    if (changes.isAdCheckEnabled) {
+      AppState.isAdCheckEnabled = changes.isAdCheckEnabled.newValue !== false;
+    }
+    if (changes.lyricsTickMs) {
+      applyLyricsTickMs(Number(changes.lyricsTickMs.newValue));
+    }
+    if (changes.isWillChangeEnabled) {
+      applyWillChangeSetting(changes.isWillChangeEnabled.newValue === true);
+    }
+    if (changes.isFastTabRendererLookupEnabled) {
+      AppState.isFastTabRendererLookupEnabled = changes.isFastTabRendererLookupEnabled.newValue !== false;
+    }
+  });
 }
 
 export function onAutoSwitchEnabled(enableAutoSwitch: EnableDisableCallback): void {

@@ -28,6 +28,30 @@ let cachedContentRect = null;
 let playerResizeObserver = null;
 let lastVideoId = null;
 let observedVideoElement = null;
+let tickMs = 20;
+
+/**
+ * Reads the configured lyrics tick interval (milliseconds) from the
+ * `blyrics-tick-ms` attribute set by the isolated content script and
+ * restarts the tick interval when it changes.
+ */
+const syncTickMs = () => {
+  const value = Number(document.documentElement.getAttribute("blyrics-tick-ms"));
+  const next = Number.isFinite(value) && value >= 20 && value <= 200 ? value : 20;
+  if (next === tickMs) {
+    return;
+  }
+  tickMs = next;
+  if (tickLyricsInterval) {
+    startLyricsTick();
+  }
+};
+
+syncTickMs();
+new MutationObserver(syncTickMs).observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ["blyrics-tick-ms"],
+});
 
 /**
  * Writes the video's intrinsic aspect ratio (from the <video> element's
@@ -150,7 +174,7 @@ const startLyricsTick = () => {
           pausedTickCounter++;
           const stateChanged = lastSentPlaying !== playing;
           const timeChanged = currentTime !== lastPlayerTime;
-          if (!stateChanged && !timeChanged && pausedTickCounter < 25) {
+          if (!stateChanged && !timeChanged && pausedTickCounter < Math.max(1, Math.round(500 / tickMs))) {
             return;
           }
           pausedTickCounter = 0;
@@ -186,7 +210,7 @@ const startLyricsTick = () => {
         stopLyricsTick();
       }
     }
-  }, 20);
+  }, tickMs);
 };
 
 /**

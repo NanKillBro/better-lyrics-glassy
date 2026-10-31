@@ -42,6 +42,8 @@ interface AppStateType {
   translationDisabledLanguages: string[];
   translationLanguage: string;
   isPassiveScrollEnabled: boolean;
+  isAdCheckEnabled: boolean;
+  isFastTabRendererLookupEnabled: boolean;
   hasPreloadedNextSong: boolean;
   currentInjectionId: number;
   lyricOffset: number;
@@ -83,6 +85,8 @@ export const AppState: AppStateType = {
   translationDisabledLanguages: [],
   translationLanguage: "en",
   isPassiveScrollEnabled: true,
+  isAdCheckEnabled: true,
+  isFastTabRendererLookupEnabled: true,
   hasPreloadedNextSong: false,
   currentInjectionId: 0,
   lyricOffset: 0,

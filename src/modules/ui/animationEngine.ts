@@ -379,7 +379,12 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
     const lyricScrollTime = currentTime + getCSSDurationInMs(lyricsElement, "--blyrics-scroll-timing-offset") / 1000;
 
     // Read layout values before the loop writes class changes, to avoid forced reflow
-    const tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR) as HTMLElement | null;
+    let tabRenderer: HTMLElement | null;
+    if (AppState.isFastTabRendererLookupEnabled && observedTabRenderer?.isConnected) {
+      tabRenderer = observedTabRenderer;
+    } else {
+      tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR) as HTMLElement | null;
+    }
     if (!tabRenderer) return;
     if (tabRenderer !== observedTabRenderer) {
       setupTabRendererObserver(tabRenderer);
