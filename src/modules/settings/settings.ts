@@ -4,6 +4,7 @@ import {
   DOCK_CONTROL_ORDER_DEFAULT,
   DOCK_DEFAULT_POSITION,
   FULLSCREEN_CONTROLS_DISABLED_ATTR,
+  FULLSCREEN_CONTROLS_PINNED_ATTR,
   LYRICS_DISABLED_ATTR,
   SMOOTH_PROGRESS_BAR_STYLE_ID,
 } from "@constants";
@@ -12,6 +13,7 @@ import { compileRicsToStyles, getStorage } from "@core/storage";
 import { configureLogging, logContent } from "@core/logger";
 import { syncKaraoke } from "@modules/karaoke/karaokeView";
 import { loadKaraokeSettings } from "@modules/karaoke/settings";
+import { migrateFullscreenControlsPref } from "@modules/settings/fullscreenControls";
 import { clearCache as clearTranslationCache } from "@modules/lyrics/translation";
 import { mountDock, mountVotingSegment, reloadAlbumArt, unmountDock, updateDockPosition } from "@modules/ui/dom";
 import { applyGlobalOffsets } from "@modules/ui/lyricsDock/offset";
@@ -58,10 +60,7 @@ export function handleSettings(): void {
     }
   );
 
-  onFullscreenControlsEnabled(
-    () => document.documentElement.removeAttribute(FULLSCREEN_CONTROLS_DISABLED_ATTR),
-    () => document.documentElement.setAttribute(FULLSCREEN_CONTROLS_DISABLED_ATTR, "")
-  );
+  applyFullscreenControlsPref();
 
   onStylizedAnimationsEnabled(
     () => {
@@ -128,16 +127,12 @@ export function onAlbumArtEnabled(enableAlbumArt: EnableDisableCallback, disable
   });
 }
 
-function onFullscreenControlsEnabled(
-  enableControls: EnableDisableCallback,
-  disableControls: EnableDisableCallback
-): void {
-  getStorage({ isFullscreenControlsEnabled: true }, items => {
-    if (items.isFullscreenControlsEnabled) {
-      enableControls();
-    } else {
-      disableControls();
-    }
+function applyFullscreenControlsPref(): void {
+  getStorage(["fullscreenControlsPref", "isFullscreenControlsEnabled"], items => {
+    const pref = migrateFullscreenControlsPref(items);
+    const root = document.documentElement;
+    root.toggleAttribute(FULLSCREEN_CONTROLS_DISABLED_ATTR, pref === "off");
+    root.toggleAttribute(FULLSCREEN_CONTROLS_PINNED_ATTR, pref === "on");
   });
 }
 

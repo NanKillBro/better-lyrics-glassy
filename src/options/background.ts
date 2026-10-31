@@ -6,7 +6,6 @@
  * @param {string} request.action - The action type ('applyStyles' or 'updateSettings')
  * @param {string} [request.ricsSource] - RICS source code for applyStyles action
  * @param {Object} [request.settings] - Settings object for updateSettings action
- * @returns {boolean} Returns true to indicate asynchronous response
  */
 
 import { buildStoreThemeContent, saveCustomCss } from "@core/customCss";
@@ -20,7 +19,7 @@ import {
   performUrlThemeUpdates,
   setActiveStoreTheme,
 } from "./store/themeStoreManager";
-import { initIdentityBackupWatcher } from "@/options/identityBackup";
+import { initIdentityBackupWatcher, initIdentityFileDownloads } from "@/options/identityBackup";
 import { fetchAllStoreThemes } from "./store/themeStoreService";
 import { logBackground, warnBackground } from "@core/logger";
 
@@ -162,10 +161,10 @@ chrome.runtime.onMessage.addListener(request => {
       });
     });
   }
-  return true;
 });
 
 // Electron does not emit onInstalled/onStartup for unpacked extensions.
 setupThemeUpdateAlarm();
 initBackgroundAuth();
 initIdentityBackupWatcher(error => warnBackground("Identity backup watcher failed:", error));
+initIdentityFileDownloads(error => warnBackground("Identity download failed:", error));

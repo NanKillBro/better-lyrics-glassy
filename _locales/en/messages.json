@@ -120,6 +120,10 @@
     "message": "Letter wave",
     "description": "Label for the per-letter wave lyric animation toggle"
   },
+  "options_display_fullscreenControlsTooltipStates": {
+    "message": "Auto hides the controls while the player bar is showing. On keeps them visible.",
+    "description": "Tooltip for the fullscreen player controls three-way switch, explaining the Auto and On states"
+  },
   "options_display_letterWaveOff": {
     "message": "Off",
     "description": "Spoken value of the letter wave three-way switch when the effect is off"
@@ -2204,6 +2208,14 @@
   "unison_isrcHintLinkText": {
     "message": "ISRC lookup tool",
     "description": "Link text for ISRC finder"
+  },
+  "unison_detectedFromLyrics": {
+    "message": "Lyrics have",
+    "description": "Shown under a Unison form field when the pasted lyrics file carries a different value for it, followed by that value and a Use button"
+  },
+  "unison_detectedUse": {
+    "message": "Use",
+    "description": "Button that copies the value found in the lyrics file into the form field above it"
   },
   "unison_feedTabsLabel": {
     "message": "Lyrics lists",
