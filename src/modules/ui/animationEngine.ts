@@ -137,6 +137,18 @@ function getCSSDurationInMs(lyricsElement: HTMLElement, property: string): numbe
   return duration;
 }
 
+/**
+ * Flushes pending style changes without reading layout.
+ *
+ * `offsetHeight` forces a full layout of the lyric line; `getComputedStyle`
+ * on a non-layout property only runs the style recalc that the transition /
+ * animation startup needs. Used by the "Skip forced layout" performance
+ * setting in place of `reflow()`.
+ */
+function flushStyles(element: HTMLElement): void {
+  void window.getComputedStyle(element).opacity;
+}
+
 // -- Skip Scrolls Decay --------------------------
 
 function decaySkipScrolls(now: number): void {
@@ -519,8 +531,13 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
         }
       }
 
-      // Single reflow to flush all pending class/style changes
-      reflow(linesToAnimate[0].lyricElement);
+      if (AppState.isSkipForcedLayoutEnabled) {
+        // Style-only flush: commits the pre-animating styles without forcing layout.
+        flushStyles(linesToAnimate[0].lyricElement);
+      } else {
+        // Single reflow to flush all pending class/style changes
+        reflow(linesToAnimate[0].lyricElement);
+      }
 
       // Activate: add animating class and update state
       for (const lineData of linesToAnimate) {
@@ -704,7 +721,13 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
 
             lyricsElement.style.transition = "none";
             lyricsElement.style.transform = `translate(0px, ${-(scrollTop - scrollPos)}px)`;
-            reflow(lyricsElement);
+            if (AppState.isSkipForcedLayoutEnabled) {
+              // The transform is paint-only, so a style flush is enough to start
+              // the transition; reading offsetHeight would force layout too.
+              flushStyles(lyricsElement);
+            } else {
+              reflow(lyricsElement);
+            }
             lyricsElement.style.transition = "";
             lyricsElement.style.transform = "translate(0px, 0px)";
 

@@ -3,7 +3,6 @@ import type { LyricsData } from "@modules/lyrics/injectLyrics";
 import { createLyrics } from "@modules/lyrics/lyrics";
 import type { LyricSourceKey } from "@modules/lyrics/providers/shared";
 import type { UnisonData } from "@modules/lyrics/providers/unison";
-import { flushLoader } from "@modules/ui/dom";
 import { log } from "@utils";
 
 export interface PlayerDetails {
@@ -44,6 +43,7 @@ interface AppStateType {
   isPassiveScrollEnabled: boolean;
   isAdCheckEnabled: boolean;
   isFastTabRendererLookupEnabled: boolean;
+  isSkipForcedLayoutEnabled: boolean;
   hasPreloadedNextSong: boolean;
   currentInjectionId: number;
   lyricOffset: number;
@@ -86,7 +86,8 @@ export const AppState: AppStateType = {
   translationLanguage: "en",
   isPassiveScrollEnabled: true,
   isAdCheckEnabled: true,
-  isFastTabRendererLookupEnabled: true,
+  isFastTabRendererLookupEnabled: false,
+  isSkipForcedLayoutEnabled: false,
   hasPreloadedNextSong: false,
   currentInjectionId: 0,
   lyricOffset: 0,

@@ -30,6 +30,7 @@ interface Options {
   lyricsTickMs: number;
   isAdCheckEnabled: boolean;
   isFastTabRendererLookupEnabled: boolean;
+  isSkipForcedLayoutEnabled: boolean;
   isTranslateEnabled: boolean;
   translationLanguage: string;
   isCursorAutoHideEnabled: boolean;
@@ -90,6 +91,7 @@ const getOptionsFromForm = (): Options => {
     isAdCheckEnabled: (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked,
     isFastTabRendererLookupEnabled: (document.getElementById("isFastTabRendererLookupEnabled") as HTMLInputElement)
       .checked,
+    isSkipForcedLayoutEnabled: (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked,
     isTranslateEnabled: (document.getElementById("translate") as HTMLInputElement).checked,
     translationLanguage: (document.getElementById("translationLanguage") as HTMLInputElement).value,
     isCursorAutoHideEnabled: (document.getElementById("cursorAutoHide") as HTMLInputElement).checked,
@@ -270,6 +272,7 @@ const restoreOptions = (): void => {
     lyricsTickMs: 20,
     isAdCheckEnabled: true,
     isFastTabRendererLookupEnabled: true,
+    isSkipForcedLayoutEnabled: false,
     isTranslateEnabled: false,
     translationLanguage: "en",
     isRomanizationEnabled: false,
@@ -339,6 +342,7 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked = items.isAdCheckEnabled;
   (document.getElementById("isFastTabRendererLookupEnabled") as HTMLInputElement).checked =
     items.isFastTabRendererLookupEnabled;
+  (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked = items.isSkipForcedLayoutEnabled;
   (document.getElementById("translate") as HTMLInputElement).checked = items.isTranslateEnabled;
   (document.getElementById("translationLanguage") as HTMLInputElement).value = items.translationLanguage;
   (document.getElementById("isRomanizationEnabled") as HTMLInputElement).checked = items.isRomanizationEnabled;

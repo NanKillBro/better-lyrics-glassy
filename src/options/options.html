@@ -188,7 +188,7 @@
 
 					Performance
 				</h2>
-				<p>Settings that trade extra effects or update frequency for lower CPU usage.</p>
+				<p>Settings that trade extra effects or update frequency for lower CPU/GPU usage. It may or may not increase your performance. </p>
 				<div class="container">
 					<span>Lyrics glow &amp; wobble<span class="info-tip" data-tooltip="Adds glow and wobble animations to highlighted words. Measured at ~1.5 ms of main-thread work per frame and ~13% GPU; disabling it is the biggest visual CPU saving." tabindex="0">i</span></span>
 					<label>
@@ -219,6 +219,13 @@
 							<option value="50">20 Hz (lowest CPU)</option>
 						</select>
 					</div>
+				</div>
+				<div class="container">
+					<span>Skip forced layout on lyric updates<span class="info-tip" data-tooltip="Uses a style-only flush instead of reading offsetHeight when starting lyric animations and scrolling. Avoids forcing layout on the lyric line while keeping the same transition sequence. Experimental: disable if animations or scrolling misbehave." tabindex="0">i</span></span>
+					<label>
+						<input type="checkbox" id="isSkipForcedLayoutEnabled">
+						<span class="checkmark"></span>
+					</label>
 				</div>
 				<div class="container">
 					<span>Cache tab-renderer element<span class="info-tip" data-tooltip="Reuses the tracked lyrics container instead of searching the DOM each tick (~1 ms saved per tick). Disable only if lyrics scrolling stops following the song." tabindex="0">i</span></span>

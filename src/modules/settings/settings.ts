@@ -118,10 +118,12 @@ export function loadPerformanceSettings(): void {
       lyricsTickMs: 20,
       isWillChangeEnabled: false,
       isFastTabRendererLookupEnabled: true,
+      isSkipForcedLayoutEnabled: false,
     },
     items => {
       AppState.isAdCheckEnabled = items.isAdCheckEnabled !== false;
       AppState.isFastTabRendererLookupEnabled = items.isFastTabRendererLookupEnabled !== false;
+      AppState.isSkipForcedLayoutEnabled = items.isSkipForcedLayoutEnabled === true;
       applyLyricsTickMs(Number(items.lyricsTickMs));
       applyWillChangeSetting(items.isWillChangeEnabled === true);
     }
@@ -147,6 +149,9 @@ export function loadPerformanceSettings(): void {
     }
     if (changes.isFastTabRendererLookupEnabled) {
       AppState.isFastTabRendererLookupEnabled = changes.isFastTabRendererLookupEnabled.newValue !== false;
+    }
+    if (changes.isSkipForcedLayoutEnabled) {
+      AppState.isSkipForcedLayoutEnabled = changes.isSkipForcedLayoutEnabled.newValue === true;
     }
   });
 }

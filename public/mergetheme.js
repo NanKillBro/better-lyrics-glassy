@@ -2770,34 +2770,108 @@ function dockBetterLyricsFooterToTabs() {
       tabsHost.classList.toggle('blyrics-dock-collapsed', shouldCollapse);
     }
   }
+
+  observeFooterDockGeometry([tabsHost, ...tabs]);
+}
+
+const FOOTER_DOCK_RELEVANT_SELECTOR =
+  '.blyrics-footer__container, a#betterLyricsFooterLink, tp-yt-paper-tabs.tab-header-container, tp-yt-paper-tab.tab-header, ytmusic-player-page, ytmusic-page';
+
+function isRelevantDockNode(node) {
+  if (!(node instanceof Element)) {
+    return false;
+  }
+  return (
+    node.matches(FOOTER_DOCK_RELEVANT_SELECTOR) ||
+    Boolean(node.querySelector(FOOTER_DOCK_RELEVANT_SELECTOR))
+  );
+}
+
+function isRelevantDockMutation(record) {
+  if (
+    record.target instanceof Element &&
+    record.target.matches('tp-yt-paper-tabs.tab-header-container, tp-yt-paper-tab.tab-header')
+  ) {
+    return true;
+  }
+  for (const node of record.addedNodes) {
+    if (isRelevantDockNode(node)) {
+      return true;
+    }
+  }
+  for (const node of record.removedNodes) {
+    if (isRelevantDockNode(node)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+let footerDockRafPending = false;
+function scheduleFooterDock() {
+  if (footerDockRafPending) {
+    return;
+  }
+  footerDockRafPending = true;
+  requestAnimationFrame(() => {
+    footerDockRafPending = false;
+    dockBetterLyricsFooterToTabs();
+  });
+}
+
+let footerDockResizeObserver = null;
+const footerDockResizeTargets = new Set();
+
+function observeFooterDockGeometry(elements) {
+  if (typeof ResizeObserver === 'undefined') {
+    return;
+  }
+  if (!footerDockResizeObserver) {
+    footerDockResizeObserver = new ResizeObserver(scheduleFooterDock);
+  }
+  const next = new Set(elements.filter(Boolean));
+  for (const el of footerDockResizeTargets) {
+    if (!next.has(el)) {
+      footerDockResizeObserver.unobserve(el);
+      footerDockResizeTargets.delete(el);
+    }
+  }
+  for (const el of next) {
+    if (!footerDockResizeTargets.has(el)) {
+      footerDockResizeObserver.observe(el);
+      footerDockResizeTargets.add(el);
+    }
+  }
 }
 
 let nankillFooterDockObserver;
+let footerDockListenersAttached = false;
 function setupFooterDockingObserver() {
-  let rafPending = false;
-  const scheduleDock = () => {
-    if (rafPending) {
-      return;
-    }
-    rafPending = true;
-    requestAnimationFrame(() => {
-      rafPending = false;
-      dockBetterLyricsFooterToTabs();
-    });
-  };
-
   dockBetterLyricsFooterToTabs();
 
   if (!nankillFooterDockObserver) {
     console.info('[GlassyUI] Starting DOM observer for lyrics footer docking...');
-    nankillFooterDockObserver = new MutationObserver(scheduleDock);
-    nankillFooterDockObserver.observe(document.documentElement, {
+    nankillFooterDockObserver = new MutationObserver((records) => {
+      // Child-list changes happen constantly in YTM (lists, player chrome,
+      // lyrics). Only the footer/tabs/page shell can change docking geometry.
+      if (records.some(isRelevantDockMutation)) {
+        scheduleFooterDock();
+      }
+    });
+    nankillFooterDockObserver.observe(document.body || document.documentElement, {
       childList: true,
       subtree: true,
     });
   }
 
-  window.addEventListener('resize', scheduleDock);
+  if (!footerDockListenersAttached) {
+    footerDockListenersAttached = true;
+    window.addEventListener('resize', scheduleFooterDock);
+    for (const target of [window, document]) {
+      target.addEventListener('yt-navigate-finish', scheduleFooterDock);
+      target.addEventListener('yt-page-data-updated', scheduleFooterDock);
+    }
+  }
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
