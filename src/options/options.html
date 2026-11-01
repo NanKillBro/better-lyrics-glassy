@@ -2,6 +2,7 @@
 <html lang="en-US">
 
 <head>
+	<meta charset="utf-8">
 	<meta name="color-scheme" content="dark">
 	<title>Better Lyrics Glassy Settings</title>
 	<link rel="stylesheet" href="/fonts/fonts.css">
@@ -224,6 +225,13 @@
 					<span>Skip forced layout on lyric updates<span class="info-tip" data-tooltip="Uses a style-only flush instead of reading offsetHeight when starting lyric animations and scrolling. Avoids forcing layout on the lyric line while keeping the same transition sequence. Experimental: disable if animations or scrolling misbehave." tabindex="0">i</span></span>
 					<label>
 						<input type="checkbox" id="isSkipForcedLayoutEnabled">
+						<span class="checkmark"></span>
+					</label>
+				</div>
+				<div class="container">
+					<span>Fast dock proximity tracking<span class="info-tip" data-tooltip="Caches the dock's position, transform and open-menu bounds instead of measuring the DOM on every mouse move. Measured ~3-5% of main-thread work while the pointer moves. Opt-in: disable if the dock stops expanding near the cursor after a layout change." tabindex="0">i</span></span>
+					<label>
+						<input type="checkbox" id="isFastDockProximityEnabled">
 						<span class="checkmark"></span>
 					</label>
 				</div>

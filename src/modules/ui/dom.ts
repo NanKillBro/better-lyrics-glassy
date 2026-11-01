@@ -56,6 +56,7 @@ import { requestLyrics } from "@modules/unison/unisonApi";
 import { log } from "@utils";
 import { generatePetName } from "@/core/keyIdentity";
 import { byId, deleteVote, type UnisonData, vote } from "../lyrics/providers/unison";
+import { createDockProximityTracker, type DockProximityTracker } from "./dockProximity";
 import { buildControlsSegment, closeSourceMenu } from "./lyricsDock/controls";
 import { parseSvgString, syncTypeColors, syncTypeIcons } from "./lyricsDock/icons";
 import { loadSavedOffset } from "./lyricsDock/offset";
@@ -633,13 +634,9 @@ function createUnisonFooterCard(unisonData: UnisonData): HTMLElement {
   return unisonContainer;
 }
 
-const DOCK_PROXIMITY = 104;
 const DOCK_LEAVE_GRACE = 120;
-const BOTTOM_REVEAL_ZONE = 100;
 const PLAYER_BAR_HIDE_DELAY = 800;
-let dockProximityAttached = false;
-let dockProximityListener: ((event: MouseEvent) => void) | null = null;
-let dockProximityRaf: number | null = null;
+let dockProximityTracker: DockProximityTracker | null = null;
 let dockLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 let playerBarHideTimer: ReturnType<typeof setTimeout> | null = null;
 const DOCK_EXPANDED_CLASS = `${DOCK_CLASS}__inner--expanded`;
@@ -674,97 +671,23 @@ function setPlayerBarShown(shown: boolean): void {
   }
 }
 
-function isCursorNearBottom(event: MouseEvent): boolean {
-  const layout = document.getElementById("layout");
-  if (!layout?.hasAttribute("player-fullscreened")) return false;
-  let threshold = window.innerHeight - BOTTOM_REVEAL_ZONE;
-  if (layout.hasAttribute("show-fullscreen-controls")) {
-    const bar = document.querySelector(PLAYER_BAR_SELECTOR)?.getBoundingClientRect();
-    if (bar && bar.height > 0) threshold = Math.min(threshold, bar.top);
-  }
-  return event.clientY >= threshold;
-}
-
-function evaluateDockProximity(event: MouseEvent): void {
-  const barNear = isCursorNearBottom(event);
-  const inner = document.getElementsByClassName(`${DOCK_CLASS}__inner`)[0] as HTMLElement | undefined;
-  if (!inner) {
-    setPlayerBarShown(barNear);
-    return;
-  }
-
-  const rect = inner.getBoundingClientRect();
-  const dock = inner.parentElement as HTMLElement | null;
-  const dockActive =
-    rect.width > 0 &&
-    !dock?.classList.contains(`${DOCK_CLASS}--hidden`) &&
-    !dock?.classList.contains(`${DOCK_CLASS}--idle-hidden`);
-
-  if (!dockActive) {
-    setPlayerBarShown(barNear);
-    return;
-  }
-
-  const position = dock?.dataset.position ?? "";
-  let { left, right, top, bottom } = rect;
-  if (position.includes("right")) left -= DOCK_PROXIMITY;
-  if (position.includes("left")) right += DOCK_PROXIMITY;
-  if (position.startsWith("top")) {
-    bottom += DOCK_PROXIMITY;
-  } else {
-    top -= DOCK_PROXIMITY;
-    // Activating a bottom dock translates it up by --dock-y-shift, which would carry this
-    // zone off the cursor and oscillate. Extend the zone down to the dock's resting edge so
-    // the shift can never eject the cursor. The live matrix stays exact mid-slide and follows
-    // any themed shift value.
-    const transform = dock ? getComputedStyle(dock).transform : "none";
-    const shiftY = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
-    bottom -= shiftY;
-  }
-
-  let dockNear = event.clientX >= left && event.clientX <= right && event.clientY >= top && event.clientY <= bottom;
-
-  // While the source dropdown is open, treat its bounds (plus a bridging margin) as
-  // part of the dock so moving onto it does not collapse the dock or drop the player bar.
-  if (!dockNear) {
-    const menu = document.querySelector(`.${DOCK_CLASS}__menu--open`);
-    if (menu) {
-      const m = menu.getBoundingClientRect();
-      const pad = 32;
-      dockNear =
-        event.clientX >= m.left - pad &&
-        event.clientX <= m.right + pad &&
-        event.clientY >= m.top - pad &&
-        event.clientY <= m.bottom + pad;
-    }
-  }
-
-  setDockNear(inner, dockNear);
-  setPlayerBarShown(dockNear || barNear);
-}
-
 // Pre-expands the dock when the cursor comes near, so the controls have settled into
 // their revealed positions before the pointer reaches them, and keeps the player bar
 // shown while the cursor is near the dock. The trigger zone is extended only toward the
 // panel interior (the approach side for the dock's anchor) and uses no overlay element,
 // so it never shadows clicks on the lyrics or player. Being position-based rather than
 // mouseenter/mouseleave, it stays stable while the cursor is held still during a click.
-// Reads are coalesced to one per frame to bound the per-move layout/style cost.
-function ensureDockProximityListener(): void {
-  if (dockProximityAttached) return;
-  dockProximityAttached = true;
-  dockProximityListener = event => {
-    if (dockProximityRaf !== null) cancelAnimationFrame(dockProximityRaf);
-    dockProximityRaf = requestAnimationFrame(() => {
-      dockProximityRaf = null;
-      evaluateDockProximity(event);
-    });
-  };
-  document.addEventListener("mousemove", dockProximityListener, { passive: true });
-}
-
+// Reads are coalesced to one per frame; the opt-in cached mode also avoids re-measuring
+// the DOM on every move.
 export function setupFullscreenPlayerBarReveal(): void {
-  ensureDockProximityListener();
+  if (dockProximityTracker) return;
+  dockProximityTracker = createDockProximityTracker({
+    dockClass: DOCK_CLASS,
+    playerBarSelector: PLAYER_BAR_SELECTOR,
+    mode: () => (AppState.isFastDockProximityEnabled ? "cached" : "legacy"),
+    onDockNear: setDockNear,
+    onPlayerBarShown: setPlayerBarShown,
+  });
 }
 
 // -- Dock entry/exit effect ----------------------------------------------

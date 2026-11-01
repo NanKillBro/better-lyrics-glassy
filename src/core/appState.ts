@@ -43,6 +43,7 @@ interface AppStateType {
   isPassiveScrollEnabled: boolean;
   isAdCheckEnabled: boolean;
   isFastTabRendererLookupEnabled: boolean;
+  isFastDockProximityEnabled: boolean;
   isSkipForcedLayoutEnabled: boolean;
   hasPreloadedNextSong: boolean;
   currentInjectionId: number;
@@ -87,6 +88,7 @@ export const AppState: AppStateType = {
   isPassiveScrollEnabled: true,
   isAdCheckEnabled: true,
   isFastTabRendererLookupEnabled: false,
+  isFastDockProximityEnabled: false,
   isSkipForcedLayoutEnabled: false,
   hasPreloadedNextSong: false,
   currentInjectionId: 0,

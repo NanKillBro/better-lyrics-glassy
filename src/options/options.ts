@@ -30,6 +30,7 @@ interface Options {
   lyricsTickMs: number;
   isAdCheckEnabled: boolean;
   isFastTabRendererLookupEnabled: boolean;
+  isFastDockProximityEnabled: boolean;
   isSkipForcedLayoutEnabled: boolean;
   isTranslateEnabled: boolean;
   translationLanguage: string;
@@ -91,6 +92,7 @@ const getOptionsFromForm = (): Options => {
     isAdCheckEnabled: (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked,
     isFastTabRendererLookupEnabled: (document.getElementById("isFastTabRendererLookupEnabled") as HTMLInputElement)
       .checked,
+    isFastDockProximityEnabled: (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked,
     isSkipForcedLayoutEnabled: (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked,
     isTranslateEnabled: (document.getElementById("translate") as HTMLInputElement).checked,
     translationLanguage: (document.getElementById("translationLanguage") as HTMLInputElement).value,
@@ -272,6 +274,7 @@ const restoreOptions = (): void => {
     lyricsTickMs: 20,
     isAdCheckEnabled: true,
     isFastTabRendererLookupEnabled: true,
+    isFastDockProximityEnabled: false,
     isSkipForcedLayoutEnabled: false,
     isTranslateEnabled: false,
     translationLanguage: "en",
@@ -310,13 +313,6 @@ const restoreOptions = (): void => {
     lineOffsetTrim: 0,
   };
 
-  const readKeys = [
-    ...Object.keys(defaultOptions),
-    "isUnisonPinnedDockEnabled",
-    "unisonPinnedDockPosition",
-    "isUnisonAutoHideInFullscreenEnabled",
-  ];
-
   chrome.storage.local.get(defaultOptions, setOptionsInForm);
 
   document.getElementById("clear-cache")!.addEventListener("click", () => clearTransientLyrics());
@@ -342,6 +338,8 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked = items.isAdCheckEnabled;
   (document.getElementById("isFastTabRendererLookupEnabled") as HTMLInputElement).checked =
     items.isFastTabRendererLookupEnabled;
+  (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked =
+    items.isFastDockProximityEnabled;
   (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked = items.isSkipForcedLayoutEnabled;
   (document.getElementById("translate") as HTMLInputElement).checked = items.isTranslateEnabled;
   (document.getElementById("translationLanguage") as HTMLInputElement).value = items.translationLanguage;
