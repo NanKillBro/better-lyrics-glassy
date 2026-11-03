@@ -32,6 +32,7 @@ interface Options {
   isFastTabRendererLookupEnabled: boolean;
   isFastDockProximityEnabled: boolean;
   isSkipForcedLayoutEnabled: boolean;
+  isPlayerMetadataCacheEnabled: boolean;
   isTranslateEnabled: boolean;
   translationLanguage: string;
   isCursorAutoHideEnabled: boolean;
@@ -94,6 +95,7 @@ const getOptionsFromForm = (): Options => {
       .checked,
     isFastDockProximityEnabled: (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked,
     isSkipForcedLayoutEnabled: (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked,
+    isPlayerMetadataCacheEnabled: (document.getElementById("isPlayerMetadataCacheEnabled") as HTMLInputElement).checked,
     isTranslateEnabled: (document.getElementById("translate") as HTMLInputElement).checked,
     translationLanguage: (document.getElementById("translationLanguage") as HTMLInputElement).value,
     isCursorAutoHideEnabled: (document.getElementById("cursorAutoHide") as HTMLInputElement).checked,
@@ -276,6 +278,7 @@ const restoreOptions = (): void => {
     isFastTabRendererLookupEnabled: true,
     isFastDockProximityEnabled: false,
     isSkipForcedLayoutEnabled: false,
+    isPlayerMetadataCacheEnabled: false,
     isTranslateEnabled: false,
     translationLanguage: "en",
     isRomanizationEnabled: false,
@@ -341,6 +344,8 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked =
     items.isFastDockProximityEnabled;
   (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked = items.isSkipForcedLayoutEnabled;
+  (document.getElementById("isPlayerMetadataCacheEnabled") as HTMLInputElement).checked =
+    items.isPlayerMetadataCacheEnabled;
   (document.getElementById("translate") as HTMLInputElement).checked = items.isTranslateEnabled;
   (document.getElementById("translationLanguage") as HTMLInputElement).value = items.translationLanguage;
   (document.getElementById("isRomanizationEnabled") as HTMLInputElement).checked = items.isRomanizationEnabled;

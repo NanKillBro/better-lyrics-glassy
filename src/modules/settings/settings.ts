@@ -109,6 +109,10 @@ function applyLyricsTickMs(tickMs: number): void {
   document.documentElement.setAttribute("blyrics-tick-ms", String(value));
 }
 
+function applyPlayerMetadataCacheSetting(enabled: boolean): void {
+  document.documentElement.setAttribute("blyrics-player-metadata-cache", enabled ? "true" : "false");
+}
+
 let hasInitializedPerformanceListener = false;
 
 export function loadPerformanceSettings(): void {
@@ -120,6 +124,7 @@ export function loadPerformanceSettings(): void {
       isFastTabRendererLookupEnabled: true,
       isFastDockProximityEnabled: false,
       isSkipForcedLayoutEnabled: false,
+      isPlayerMetadataCacheEnabled: false,
     },
     items => {
       AppState.isAdCheckEnabled = items.isAdCheckEnabled !== false;
@@ -128,6 +133,7 @@ export function loadPerformanceSettings(): void {
       AppState.isSkipForcedLayoutEnabled = items.isSkipForcedLayoutEnabled === true;
       applyLyricsTickMs(Number(items.lyricsTickMs));
       applyWillChangeSetting(items.isWillChangeEnabled === true);
+      applyPlayerMetadataCacheSetting(items.isPlayerMetadataCacheEnabled === true);
     }
   );
 
@@ -157,6 +163,9 @@ export function loadPerformanceSettings(): void {
     }
     if (changes.isSkipForcedLayoutEnabled) {
       AppState.isSkipForcedLayoutEnabled = changes.isSkipForcedLayoutEnabled.newValue === true;
+    }
+    if (changes.isPlayerMetadataCacheEnabled) {
+      applyPlayerMetadataCacheSetting(changes.isPlayerMetadataCacheEnabled.newValue === true);
     }
   });
 }

@@ -243,6 +243,13 @@
 					</label>
 				</div>
 				<div class="container">
+					<span>Cache player metadata<span class="info-tip" data-tooltip="Reads audio-track and duration metadata at most twice per second during steady playback instead of on every lyric tick, with an immediate refresh on song changes. The 20 ms timing clock and song-switch detection are unchanged. Opt-in: disable if duration or lyrics look stale after switching songs." tabindex="0">i</span></span>
+					<label>
+						<input type="checkbox" id="isPlayerMetadataCacheEnabled">
+						<span class="checkmark"></span>
+					</label>
+				</div>
+				<div class="container">
 					<span>Check for advertisements<span class="info-tip" data-tooltip="Reads is-advertisement from the player bar every tick. Disable on Premium or ad-blocked setups to skip the check and the ad overlay." tabindex="0">i</span></span>
 					<label>
 						<input type="checkbox" id="isAdCheckEnabled">

@@ -30,6 +30,11 @@ let lastVideoId = null;
 let observedVideoElement = null;
 let tickMs = 20;
 
+const PLAYER_METADATA_CACHE_TTL_MS = 500;
+let playerMetadataCacheEnabled = false;
+let cachedPlayerMetadata = null;
+let playerMetadataSettleUntil = 0;
+
 /**
  * Reads the configured lyrics tick interval (milliseconds) from the
  * `blyrics-tick-ms` attribute set by the isolated content script and
@@ -52,6 +57,51 @@ new MutationObserver(syncTickMs).observe(document.documentElement, {
   attributes: true,
   attributeFilter: ["blyrics-tick-ms"],
 });
+
+/**
+ * Reads the opt-in metadata-cache flag set by the isolated content script.
+ * Only audio-track and duration reads are cached; the 20 ms timing clock and
+ * video identity reads stay unchanged.
+ */
+const syncPlayerMetadataCache = () => {
+  const enabled = document.documentElement.getAttribute("blyrics-player-metadata-cache") === "true";
+  if (enabled === playerMetadataCacheEnabled) {
+    return;
+  }
+  playerMetadataCacheEnabled = enabled;
+  cachedPlayerMetadata = null;
+  playerMetadataSettleUntil = 0;
+};
+
+syncPlayerMetadataCache();
+new MutationObserver(syncPlayerMetadataCache).observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ["blyrics-player-metadata-cache"],
+});
+
+/**
+ * Reads the audio-track and duration metadata for the current track. Duration
+ * prefers the fixed track length from the player response, then the seekable
+ * progress duration, then the video element duration.
+ * @param {HTMLElement} player
+ */
+const readPlayerMetadata = player => {
+  const audioTrackData = player.getAudioTrack();
+  const playerResponse = typeof player.getPlayerResponse === "function" ? player.getPlayerResponse() : null;
+  const progressState = typeof player.getProgressState === "function" ? player.getProgressState() : null;
+  const metadataDuration = Number(playerResponse?.videoDetails?.lengthSeconds);
+  const seekableDuration = progressState?.duration;
+  let duration = player.getDuration();
+  if (Number.isFinite(seekableDuration) && seekableDuration > 0) duration = seekableDuration;
+  if (Number.isFinite(metadataDuration) && metadataDuration > 0) duration = metadataDuration;
+  return { audioTrackData, duration };
+};
+
+const readAndCachePlayerMetadata = (player, now) => {
+  const metadata = readPlayerMetadata(player);
+  cachedPlayerMetadata = Number.isFinite(metadata.duration) && metadata.duration > 0 ? { at: now, ...metadata } : null;
+  return metadata;
+};
 
 /**
  * Writes the video's intrinsic aspect ratio (from the <video> element's
@@ -143,20 +193,27 @@ const startLyricsTick = () => {
         // Update the cached rect when the video changes, as aspect ratios might shift
         if (video_id !== lastVideoId) {
           lastVideoId = video_id;
+          cachedPlayerMetadata = null;
+          playerMetadataSettleUntil = now + PLAYER_METADATA_CACHE_TTL_MS;
           if (typeof player.getVideoContentRect === "function") {
             cachedContentRect = player.getVideoContentRect();
           }
           attachVideoListener(player);
         }
 
-        const audioTrackData = player.getAudioTrack();
-        const playerResponse = typeof player.getPlayerResponse === "function" ? player.getPlayerResponse() : null;
-        const progressState = typeof player.getProgressState === "function" ? player.getProgressState() : null;
-        const metadataDuration = Number(playerResponse?.videoDetails?.lengthSeconds);
-        const seekableDuration = progressState?.duration;
-        let duration = player.getDuration();
-        if (Number.isFinite(seekableDuration) && seekableDuration > 0) duration = seekableDuration;
-        if (Number.isFinite(metadataDuration) && metadataDuration > 0) duration = metadataDuration;
+        let audioTrackData;
+        let duration;
+        if (!playerMetadataCacheEnabled) {
+          ({ audioTrackData, duration } = readPlayerMetadata(player));
+        } else if (now < playerMetadataSettleUntil) {
+          // Read per tick briefly after a song change so the cache cannot keep
+          // the previous track's duration while the player updates.
+          ({ audioTrackData, duration } = readAndCachePlayerMetadata(player, now));
+        } else if (cachedPlayerMetadata && now - cachedPlayerMetadata.at < PLAYER_METADATA_CACHE_TTL_MS) {
+          ({ audioTrackData, duration } = cachedPlayerMetadata);
+        } else {
+          ({ audioTrackData, duration } = readAndCachePlayerMetadata(player, now));
+        }
         const { isPlaying, isBuffering } = player.getPlayerStateObject();
 
         // Use the cached contentRect. Fallback if it hasn't been cached yet.
