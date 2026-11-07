@@ -149,6 +149,8 @@ export function initProviders(): void {
 }
 
 const sourceKeyToFillFn = {
+  "spicy-richsynced": (p: ProviderParameters) => unified(p, "spicy-richsynced"),
+  "spicy-synced": (p: ProviderParameters) => unified(p, "spicy-synced"),
   "binimum-richsynced": (p: ProviderParameters) => unified(p, "binimum-richsynced"),
   "binimum-synced": (p: ProviderParameters) => unified(p, "binimum-synced"),
   "bLyrics-richsynced": (p: ProviderParameters) => unified(p, "bLyrics-richsynced"),

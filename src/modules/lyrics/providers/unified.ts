@@ -1,4 +1,10 @@
-import { CUBEY_LYRICS_API_URL, CUBEY_LYRICS_API_URL_TURNSTILE, HOMEPAGE_URL, LOG_PREFIX } from "@constants";
+import {
+  CUBEY_LYRICS_API_URL,
+  CUBEY_LYRICS_API_URL_TURNSTILE,
+  HOMEPAGE_URL,
+  LOG_PREFIX,
+  SPICY_LYRICS_URL,
+} from "@constants";
 import { getLocalStorage } from "@core/storage";
 import { log } from "@core/utils";
 import { lrcFixers, parseLRC, parsePlainLyrics } from "./lrcUtils";
@@ -143,6 +149,8 @@ const MANAGED_KEYS = [
   "bLyrics-synced",
   "binimum-richsynced",
   "binimum-synced",
+  "spicy-richsynced",
+  "spicy-synced",
   "metadata",
 ] as const;
 
@@ -336,6 +344,15 @@ async function parseSSEMessage(message: string, params: ProviderParameters) {
 async function processStreamData(event: string, data: any, params: ProviderParameters) {
   const { sourceMap, duration } = params;
 
+  // Every provider has reported; Unison events can still follow before the stream closes.
+  if (event === "done") {
+    for (const key of MANAGED_KEYS) {
+      if (!sourceMap[key].filled) sourceMap[key].filled = true;
+      resolveWaiter(params, key);
+    }
+    return;
+  }
+
   if (event === "metadata") {
     if (data.album && !params.album) params.album = data.album;
     if (data.song && params.song !== data.song) params.song = data.song;
@@ -492,6 +509,21 @@ async function processStreamData(event: string, data: any, params: ProviderParam
 
         resolveWaiter(params, "binimum-richsynced");
         resolveWaiter(params, "binimum-synced");
+      }
+    }
+
+    // Spicy Lyrics (community TTML)
+    if (provider === "spicy") {
+      if (results.lyrics) {
+        await fillTtml(results.lyrics, params, {
+          richsyncKey: "spicy-richsynced",
+          syncedKey: "spicy-synced",
+          source: "Spicy Lyrics",
+          sourceHref: SPICY_LYRICS_URL,
+        });
+
+        resolveWaiter(params, "spicy-richsynced");
+        resolveWaiter(params, "spicy-synced");
       }
     }
   }
