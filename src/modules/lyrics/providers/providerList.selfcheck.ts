@@ -45,4 +45,16 @@ assert.deepEqual(
   "unknown stored keys are preserved and do not disturb insertion"
 );
 
+assert.deepEqual(
+  mergePreferredProviders(["a", "d_b", "c"], ["a", "d_b", "c"]),
+  ["a", "d_b", "c"],
+  "a disabled default key is not duplicated when the stored list already has it"
+);
+
+assert.deepEqual(
+  mergePreferredProviders(["a", "c"], ["a", "d_b", "c"]),
+  ["a", "d_b", "c"],
+  "a disabled default key is inserted disabled"
+);
+
 console.log("providerList selfcheck passed");

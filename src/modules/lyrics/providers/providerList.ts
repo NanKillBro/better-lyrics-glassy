@@ -2,7 +2,8 @@ const stripDisabledPrefix = (id: string): string => (id.startsWith("d_") ? id.sl
 
 export function mergePreferredProviders(stored: readonly string[], defaults: readonly string[]): string[] {
   const merged = [...stored];
-  const indexOfKey = (key: string): number => merged.findIndex(id => stripDisabledPrefix(id) === key);
+  const indexOfKey = (key: string): number =>
+    merged.findIndex(id => stripDisabledPrefix(id) === stripDisabledPrefix(key));
 
   defaults.forEach((key, defaultIndex) => {
     if (indexOfKey(key) !== -1) return;
