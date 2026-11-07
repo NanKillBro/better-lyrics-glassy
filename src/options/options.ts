@@ -662,11 +662,15 @@ function openExtensionPage(pagePath: string): void {
   }
 }
 
+const TOUCH_DRAG_DELAY_MS = 200;
+
 document.addEventListener("DOMContentLoaded", () => {
   new Sortable(document.getElementById("providers-list")!, {
     animation: 150,
     ghostClass: "dragging",
     forceFallback: true,
+    delay: TOUCH_DRAG_DELAY_MS,
+    delayOnTouchOnly: true,
     filter: ".checkbox-container",
     preventOnFilter: false,
     onUpdate: saveOptions,
@@ -1481,6 +1485,8 @@ function setupUnisonActionsModal(): void {
       animation: 150,
       ghostClass: "dragging",
       forceFallback: true,
+      delay: TOUCH_DRAG_DELAY_MS,
+      delayOnTouchOnly: true,
       onUpdate: debouncedSaveOptions,
     });
   }
