@@ -148,7 +148,7 @@
 					</label>
 				</div>
 				<div class="container">
-					<span>__MSG_options_display_unblurUpcomingLyrics__<span class="info-tip" data-tooltip="__MSG_options_display_unblurUpcomingLyricsHint__" tabindex="0">i</span></span>
+					<span>__MSG_options_display_showUpcomingLyricsSooner__<span class="info-tip" data-tooltip="__MSG_options_display_showUpcomingLyricsSoonerHint__" tabindex="0">i</span></span>
 					<label>
 						<input type="checkbox" id="isUnblurUpcomingLyricsEnabled">
 						<span class="checkmark"></span>
@@ -201,6 +201,13 @@
 					<span>Lyrics glow &amp; wobble<span class="info-tip" data-tooltip="Adds glow and wobble animations to highlighted words. Measured at ~1.5 ms of main-thread work per frame and ~13% GPU; disabling it is the biggest visual CPU saving." tabindex="0">i</span></span>
 					<label>
 						<input type="checkbox" id="isStylizedAnimationsEnabled">
+						<span class="checkmark"></span>
+					</label>
+				</div>
+				<div class="container">
+					<span>Unblur lyrics<span class="info-tip" data-tooltip="Removes the progressive blur from the 1-6 lines below the active lyric. Filter blur is GPU-heavy, so this reduces GPU work; upcoming lines stay dimmed by opacity. Only applies when the Glassy Merge Theme is selected." tabindex="0">i</span></span>
+					<label>
+						<input type="checkbox" id="isLyricsBlurDisabled">
 						<span class="checkmark"></span>
 					</label>
 				</div>

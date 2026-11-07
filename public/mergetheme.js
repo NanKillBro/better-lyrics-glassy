@@ -1124,33 +1124,35 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
 /* downwards blurring */
 /* credit to Apple Music theme by tposejank, but some custom has been made for this to work properly */
 
+/* The Performance-tab "Unblur lyrics" switch sets blyrics-disable-lyrics-blur
+   on <html>, which makes these six rules stop matching. */
 /* 1 line below */
-.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line:not(.blyrics--animating) {
   filter: blur(2px) !important;
 }
 
 /* 2 lines below */
-.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
   filter: blur(3.5px) !important;
 }
 
 /* 3 line below */
-.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
   filter: blur(5px) !important;
 }
 
 /* 4 lines below */
-.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
   filter: blur(6.5px) !important;
 }
 
 /* 5 lines below */
-.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
   filter: blur(8px) !important;
 }
 
 /* 6 lines below */
-.blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
   filter: blur(9.5px) !important;
 }
 

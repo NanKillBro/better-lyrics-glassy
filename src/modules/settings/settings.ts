@@ -111,6 +111,12 @@ function applyPlayerMetadataCacheSetting(enabled: boolean): void {
   document.documentElement.setAttribute("blyrics-player-metadata-cache", enabled ? "true" : "false");
 }
 
+const LYRICS_BLUR_DISABLED_ATTR = "blyrics-disable-lyrics-blur";
+
+function applyLyricsBlurSetting(disabled: boolean): void {
+  document.documentElement.toggleAttribute(LYRICS_BLUR_DISABLED_ATTR, disabled);
+}
+
 let hasInitializedPerformanceListener = false;
 
 export function loadPerformanceSettings(): void {
@@ -122,6 +128,7 @@ export function loadPerformanceSettings(): void {
       isFastTabRendererLookupEnabled: true,
       isFastDockProximityEnabled: false,
       isSkipForcedLayoutEnabled: false,
+      isLyricsBlurDisabled: false,
       isPlayerMetadataCacheEnabled: false,
     },
     items => {
@@ -131,6 +138,7 @@ export function loadPerformanceSettings(): void {
       AppState.isSkipForcedLayoutEnabled = items.isSkipForcedLayoutEnabled === true;
       applyLyricsTickMs(Number(items.lyricsTickMs));
       applyWillChangeSetting(items.isWillChangeEnabled === true);
+      applyLyricsBlurSetting(items.isLyricsBlurDisabled === true);
       applyPlayerMetadataCacheSetting(items.isPlayerMetadataCacheEnabled === true);
     }
   );
@@ -161,6 +169,9 @@ export function loadPerformanceSettings(): void {
     }
     if (changes.isSkipForcedLayoutEnabled) {
       AppState.isSkipForcedLayoutEnabled = changes.isSkipForcedLayoutEnabled.newValue === true;
+    }
+    if (changes.isLyricsBlurDisabled) {
+      applyLyricsBlurSetting(changes.isLyricsBlurDisabled.newValue === true);
     }
     if (changes.isPlayerMetadataCacheEnabled) {
       applyPlayerMetadataCacheSetting(changes.isPlayerMetadataCacheEnabled.newValue === true);

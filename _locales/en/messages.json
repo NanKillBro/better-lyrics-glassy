@@ -94,13 +94,13 @@
     "message": "Auto-scroll unsynced lyrics",
     "description": "Auto-scroll unsynced lyrics setting label"
   },
-  "options_display_unblurUpcomingLyrics": {
-    "message": "Unblur upcoming lyrics",
-    "description": "Unblur upcoming lyrics setting label"
+  "options_display_showUpcomingLyricsSooner": {
+    "message": "Show upcoming lyrics sooner",
+    "description": "Show upcoming lyrics sooner setting label"
   },
-  "options_display_unblurUpcomingLyricsHint": {
+  "options_display_showUpcomingLyricsSoonerHint": {
     "message": "Removes the synced transition delay, so the active line sharpens as soon as it becomes active instead of staying blurred until its word animation starts. Only applies when the Glassy Merge Theme is selected.",
-    "description": "Tooltip for the Unblur upcoming lyrics setting"
+    "description": "Tooltip for the Show upcoming lyrics sooner setting"
   },
   "options_display_shadersPromo": {
     "message": "Show link to Better Lyrics Shaders",

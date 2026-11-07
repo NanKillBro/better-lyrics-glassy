@@ -32,6 +32,7 @@ interface Options {
   isFastTabRendererLookupEnabled: boolean;
   isFastDockProximityEnabled: boolean;
   isSkipForcedLayoutEnabled: boolean;
+  isLyricsBlurDisabled: boolean;
   isPlayerMetadataCacheEnabled: boolean;
   isTranslateEnabled: boolean;
   translationLanguage: string;
@@ -96,6 +97,7 @@ const getOptionsFromForm = (): Options => {
       .checked,
     isFastDockProximityEnabled: (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked,
     isSkipForcedLayoutEnabled: (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked,
+    isLyricsBlurDisabled: (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked,
     isPlayerMetadataCacheEnabled: (document.getElementById("isPlayerMetadataCacheEnabled") as HTMLInputElement).checked,
     isTranslateEnabled: (document.getElementById("translate") as HTMLInputElement).checked,
     translationLanguage: (document.getElementById("translationLanguage") as HTMLInputElement).value,
@@ -279,6 +281,7 @@ const restoreOptions = (): void => {
     isFastTabRendererLookupEnabled: true,
     isFastDockProximityEnabled: true,
     isSkipForcedLayoutEnabled: false,
+    isLyricsBlurDisabled: false,
     isPlayerMetadataCacheEnabled: true,
     isTranslateEnabled: false,
     translationLanguage: "en",
@@ -345,6 +348,7 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked =
     items.isFastDockProximityEnabled;
   (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked = items.isSkipForcedLayoutEnabled;
+  (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked = items.isLyricsBlurDisabled;
   (document.getElementById("isPlayerMetadataCacheEnabled") as HTMLInputElement).checked =
     items.isPlayerMetadataCacheEnabled;
   (document.getElementById("translate") as HTMLInputElement).checked = items.isTranslateEnabled;
