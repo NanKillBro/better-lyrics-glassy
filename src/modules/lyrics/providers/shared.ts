@@ -120,6 +120,12 @@ const defaultPreferredProviderList: LyricSourceKey[] = [...PROVIDER_CONFIGS]
   .sort((a, b) => a.priority - b.priority)
   .map(p => p.key) as LyricSourceKey[];
 
+// Providers that stay available in the sources list but start disabled on a fresh profile.
+const defaultDisabledProviders = new Set<LyricSourceKey>(["yt-captions"]);
+const defaultProviderSettings = defaultPreferredProviderList.map(key =>
+  defaultDisabledProviders.has(key) ? `d_${key}` : key
+);
+
 function isLyricSourceKey(provider: string): provider is LyricSourceKey {
   return (LYRIC_SOURCE_KEYS as readonly string[]).includes(provider);
 }
@@ -134,8 +140,8 @@ export function initProviders(): void {
   }
   hasInitializedProviders = true;
   const updateProvidersList = (preferredProviderList: string[] | null) => {
-    const stored = preferredProviderList ?? [...defaultPreferredProviderList];
-    const merged = mergePreferredProviders(stored, defaultPreferredProviderList);
+    const stored = preferredProviderList ?? [...defaultProviderSettings];
+    const merged = mergePreferredProviders(stored, defaultProviderSettings);
 
     const finalProviderList = merged.filter(isLyricSourceKey);
 
