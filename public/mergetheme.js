@@ -1223,6 +1223,14 @@ ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-sc
               transform 1.3s ease calc(var(--blyrics-anim-delay, 0s) - 0.3s);
 }
 
+/* Display option "Unblur upcoming lyrics": drop the synced delay so the active
+   line sharpens immediately. The extension toggles the attribute on <html>. */
+:root[blyrics-unblur-upcoming] .blyrics-container > div.blyrics--animating:not(:empty):not(.blyrics--translated):not(.blyrics--romanized) {
+  transition: opacity 0.7s ease,
+              filter 0.7s ease,
+              transform 1.3s ease;
+}
+
 /* Translated & Romanized */
 .blyrics-container > div > span.blyrics--translated,
 .blyrics-container > div > span.blyrics--romanized {

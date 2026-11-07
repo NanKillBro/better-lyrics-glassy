@@ -25,6 +25,7 @@ interface Options {
   isFullScreenDisabled: boolean;
   isStylizedAnimationsEnabled: boolean;
   isPassiveScrollEnabled: boolean;
+  isUnblurUpcomingLyricsEnabled: boolean;
   isWillChangeEnabled: boolean;
   lyricsTickMs: number;
   isAdCheckEnabled: boolean;
@@ -86,6 +87,8 @@ const getOptionsFromForm = (): Options => {
     isFullScreenDisabled: (document.getElementById("isFullScreenDisabled") as HTMLInputElement).checked,
     isStylizedAnimationsEnabled: (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked,
     isPassiveScrollEnabled: (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked,
+    isUnblurUpcomingLyricsEnabled: (document.getElementById("isUnblurUpcomingLyricsEnabled") as HTMLInputElement)
+      .checked,
     isWillChangeEnabled: (document.getElementById("isWillChangeEnabled") as HTMLInputElement).checked,
     lyricsTickMs: Number((document.getElementById("lyricsTickMs") as HTMLSelectElement).value) || 20,
     isAdCheckEnabled: (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked,
@@ -269,6 +272,7 @@ const restoreOptions = (): void => {
     isFullScreenDisabled: false,
     isStylizedAnimationsEnabled: true,
     isPassiveScrollEnabled: true,
+    isUnblurUpcomingLyricsEnabled: false,
     isWillChangeEnabled: true,
     lyricsTickMs: 20,
     isAdCheckEnabled: false,
@@ -331,6 +335,8 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked =
     items.isStylizedAnimationsEnabled;
   (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked = items.isPassiveScrollEnabled;
+  (document.getElementById("isUnblurUpcomingLyricsEnabled") as HTMLInputElement).checked =
+    items.isUnblurUpcomingLyricsEnabled;
   (document.getElementById("isWillChangeEnabled") as HTMLInputElement).checked = items.isWillChangeEnabled;
   (document.getElementById("lyricsTickMs") as HTMLSelectElement).value = String(items.lyricsTickMs);
   (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked = items.isAdCheckEnabled;

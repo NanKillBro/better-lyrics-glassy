@@ -67,6 +67,7 @@ export function handleSettings(): void {
   );
 
   loadPerformanceSettings();
+  loadUnblurUpcomingLyricsSetting();
 }
 
 const WILL_CHANGE_STYLE_ID = "blyrics-disable-will-change";
@@ -88,6 +89,22 @@ function applyWillChangeSetting(enabled: boolean): void {
 function applyLyricsTickMs(tickMs: number): void {
   const value = Number.isFinite(tickMs) ? Math.min(200, Math.max(20, Math.round(tickMs))) : 20;
   document.documentElement.setAttribute("blyrics-tick-ms", String(value));
+}
+
+const UNBLUR_UPCOMING_LYRICS_ATTR = "blyrics-unblur-upcoming";
+
+function applyUnblurUpcomingLyricsSetting(enabled: boolean): void {
+  if (enabled) {
+    document.documentElement.setAttribute(UNBLUR_UPCOMING_LYRICS_ATTR, "true");
+  } else {
+    document.documentElement.removeAttribute(UNBLUR_UPCOMING_LYRICS_ATTR);
+  }
+}
+
+function loadUnblurUpcomingLyricsSetting(): void {
+  getStorage({ isUnblurUpcomingLyricsEnabled: false }, items => {
+    applyUnblurUpcomingLyricsSetting(items.isUnblurUpcomingLyricsEnabled === true);
+  });
 }
 
 function applyPlayerMetadataCacheSetting(enabled: boolean): void {
