@@ -148,6 +148,22 @@
     "message": "Auto-scroll unsynced lyrics",
     "description": "Auto-scroll unsynced lyrics setting label"
   },
+  "options_display_unblurLyrics": {
+    "message": "Unblur lyrics",
+    "description": "Unblur lyrics setting label"
+  },
+  "options_display_unblurLyricsTooltip": {
+    "message": "Removes the progressive blur from the 1-6 lines below the active lyric. Filter blur is GPU-heavy, so this reduces GPU work; upcoming lines stay dimmed by opacity. Only applies when the Glassy Merge Theme is selected.",
+    "description": "Tooltip for the Unblur lyrics setting"
+  },
+  "options_display_showUpcomingLyricsSooner": {
+    "message": "Show upcoming lyrics sooner",
+    "description": "Show upcoming lyrics sooner setting label"
+  },
+  "options_display_showUpcomingLyricsSoonerHint": {
+    "message": "Removes the synced transition delay, so the active line sharpens as soon as it becomes active instead of staying blurred until its word animation starts. Only applies when the Glassy Merge Theme is selected.",
+    "description": "Tooltip for the Show upcoming lyrics sooner setting"
+  },
   "picture_in_picture_open": {
     "message": "Open Picture-in-Picture lyrics",
     "description": "Accessible label for the dock action that opens the floating lyrics window"

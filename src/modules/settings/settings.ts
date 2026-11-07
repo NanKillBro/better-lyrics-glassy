@@ -78,6 +78,9 @@ export function handleSettings(): void {
       }
     }
   );
+
+  loadLyricsBlurSetting();
+  loadUnblurUpcomingLyricsSetting();
 }
 
 export function onAutoSwitchEnabled(enableAutoSwitch: EnableDisableCallback): void {
@@ -117,6 +120,30 @@ function applyFullscreenControlsPref(): void {
     const root = document.documentElement;
     root.toggleAttribute(FULLSCREEN_CONTROLS_DISABLED_ATTR, pref === "off");
     root.toggleAttribute(FULLSCREEN_CONTROLS_PINNED_ATTR, pref === "on");
+  });
+}
+
+const LYRICS_BLUR_DISABLED_ATTR = "blyrics-disable-lyrics-blur";
+
+function applyLyricsBlurSetting(disabled: boolean): void {
+  document.documentElement.toggleAttribute(LYRICS_BLUR_DISABLED_ATTR, disabled);
+}
+
+function loadLyricsBlurSetting(): void {
+  getStorage({ isLyricsBlurDisabled: false }, items => {
+    applyLyricsBlurSetting(items.isLyricsBlurDisabled === true);
+  });
+}
+
+const UNBLUR_UPCOMING_LYRICS_ATTR = "blyrics-unblur-upcoming";
+
+function applyUnblurUpcomingLyricsSetting(enabled: boolean): void {
+  document.documentElement.toggleAttribute(UNBLUR_UPCOMING_LYRICS_ATTR, enabled);
+}
+
+function loadUnblurUpcomingLyricsSetting(): void {
+  getStorage({ isUnblurUpcomingLyricsEnabled: false }, items => {
+    applyUnblurUpcomingLyricsSetting(items.isUnblurUpcomingLyricsEnabled === true);
   });
 }
 

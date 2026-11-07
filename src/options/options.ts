@@ -95,6 +95,8 @@ interface Options extends VideoQualitySettings {
   isStylizedAnimationsEnabled: boolean;
   letterWavePref: LetterWavePref;
   isPassiveScrollEnabled: boolean;
+  isUnblurUpcomingLyricsEnabled: boolean;
+  isLyricsBlurDisabled: boolean;
   isPictureInPictureEnabled: boolean;
   isPictureInPictureAutoRestoreEnabled: boolean;
   pipWindowLayout: string;
@@ -167,6 +169,9 @@ const getOptionsFromForm = (): Options => {
     isStylizedAnimationsEnabled: (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked,
     letterWavePref: getTriSwitchState("letterWaveSwitch"),
     isPassiveScrollEnabled: (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked,
+    isUnblurUpcomingLyricsEnabled: (document.getElementById("isUnblurUpcomingLyricsEnabled") as HTMLInputElement)
+      .checked,
+    isLyricsBlurDisabled: (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked,
     isPictureInPictureEnabled: (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked,
     isPictureInPictureAutoRestoreEnabled: (
       document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement
@@ -365,6 +370,8 @@ const restoreOptions = (): void => {
     isStylizedAnimationsEnabled: true,
     letterWavePref: "on",
     isPassiveScrollEnabled: true,
+    isUnblurUpcomingLyricsEnabled: false,
+    isLyricsBlurDisabled: false,
     isPictureInPictureEnabled: true,
     isPictureInPictureAutoRestoreEnabled: false,
     pipWindowLayout: "horizontal",
@@ -464,6 +471,9 @@ const setOptionsInForm = (items: Options): void => {
   syncFullscreenDependents();
   setTriSwitchState("letterWaveSwitch", items.letterWavePref);
   (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked = items.isPassiveScrollEnabled;
+  (document.getElementById("isUnblurUpcomingLyricsEnabled") as HTMLInputElement).checked =
+    items.isUnblurUpcomingLyricsEnabled;
+  (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked = items.isLyricsBlurDisabled;
   (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked = items.isPictureInPictureEnabled;
   (document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement).checked =
     items.isPictureInPictureAutoRestoreEnabled;
