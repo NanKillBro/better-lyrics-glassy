@@ -97,15 +97,11 @@ ytmusic-player-page:not([blyrics-dfs])[blyrics-video-mode] #av-id {
   padding-bottom: 10px;
 }
 
-/* Hide the fullscreen media buttons without hiding the window itself: visibility:hidden
-   on #song-media-window also removes the tap catcher from hit-testing, so a tap lands on
-   <video>, where YTM runs both its own tap handler (pause) and the player's click handler
-   (delayed play) — one tap then pauses and immediately resumes. */
-ytmusic-player-page[player-fullscreened]:not([blyrics-dfs]) #song-media-window {
-  visibility: visible;
-}
-
-ytmusic-player-page[player-fullscreened]:not([blyrics-dfs]) #song-media-window > * {
+/* Hide only the fullscreen media buttons: hiding #song-media-window (or all of its
+   children) also hides elements hit-testing needs, so a tap lands on <video>, where
+   YTM runs both its own tap handler (pause) and the player's click handler (delayed
+   play) — one tap then pauses and immediately resumes. */
+ytmusic-player-page[player-fullscreened]:not([blyrics-dfs]) #song-media-window .top-row-buttons {
   visibility: hidden;
 }
 
