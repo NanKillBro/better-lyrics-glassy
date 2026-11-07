@@ -130,12 +130,14 @@ export function loadPerformanceSettings(): void {
       isSkipForcedLayoutEnabled: false,
       isLyricsBlurDisabled: false,
       isPlayerMetadataCacheEnabled: false,
+      isProgressiveLyricsEnabled: false,
     },
     items => {
       AppState.isAdCheckEnabled = items.isAdCheckEnabled !== false;
       AppState.isFastTabRendererLookupEnabled = items.isFastTabRendererLookupEnabled !== false;
       AppState.isFastDockProximityEnabled = items.isFastDockProximityEnabled === true;
       AppState.isSkipForcedLayoutEnabled = items.isSkipForcedLayoutEnabled === true;
+      AppState.isProgressiveLyricsEnabled = items.isProgressiveLyricsEnabled === true;
       applyLyricsTickMs(Number(items.lyricsTickMs));
       applyWillChangeSetting(items.isWillChangeEnabled === true);
       applyLyricsBlurSetting(items.isLyricsBlurDisabled === true);
@@ -175,6 +177,9 @@ export function loadPerformanceSettings(): void {
     }
     if (changes.isPlayerMetadataCacheEnabled) {
       applyPlayerMetadataCacheSetting(changes.isPlayerMetadataCacheEnabled.newValue === true);
+    }
+    if (changes.isProgressiveLyricsEnabled) {
+      AppState.isProgressiveLyricsEnabled = changes.isProgressiveLyricsEnabled.newValue === true;
     }
   });
 }
@@ -335,6 +340,9 @@ export function listenForPopupMessages(): void {
         });
       }
     } else if (request.action === "updateSettings") {
+      if (request.settings && typeof request.settings.isProgressiveLyricsEnabled === "boolean") {
+        AppState.isProgressiveLyricsEnabled = request.settings.isProgressiveLyricsEnabled;
+      }
       clearTranslationCache();
       setUpLog();
       hideCursorOnIdle();

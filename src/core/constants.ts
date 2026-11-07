@@ -466,3 +466,6 @@ export const PROVIDER_CONFIGS: ProviderConfig[] = [
 ] as const;
 
 export const LYRIC_SOURCE_KEYS = PROVIDER_CONFIGS.map(p => p.key);
+
+/** How long to wait for a better-ranked provider before showing the best one so far. */
+export const LYRICS_SELECTION_QUIET_MS = 150;

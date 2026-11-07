@@ -45,6 +45,7 @@ interface AppStateType {
   isFastTabRendererLookupEnabled: boolean;
   isFastDockProximityEnabled: boolean;
   isSkipForcedLayoutEnabled: boolean;
+  isProgressiveLyricsEnabled: boolean;
   hasPreloadedNextSong: boolean;
   currentInjectionId: number;
   lyricOffset: number;
@@ -90,6 +91,7 @@ export const AppState: AppStateType = {
   isFastTabRendererLookupEnabled: false,
   isFastDockProximityEnabled: false,
   isSkipForcedLayoutEnabled: false,
+  isProgressiveLyricsEnabled: false,
   hasPreloadedNextSong: false,
   currentInjectionId: 0,
   lyricOffset: 0,

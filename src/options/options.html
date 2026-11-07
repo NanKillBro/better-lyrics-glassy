@@ -257,6 +257,13 @@
 					</label>
 				</div>
 				<div class="container">
+					<span>Load lyrics progressively<span class="info-tip" data-tooltip="Shows the best provider result as soon as it arrives, then reloads the lyric view when a higher-priority source lands. The reload rebuilds the lyric DOM, so the view can flicker or jump back to the current line. Off by default." tabindex="0">i</span></span>
+					<label>
+						<input type="checkbox" id="isProgressiveLyricsEnabled">
+						<span class="checkmark"></span>
+					</label>
+				</div>
+				<div class="container">
 					<span>Check for advertisements<span class="info-tip" data-tooltip="Reads is-advertisement from the player bar every tick. Disable on Premium or ad-blocked setups to skip the check and the ad overlay." tabindex="0">i</span></span>
 					<label>
 						<input type="checkbox" id="isAdCheckEnabled">

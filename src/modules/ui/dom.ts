@@ -750,6 +750,13 @@ function animateControlsSwap(oldControls: HTMLElement, newControls: HTMLElement)
 // Mounts the dock if absent, otherwise refreshes its controls in place. The dock
 // element persists across re-injections so the cursor's hover state (and the expanded
 // reveal) is never lost during a provider switch or toggle.
+/** Rebuilds the dock controls without touching the lyric view, for late provider results. */
+export function refreshDockSources(): void {
+  if (!AppState.isControlsDockEnabled) return;
+  if (!document.getElementsByClassName(DOCK_CLASS)[0]) return;
+  mountDock(AppState.controlsDockPosition);
+}
+
 export function mountDock(position: string): void {
   let dock = document.getElementsByClassName(DOCK_CLASS)[0] as HTMLElement | undefined;
   let inner: HTMLElement | null;

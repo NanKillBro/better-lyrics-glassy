@@ -108,7 +108,18 @@ export async function byId(lyricsId: number): Promise<UnisonResponse | null> {
   }
 }
 
-export default async function unison(providerParameters: ProviderParameters): Promise<void> {
+const inFlight = new WeakMap<ProviderParameters, Promise<void>>();
+
+export default function unison(providerParameters: ProviderParameters): Promise<void> {
+  // All four Unison source keys share one request; progressive loading asks them concurrently.
+  const pending = inFlight.get(providerParameters);
+  if (pending) return pending;
+  const request = fetchUnison(providerParameters).finally(() => inFlight.delete(providerParameters));
+  inFlight.set(providerParameters, request);
+  return request;
+}
+
+async function fetchUnison(providerParameters: ProviderParameters): Promise<void> {
   const url = new URL(UNISON_API_URL);
 
   url.searchParams.append("v", providerParameters.videoId);

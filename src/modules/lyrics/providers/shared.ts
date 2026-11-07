@@ -221,11 +221,26 @@ export async function saveLyricsToCache(providerParameters: ProviderParameters, 
   }
 }
 
+const inFlight = new WeakMap<LyricSource, Promise<LyricSourceResult | null>>();
+
 /**
  * @param providerParameters
  * @param sourceName
  */
-export async function getLyrics(
+export function getLyrics(
+  providerParameters: ProviderParameters,
+  sourceName: LyricSourceKey
+): Promise<LyricSourceResult | null> {
+  // Progressive loading asks providers concurrently; a second ask for the same source joins the first.
+  const lyricSource = providerParameters.sourceMap[sourceName];
+  const pending = inFlight.get(lyricSource);
+  if (pending) return pending;
+  const request = fetchLyrics(providerParameters, sourceName).finally(() => inFlight.delete(lyricSource));
+  inFlight.set(lyricSource, request);
+  return request;
+}
+
+async function fetchLyrics(
   providerParameters: ProviderParameters,
   sourceName: LyricSourceKey
 ): Promise<LyricSourceResult | null> {

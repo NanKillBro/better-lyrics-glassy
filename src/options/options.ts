@@ -34,6 +34,7 @@ interface Options {
   isSkipForcedLayoutEnabled: boolean;
   isLyricsBlurDisabled: boolean;
   isPlayerMetadataCacheEnabled: boolean;
+  isProgressiveLyricsEnabled: boolean;
   isTranslateEnabled: boolean;
   translationLanguage: string;
   isCursorAutoHideEnabled: boolean;
@@ -99,6 +100,7 @@ const getOptionsFromForm = (): Options => {
     isSkipForcedLayoutEnabled: (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked,
     isLyricsBlurDisabled: (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked,
     isPlayerMetadataCacheEnabled: (document.getElementById("isPlayerMetadataCacheEnabled") as HTMLInputElement).checked,
+    isProgressiveLyricsEnabled: (document.getElementById("isProgressiveLyricsEnabled") as HTMLInputElement).checked,
     isTranslateEnabled: (document.getElementById("translate") as HTMLInputElement).checked,
     translationLanguage: (document.getElementById("translationLanguage") as HTMLInputElement).value,
     isCursorAutoHideEnabled: (document.getElementById("cursorAutoHide") as HTMLInputElement).checked,
@@ -283,6 +285,7 @@ const restoreOptions = (): void => {
     isSkipForcedLayoutEnabled: false,
     isLyricsBlurDisabled: false,
     isPlayerMetadataCacheEnabled: true,
+    isProgressiveLyricsEnabled: false,
     isTranslateEnabled: false,
     translationLanguage: "en",
     isRomanizationEnabled: false,
@@ -353,6 +356,8 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked = items.isLyricsBlurDisabled;
   (document.getElementById("isPlayerMetadataCacheEnabled") as HTMLInputElement).checked =
     items.isPlayerMetadataCacheEnabled;
+  (document.getElementById("isProgressiveLyricsEnabled") as HTMLInputElement).checked =
+    items.isProgressiveLyricsEnabled;
   (document.getElementById("translate") as HTMLInputElement).checked = items.isTranslateEnabled;
   (document.getElementById("translationLanguage") as HTMLInputElement).value = items.translationLanguage;
   (document.getElementById("isRomanizationEnabled") as HTMLInputElement).checked = items.isRomanizationEnabled;
