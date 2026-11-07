@@ -190,7 +190,7 @@ Evaluation range: upstream `1b8dd13e..8c2f405d` (807 commits, merged as v3.0.0 i
 
 ## Batch 5
 
-Evaluation range: upstream `8c2f405d..c6e12997` (41 commits on `upstream/master`, up to 2026-11-06), evaluated from `extensions-src/better-lyrics-glassy-dev` at `b290efbd`. 8 upstream items backported as 6 commits; 33 skipped. Branch `backport/batch-5` based on `master` @ `8a655642`.
+Evaluation range: upstream `8c2f405d..c6e12997` (41 commits on `upstream/master`, up to 2026-11-06), evaluated from `extensions-src/better-lyrics-glassy-dev` at `b290efbd`. 9 upstream items backported as 7 commits; 32 skipped. Branch `backport/batch-5` based on `master` @ `8a655642`.
 
 ### Backported
 
@@ -209,11 +209,15 @@ Evaluation range: upstream `8c2f405d..c6e12997` (41 commits on `upstream/master`
    - New `src/options/unison/ttmlMetadata.ts` reads `ttm:title`, Composer/AMLL `meta` (`artists`, `album`, `isrc`, `ytVideoId`, `musicName`) and the body `dur`; adapted to this engine's `console.warn(LOG_PREFIX_UNISON, ...)` logger.
    - `unisonPage.ts` replaces the always-first-wins `autoDetect*` functions with `runLyricsChecks()`, marks URL-prefilled metadata as user-owned, and accepts clock-form durations (`3:12.345` → 192) in `parseDurationInput`.
    - Added `detectedField.selfcheck.ts` and `ttmlMetadata.selfcheck.ts` (the latter stubs `chrome.runtime.getManifest` for this engine's `@constants` module-scope read).
+7. **Add the Spicy Lyrics Provider (PR 1022: `f77dcc2d`)** — adapted, provider core only
+   - `unified.ts`: handles `provider === "spicy"`, fills `spicy-richsynced`/`spicy-synced` through `fillTtml` with `SPICY_LYRICS_URL`; attribution/contributor credits and the karaoke/PiP credit UI are left out.
+   - Adds both keys to `PROVIDER_CONFIGS` (richsynced priority 2, synced priority 9), `sourceKeyToFillFn`, `MANAGED_KEYS`, both options defaults and `options_provider_spicylyrics` (en).
+   - Also cherry-picks the small `event === "done"` slice of `b5772f5e`: marks every managed key filled and resolves its waiters when the stream reports all providers done. In the sequential loop this caps the cost of a provider that has no result (including Spicy on a song without Spicy lyrics); it does not change provider ordering or rendering.
+   - Verification: old `fillTtml` parsed a real 25 KB Better Lyrics TTML sample with the `spicy-*` keys into 36 word-synced lines (language `en`). Live `spicy` stream events still need a real YT Music session.
 
-### Skipped (33)
+### Skipped (32)
 
 - **Progressive provider pipeline (`b5772f5e`, PR 1043)**: not compatible with this engine as a cherry-pick. It needs `mainView` plus `processLyrics(doc, ..., replacing)`, `createLyricsWrapper(keepContents)` and `cleanup(keepView)` for in-place upgrades, none of which exist here (`injectLyrics.ts:171` rewrites the DOM directly). It expects the Unison provider to stream shared/personal stages and keep one `blyrics_<id>_unison` entry for four keys, while `unison.ts:111` is a single fetch that fills all four. It also uses `providerPin.ts` (`resolvePin`/`keepsPin`), where this engine still has `AppState.manualProviderKey` + `availableProviderKeys` (`lyrics.ts:352`). The pure `selection.ts` is portable, but without the renderer and Unison rewrites a port would rebuild the view (flicker, scroll/animation reset) and fire duplicate Unison lookups. Batch 5 changes do not conflict; the commit stays out.
-- **Spicy Lyrics provider (`f77dcc2d`, PR 1022)**: provider plus contributor-credit UI, karaoke end-card and PiP hunks; not a small self-contained change for this engine.
 - **Auth partner origins (`9aca76ab` PR 1046, `f81109dc` PR 1049)**: adds OpenLyryc/composer to `externally_connectable`, CSP and auth-partner metadata; this engine has no `partners.ts` (it uses `approvedOrigins.ts`) and expanding third-party auth trust was left out.
 - **Unison cache count by sync type (`cbee8b0e`, PR 1051)**: depends on `summarizeLyricCache`/storage breakdown UI absent here.
 - **Identity download from the background page (`5a2b2d12`, PR 1040)**: this engine exports identity with an anchor and has no `identityBackup` module.
@@ -228,6 +232,7 @@ Evaluation range: upstream `8c2f405d..c6e12997` (41 commits on `upstream/master`
 - `npm run typecheck` — passed.
 - `npx tsx` selfchecks — `constants`, `providerList`, `themeBuildResolver`, `utils`, `detectedField`, `ttmlMetadata` all passed.
 - `npm run build:ci` — Vite build succeeded with no errors/warnings; the trailing sourcemap upload fails without `SOURCEMAPS_API_KEY` (environment-only).
+- Spicy provider parser check: `fillTtml` parsed the real `api.betterlyrics.org` TTML sample into 36 word-synced lines under the `spicy-*` keys; live stream-event QA pending.
 - Electron 42.5.0 / Chromium 148 (`xvfb-run`, `session.extensions.loadExtension(dist/chrome)`):
   - `options_ui/page.html` and `pages/unison.html?submit=true` load with 0 console errors; the options controls (including the provider list and blur toggles) are present.
   - Pasting a TTML with `ttm:title`, Composer `artists`/`album`/`isrc`/`ytVideoId`, `xml:lang="en"` and `body dur="3:12.345"` fills song, artist (`Artist One, Artist Two`), album, isrc (`USUM71900001`), videoId, duration (`192`), format (`ttml`) and language (`en`).
