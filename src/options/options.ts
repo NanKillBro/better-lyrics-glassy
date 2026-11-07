@@ -24,7 +24,6 @@ interface Options {
   isShadersPromoEnabled: boolean;
   isFullScreenDisabled: boolean;
   isStylizedAnimationsEnabled: boolean;
-  isSmoothProgressBarEnabled: boolean;
   isPassiveScrollEnabled: boolean;
   isWillChangeEnabled: boolean;
   lyricsTickMs: number;
@@ -86,7 +85,6 @@ const getOptionsFromForm = (): Options => {
     isShadersPromoEnabled: (document.getElementById("isShadersPromoEnabled") as HTMLInputElement).checked,
     isFullScreenDisabled: (document.getElementById("isFullScreenDisabled") as HTMLInputElement).checked,
     isStylizedAnimationsEnabled: (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked,
-    isSmoothProgressBarEnabled: (document.getElementById("isSmoothProgressBarEnabled") as HTMLInputElement).checked,
     isPassiveScrollEnabled: (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked,
     isWillChangeEnabled: (document.getElementById("isWillChangeEnabled") as HTMLInputElement).checked,
     lyricsTickMs: Number((document.getElementById("lyricsTickMs") as HTMLSelectElement).value) || 20,
@@ -270,7 +268,6 @@ const restoreOptions = (): void => {
     isCursorAutoHideEnabled: true,
     isFullScreenDisabled: false,
     isStylizedAnimationsEnabled: true,
-    isSmoothProgressBarEnabled: false,
     isPassiveScrollEnabled: true,
     isWillChangeEnabled: true,
     lyricsTickMs: 20,
@@ -333,8 +330,6 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isFullScreenDisabled") as HTMLInputElement).checked = items.isFullScreenDisabled;
   (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked =
     items.isStylizedAnimationsEnabled;
-  (document.getElementById("isSmoothProgressBarEnabled") as HTMLInputElement).checked =
-    items.isSmoothProgressBarEnabled;
   (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked = items.isPassiveScrollEnabled;
   (document.getElementById("isWillChangeEnabled") as HTMLInputElement).checked = items.isWillChangeEnabled;
   (document.getElementById("lyricsTickMs") as HTMLSelectElement).value = String(items.lyricsTickMs);
