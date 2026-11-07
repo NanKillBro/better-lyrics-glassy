@@ -205,6 +205,7 @@ function passiveScrollEngine(isPlaying: boolean): void {
 
   const tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR) as HTMLElement;
   if (!tabRenderer) return;
+  if (!tabRenderer.checkVisibility({ visibilityProperty: true })) return;
 
   const now = Date.now();
 
@@ -348,6 +349,17 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
   const tabSelector = lyricData.tabSelector;
   console.assert(tabSelector != null);
 
+  let tabRenderer: HTMLElement | null;
+  if (AppState.isFastTabRendererLookupEnabled && observedTabRenderer?.isConnected) {
+    tabRenderer = observedTabRenderer;
+  } else {
+    tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR) as HTMLElement | null;
+  }
+  if (!tabRenderer) return;
+  if (tabRenderer !== observedTabRenderer) {
+    setupTabRendererObserver(tabRenderer);
+  }
+
   const playerState = document.getElementById("player-page")?.getAttribute("player-ui-state");
   const isPlayerOpen =
     !playerState ||
@@ -355,7 +367,11 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
     playerState === "FULLSCREEN" ||
     playerState === "MINIPLAYER_IN_PLAYER_PAGE";
   // Don't tick lyrics if they're not visible
-  if (tabSelector.getAttribute("aria-selected") !== "true" || !isPlayerOpen) {
+  if (
+    tabSelector.getAttribute("aria-selected") !== "true" ||
+    !isPlayerOpen ||
+    !tabRenderer.checkVisibility({ visibilityProperty: true })
+  ) {
     animEngineState.doneFirstInstantScroll = false;
     return;
   }
@@ -391,16 +407,6 @@ export function animationEngine(currentTime: number, eventCreationTime: number, 
     const lyricScrollTime = currentTime + getCSSDurationInMs(lyricsElement, "--blyrics-scroll-timing-offset") / 1000;
 
     // Read layout values before the loop writes class changes, to avoid forced reflow
-    let tabRenderer: HTMLElement | null;
-    if (AppState.isFastTabRendererLookupEnabled && observedTabRenderer?.isConnected) {
-      tabRenderer = observedTabRenderer;
-    } else {
-      tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR) as HTMLElement | null;
-    }
-    if (!tabRenderer) return;
-    if (tabRenderer !== observedTabRenderer) {
-      setupTabRendererObserver(tabRenderer);
-    }
     const tabRendererHeight = cachedTabRendererHeight ?? tabRenderer.getBoundingClientRect().height;
     let scrollTop = tabRenderer.scrollTop;
 
