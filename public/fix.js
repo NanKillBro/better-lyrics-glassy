@@ -69,7 +69,11 @@
       }
 
       // Xác định trạng thái hiện tại
-      const isHidden = !el.hasAttribute('opened') && (el.style.display === 'none' || el.getAttribute('aria-hidden') === 'true');
+      // `tp-yt-paper-dialog` và `tp-yt-iron-dropdown` khai báo `opened` như một property,
+      // không phải attribute — `hasAttribute('opened')` luôn trả về false. Đọc property
+      // để không coi một dialog đang mở là đã đóng khi YTM tạm đặt aria-hidden="true".
+      const isOpen = typeof el.opened === 'boolean' ? el.opened : el.hasAttribute('opened');
+      const isHidden = !isOpen && (el.style.display === 'none' || el.getAttribute('aria-hidden') === 'true');
       const isVisible = !isHidden;
 
       if (isVisible) {
@@ -124,6 +128,19 @@
             console.debug('[GlassyUI: Dialogs] 💨 Fading out menu popup');
 
             el._ytmCloseTimer = setTimeout(() => {
+              const stillOpen = typeof el.opened === 'boolean' ? el.opened : el.hasAttribute('opened');
+              if (stillOpen) {
+                el.classList.remove('ytm-fade-out-menu', 'ytm-is-fading-out');
+                el.style.removeProperty('display');
+                el.style.removeProperty('animation');
+                el.style.removeProperty('pointer-events');
+                el.style.removeProperty('z-index');
+                el.dataset.stableOpen = 'true';
+                el._ytmSavedZIndex = null;
+                el._ytmFadeAnim = null;
+                el._ytmCloseTimer = null;
+                return;
+              }
               el.classList.remove('ytm-fade-out-menu', 'ytm-is-fading-out');
               el.style.setProperty('display', 'none');
               el.style.removeProperty('z-index');
@@ -152,6 +169,19 @@
             console.debug('[GlassyUI: Dialogs] 💨 Fading out dialog popup');
 
             el._ytmCloseTimer = setTimeout(() => {
+              const stillOpen = typeof el.opened === 'boolean' ? el.opened : el.hasAttribute('opened');
+              if (stillOpen) {
+                el.classList.remove('ytm-fade-out-dialog', 'ytm-is-fading-out');
+                el.style.removeProperty('display');
+                el.style.removeProperty('animation');
+                el.style.removeProperty('pointer-events');
+                el.style.removeProperty('z-index');
+                el.dataset.stableOpen = 'true';
+                el._ytmSavedZIndex = null;
+                el._ytmFadeAnim = null;
+                el._ytmCloseTimer = null;
+                return;
+              }
               el.classList.remove('ytm-fade-out-dialog', 'ytm-is-fading-out');
               el.style.setProperty('display', 'none');
               el.style.removeProperty('z-index');
