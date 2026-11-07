@@ -185,3 +185,51 @@ Evaluation range: upstream `1b8dd13e..8c2f405d` (807 commits, merged as v3.0.0 i
   - `@container style(--blyrics-background-blur: 100px)` and `Intl.Locale#maximize()` work.
   - Live `music.youtube.com/watch` page: `#player-page` carries `video-mode`, the extension set `blyrics-video-mode`, and `#song-media-window` does not contain `video.html5-main-video` (so the fullscreen `visibility: hidden` rule cannot hide the video).
 - Manual QA matrix still pending: YT fetch failure, Unison hit, narrow-panel wrap, frost skip, video edge in fullscreen, no-lyrics fullscreen bar, high-DPI artwork, zh-TW/zh-CN translations.
+
+---
+
+## Batch 5
+
+Evaluation range: upstream `8c2f405d..c6e12997` (41 commits on `upstream/master`, up to 2026-11-06), evaluated from `extensions-src/better-lyrics-glassy-dev` at `b290efbd`. 8 upstream items backported as 6 commits; 33 skipped. Branch `backport/batch-5` based on `master` @ `8a655642`.
+
+### Backported
+
+1. **Read BiniLyrics Timing from the TTML (PR 1044: `8b52c070`)** — adapted
+   - Drops the `results.timingType` reassignment so the TTML content alone decides whether the result fills `binimum-richsynced` or `binimum-synced`; this engine's `fillTtml` already sets `isWordSynced` from the parsed lines. Source link points at `binimum.org`.
+2. **Keep Click-to-Pause in Fullscreen (PR 1036: `10cc8638`)** — adapted
+   - `fullscreen.css`: hides only `#song-media-window .top-row-buttons` instead of the Batch 4 adaptation's `#song-media-window > *`; the window and its tap catcher stay visible, so one tap does not pause and immediately resume. Replaces the earlier broad child-hiding rule.
+3. **Size the Player-Bar Video Correctly in Mobile Mode (PR 1023: `272d7c16`)** — clean
+   - Adds `:not([is-mweb-modernization-enabled])` to the video-mode aspect-ratio selectors and the height-cap rule.
+4. **Pause the Engine When the Tab Panel Is Hidden (PR 1039: `028724fa`)** — adapted
+   - `animationEngine.ts`: resolves the tab renderer once, then requires `checkVisibility({ visibilityProperty: true })` before the synced tick and in the passive-scroll loop. The tab-renderer lookup moved above the visibility guard to reuse it.
+5. **Let Touch Scroll the Sources List (PR 1028: `68d18f61`)** — adapted
+   - Adds a 200ms touch-only Sortable delay to the provider list and dock-control picker. Dropped the mobile page-fit hunks: this options page is a fixed 600px desktop layout (`options.css` `html { width: 600px }`), so the `100dvh`/viewport changes do not apply.
+6. **Keep Submit Autodetect in Sync and Prefill from Pasted TTML (PR 1025 `5cc81fb1`, PR 1026 `18be3208`, PR 1029 `9e29c56c`)** — adapted, squashed into one commit
+   - New `src/options/unison/detectedField.ts` tracks whether a value is user-owned or still follows detection; language, format, ISRC, song, artist, album, video ID and duration update with the lyrics without overwriting a user edit (clearing a field hands it back to detection).
+   - New `src/options/unison/ttmlMetadata.ts` reads `ttm:title`, Composer/AMLL `meta` (`artists`, `album`, `isrc`, `ytVideoId`, `musicName`) and the body `dur`; adapted to this engine's `console.warn(LOG_PREFIX_UNISON, ...)` logger.
+   - `unisonPage.ts` replaces the always-first-wins `autoDetect*` functions with `runLyricsChecks()`, marks URL-prefilled metadata as user-owned, and accepts clock-form durations (`3:12.345` → 192) in `parseDurationInput`.
+   - Added `detectedField.selfcheck.ts` and `ttmlMetadata.selfcheck.ts` (the latter stubs `chrome.runtime.getManifest` for this engine's `@constants` module-scope read).
+
+### Skipped (33)
+
+- **Progressive provider pipeline (`b5772f5e`, PR 1043)**: not compatible with this engine as a cherry-pick. It needs `mainView` plus `processLyrics(doc, ..., replacing)`, `createLyricsWrapper(keepContents)` and `cleanup(keepView)` for in-place upgrades, none of which exist here (`injectLyrics.ts:171` rewrites the DOM directly). It expects the Unison provider to stream shared/personal stages and keep one `blyrics_<id>_unison` entry for four keys, while `unison.ts:111` is a single fetch that fills all four. It also uses `providerPin.ts` (`resolvePin`/`keepsPin`), where this engine still has `AppState.manualProviderKey` + `availableProviderKeys` (`lyrics.ts:352`). The pure `selection.ts` is portable, but without the renderer and Unison rewrites a port would rebuild the view (flicker, scroll/animation reset) and fire duplicate Unison lookups. Batch 5 changes do not conflict; the commit stays out.
+- **Spicy Lyrics provider (`f77dcc2d`, PR 1022)**: provider plus contributor-credit UI, karaoke end-card and PiP hunks; not a small self-contained change for this engine.
+- **Auth partner origins (`9aca76ab` PR 1046, `f81109dc` PR 1049)**: adds OpenLyryc/composer to `externally_connectable`, CSP and auth-partner metadata; this engine has no `partners.ts` (it uses `approvedOrigins.ts`) and expanding third-party auth trust was left out.
+- **Unison cache count by sync type (`cbee8b0e`, PR 1051)**: depends on `summarizeLyricCache`/storage breakdown UI absent here.
+- **Identity download from the background page (`5a2b2d12`, PR 1040)**: this engine exports identity with an anchor and has no `identityBackup` module.
+- **Downloads permission inside the export click (`ebac53b6`, PR 1017)**: same anchor-based export, no `chrome.downloads` path.
+- **Gamification profile links (`2140d89a`, PR 1035)**: no `gamificationRender` in this engine.
+- **Always-on fullscreen controls (`eab223c3`, PR 1021)**: the `#blyrics-fs-controls` strip and tri-state display switches are absent here.
+- **Offer detected metadata back in the form (`0ef9bc0f`, PR 1031)**: the hint bar needs new locale strings and CSS; `detectedField.ts` already carries the `offer`/`use` API if the UI is added later.
+- **Deps/i18n/release/auto-fix/docs**: braccato and npm bumps, Crowdin syncs, release/canary commits, Biome/Knip auto-fixes, README/funding/docs changes.
+
+### Batch 5 verification (2026-11-08)
+
+- `npm run typecheck` — passed.
+- `npx tsx` selfchecks — `constants`, `providerList`, `themeBuildResolver`, `utils`, `detectedField`, `ttmlMetadata` all passed.
+- `npm run build:ci` — Vite build succeeded with no errors/warnings; the trailing sourcemap upload fails without `SOURCEMAPS_API_KEY` (environment-only).
+- Electron 42.5.0 / Chromium 148 (`xvfb-run`, `session.extensions.loadExtension(dist/chrome)`):
+  - `options_ui/page.html` and `pages/unison.html?submit=true` load with 0 console errors; the options controls (including the provider list and blur toggles) are present.
+  - Pasting a TTML with `ttm:title`, Composer `artists`/`album`/`isrc`/`ytVideoId`, `xml:lang="en"` and `body dur="3:12.345"` fills song, artist (`Artist One, Artist Two`), album, isrc (`USUM71900001`), videoId, duration (`192`), format (`ttml`) and language (`en`).
+  - Typing a user song value then editing the lyrics keeps the user value, confirming the user-owned guard.
+- Manual QA still pending: BiniLyrics timing from TTML, fullscreen click-to-pause, mobile-mode video sizing, tab-hidden tick pause.
