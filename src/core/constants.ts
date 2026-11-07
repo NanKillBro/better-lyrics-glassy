@@ -38,7 +38,6 @@ export const FULLSCREEN_CONTROLS_DISABLED_ATTR = "blyrics-no-fs-controls" as con
 export const FULLSCREEN_CONTROLS_PINNED_ATTR = "blyrics-fs-controls-pinned" as const;
 export const KARAOKE_ACTIVE_ATTR = "blyrics-karaoke" as const;
 export const DISABLE_EFFECTS_STYLE_ID = "blyrics-disable-effects" as const;
-export const SMOOTH_PROGRESS_BAR_STYLE_ID = "blyrics-smooth-progress-bar" as const;
 export const HIDDEN_CLASS = "blyrics-hidden" as const;
 export const REPORT_MODAL = "blyrics-report-lyrics" as const;
 

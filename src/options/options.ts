@@ -93,7 +93,6 @@ interface Options extends VideoQualitySettings {
   isFullScreenDisabled: boolean;
   fullscreenControlsPref: FullscreenControlsPref;
   isStylizedAnimationsEnabled: boolean;
-  isSmoothProgressBarEnabled: boolean;
   letterWavePref: LetterWavePref;
   isPassiveScrollEnabled: boolean;
   isPictureInPictureEnabled: boolean;
@@ -166,7 +165,6 @@ const getOptionsFromForm = (): Options => {
     isFullScreenDisabled: (document.getElementById("isFullScreenDisabled") as HTMLInputElement).checked,
     fullscreenControlsPref: getTriSwitchState("fullscreenControlsSwitch"),
     isStylizedAnimationsEnabled: (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked,
-    isSmoothProgressBarEnabled: (document.getElementById("isSmoothProgressBarEnabled") as HTMLInputElement).checked,
     letterWavePref: getTriSwitchState("letterWaveSwitch"),
     isPassiveScrollEnabled: (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked,
     isPictureInPictureEnabled: (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked,
@@ -365,7 +363,6 @@ const restoreOptions = (): void => {
     isFullScreenDisabled: false,
     fullscreenControlsPref: "auto",
     isStylizedAnimationsEnabled: true,
-    isSmoothProgressBarEnabled: false,
     letterWavePref: "on",
     isPassiveScrollEnabled: true,
     isPictureInPictureEnabled: true,
@@ -464,8 +461,6 @@ const setOptionsInForm = (items: Options): void => {
   setTriSwitchState("fullscreenControlsSwitch", items.fullscreenControlsPref);
   (document.getElementById("isStylizedAnimationsEnabled") as HTMLInputElement).checked =
     items.isStylizedAnimationsEnabled;
-  (document.getElementById("isSmoothProgressBarEnabled") as HTMLInputElement).checked =
-    items.isSmoothProgressBarEnabled;
   syncFullscreenDependents();
   setTriSwitchState("letterWaveSwitch", items.letterWavePref);
   (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked = items.isPassiveScrollEnabled;
