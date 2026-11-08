@@ -2,6 +2,7 @@ import {
   DOCK_CLASS,
   DOCK_CONTROL_ORDER_DEFAULT,
   DOCK_DEFAULT_POSITION,
+  LOG_PREFIX,
   LOG_PREFIX_CONTENT,
   LYRICS_DISABLED_ATTR,
 } from "@constants";
@@ -137,7 +138,11 @@ export function loadPerformanceSettings(): void {
       AppState.isFastTabRendererLookupEnabled = items.isFastTabRendererLookupEnabled !== false;
       AppState.isFastDockProximityEnabled = items.isFastDockProximityEnabled === true;
       AppState.isSkipForcedLayoutEnabled = items.isSkipForcedLayoutEnabled === true;
-      AppState.isProgressiveLyricsEnabled = items.isProgressiveLyricsEnabled === true;
+      const progressiveEnabled = items.isProgressiveLyricsEnabled === true;
+      if (AppState.isProgressiveLyricsEnabled !== progressiveEnabled) {
+        log(LOG_PREFIX, `Progressive lyrics loading ${progressiveEnabled ? "enabled" : "disabled"}`);
+      }
+      AppState.isProgressiveLyricsEnabled = progressiveEnabled;
       applyLyricsTickMs(Number(items.lyricsTickMs));
       applyWillChangeSetting(items.isWillChangeEnabled === true);
       applyLyricsBlurSetting(items.isLyricsBlurDisabled === true);
@@ -179,7 +184,11 @@ export function loadPerformanceSettings(): void {
       applyPlayerMetadataCacheSetting(changes.isPlayerMetadataCacheEnabled.newValue === true);
     }
     if (changes.isProgressiveLyricsEnabled) {
-      AppState.isProgressiveLyricsEnabled = changes.isProgressiveLyricsEnabled.newValue === true;
+      const progressiveEnabled = changes.isProgressiveLyricsEnabled.newValue === true;
+      if (AppState.isProgressiveLyricsEnabled !== progressiveEnabled) {
+        log(LOG_PREFIX, `Progressive lyrics loading ${progressiveEnabled ? "enabled" : "disabled"}`);
+      }
+      AppState.isProgressiveLyricsEnabled = progressiveEnabled;
     }
   });
 }
@@ -341,7 +350,11 @@ export function listenForPopupMessages(): void {
       }
     } else if (request.action === "updateSettings") {
       if (request.settings && typeof request.settings.isProgressiveLyricsEnabled === "boolean") {
-        AppState.isProgressiveLyricsEnabled = request.settings.isProgressiveLyricsEnabled;
+        const progressiveEnabled = request.settings.isProgressiveLyricsEnabled;
+        if (AppState.isProgressiveLyricsEnabled !== progressiveEnabled) {
+          log(LOG_PREFIX, `Progressive lyrics loading ${progressiveEnabled ? "enabled" : "disabled"}`);
+        }
+        AppState.isProgressiveLyricsEnabled = progressiveEnabled;
       }
       clearTranslationCache();
       setUpLog();

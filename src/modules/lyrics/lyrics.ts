@@ -355,6 +355,7 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
 
     if (AppState.isProgressiveLyricsEnabled) {
       progressiveHandled = true;
+      log(LOG_PREFIX, `Progressive lyrics loading active: asking ${orderedProviders.length} providers concurrently`);
       const selection = createSelection<LyricSourceKey, LyricSourceResult>({
         order: orderedProviders,
         display: (provider, sourceLyrics) => showLyrics(provider, sourceLyrics),
