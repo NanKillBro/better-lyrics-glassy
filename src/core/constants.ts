@@ -36,6 +36,8 @@ export const SHADERS_DETECTION_SELECTOR = '[id^="better-lyrics-kawarp-"]' as con
 export const LYRICS_LOADER_ID = "blyrics-loader" as const;
 export const LYRICS_WRAPPER_ID = "blyrics-wrapper" as const;
 export const LYRICS_DISABLED_ATTR = "blyrics-dfs" as const;
+export const THEMESONG_ACTIVE_ATTR = "blyrics-themesong" as const;
+export const THEMESONG_CONTAINER_ID = "ThemeSong-MainContainer" as const;
 export const HIDDEN_CLASS = "blyrics-hidden" as const;
 export const REPORT_MODAL = "blyrics-report-lyrics" as const;
 

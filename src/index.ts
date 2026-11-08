@@ -33,6 +33,7 @@ import {
   setupWakeLockForFullscreen,
 } from "@modules/ui/observer";
 import { subscribeToCustomStyles } from "@modules/ui/styleInjector";
+import { observeThemeSong } from "@modules/ui/themeSongCompat";
 import { log, setUpLog } from "@utils";
 
 /**
@@ -43,6 +44,7 @@ import { log, setUpLog } from "@utils";
 async function modify(): Promise<void> {
   setUpLog();
   await injectHeadTags();
+  observeThemeSong();
   await loadLocaleOverride();
   injectI18nCssVars();
   subscribeToLocaleChanges();
