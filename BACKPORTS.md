@@ -238,3 +238,15 @@ Evaluation range: upstream `8c2f405d..c6e12997` (41 commits on `upstream/master`
   - Pasting a TTML with `ttm:title`, Composer `artists`/`album`/`isrc`/`ytVideoId`, `xml:lang="en"` and `body dur="3:12.345"` fills song, artist (`Artist One, Artist Two`), album, isrc (`USUM71900001`), videoId, duration (`192`), format (`ttml`) and language (`en`).
   - Typing a user song value then editing the lyrics keeps the user value, confirming the user-owned guard.
 - Manual QA still pending: BiniLyrics timing from TTML, fullscreen click-to-pause, mobile-mode video sizing, tab-hidden tick pause.
+
+### Local changes after Batch 5 (not upstream)
+
+1. **Disable YouTube Captions by default (`77b0a05d`)** — both engines (`better-lyrics-glassy`, `better-lyrics-glassy-dev` `eb5780eb`)
+   - Runtime defaults in `providers/shared.ts` now mark `yt-captions` with `d_` through `defaultDisabledProviders`; the options fallback and default-order lists use `d_yt-captions` too. The provider stays visible in the sources list and can be enabled. Existing `preferredProviderList` storage wins.
+2. **Fix disabled-default provider merging (`840016db`, dev `8de7d2fa`)**
+   - `mergePreferredProviders` stripped the stored id's `d_` prefix but compared the default key as-is, so `d_yt-captions` was inserted twice. Both sides are stripped now; two selfcheck cases cover disabled defaults.
+3. **Opt-in progressive lyrics loading (`7b33ff63`)** — old engine only
+   - New `selection.ts` (port of upstream's pure selection, 150 ms quiet window), concurrent provider tasks in `createLyrics`, classic `processLyrics` re-injection on display/upgrade, YT-match withdrawal, `hasShownLyrics` not-found fallback, dock refresh only when late providers were added.
+   - `getLyrics` dedupes concurrent calls per source with a `WeakMap` in-flight promise; the Unison filler does the same so four Unison keys still make one request.
+   - `AppState.isProgressiveLyricsEnabled` (default false), Performance-tab checkbox **Load lyrics progressively**, `loadPerformanceSettings()` listener and a synchronous copy from the `updateSettings` message.
+   - Full mechanics, risks and verification: `AI_Library/glassy-music-nankill/progressive-lyrics.md`.
