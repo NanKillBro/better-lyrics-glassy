@@ -249,5 +249,33 @@ Evaluation range: upstream `8c2f405d..c6e12997` (41 commits on `upstream/master`
 3. **Opt-in progressive lyrics loading (`7b33ff63`)** — old engine only
    - New `selection.ts` (port of upstream's pure selection, 150 ms quiet window), concurrent provider tasks in `createLyrics`, classic `processLyrics` re-injection on display/upgrade, YT-match withdrawal, `hasShownLyrics` not-found fallback, dock refresh only when late providers were added.
    - `getLyrics` dedupes concurrent calls per source with a `WeakMap` in-flight promise; the Unison filler does the same so four Unison keys still make one request.
-   - `AppState.isProgressiveLyricsEnabled` (default false), Performance-tab checkbox **Load lyrics progressively**, `loadPerformanceSettings()` listener and a synchronous copy from the `updateSettings` message.
-   - Full mechanics, risks and verification: `AI_Library/glassy-music-nankill/progressive-lyrics.md`.
+    - `AppState.isProgressiveLyricsEnabled` (default false), Performance-tab checkbox **Load lyrics progressively**, `loadPerformanceSettings()` listener and a synchronous copy from the `updateSettings` message.
+    - Full mechanics, risks and verification: `AI_Library/glassy-music-nankill/progressive-lyrics.md`.
+
+---
+
+## Batch 6
+
+Evaluation range: upstream `c6e12997..205c4751` (6 commits on `upstream/master`, up to 2026-11-08), evaluated from `extensions-src/better-lyrics-glassy-dev` at `45f2875e`. 1 upstream item backported; 5 skipped. Branch `backport/batch-6` based on `master` @ `31f140c4`.
+
+### Backported
+
+1. **Gate ThemeSong Compatibility Without a Root `:has()` (PR 1056: `7c53e77a`)** — adapted
+   - `themesong.css`: replaces `@supports (selector(:root:has(#ThemeSong-MainContainer))) { :root:has(…) { … } }` with `:root:is([blyrics-themesong], #ThemeSong-MainContainer)`, removing a root-anchored `:has()` that Blink re-evaluates on DOM mutations, including the lyric engine's per-frame DOM writes.
+   - Adds `THEMESONG_ACTIVE_ATTR` / `THEMESONG_CONTAINER_ID` to `src/core/constants.ts` and `src/modules/ui/themeSongCompat.ts`; a `MutationObserver` on `<body>`'s direct children toggles the root attribute. ThemeSong appends `#ThemeSong-MainContainer` directly to `<body>`, so the direct-child observer is sufficient.
+   - Dropped the `progressBar.ts` repaint hunk (no `modules/ui/playerControls` in this engine) and the observer-dispose wiring (this entrypoint has no reinjection cleanup). Kept the local `& #layout` selector optimization.
+   - `STYLING.md` §15 documents the attribute gate.
+
+### Skipped (5)
+
+- **Unison background-group preview (PR 1055: `742a83bd`)**: this engine's `unisonPage.ts` `parseTtmlLines()` already emits one preview line per `x-bg` group, verified with the upstream selfcheck TTML sample; the other half bumps `@braccato/core` 1.20.0 / parsers 0.4.1, which is out of scope.
+- **Release 3.0.2.2 (`24a5805d`)**, **lockfile auto-fix (`4c775435`)**, **long-word docs (`c91777a2`, `205c4751`)**: release metadata, dependency-lock noise, and documentation for the new renderer's `.blyrics-word-group-long` / `blyrics-long-word-wrap-threshold`, which this engine does not have.
+- Dev-local `eb5780eb` / `8de7d2fa` are mirrored here as `77b0a05d` / `840016db`; `45f2875e` is only the matching merge.
+
+### Batch 6 verification (2026-11-08)
+
+- `npm run typecheck` — passed.
+- `npx tsx` selfchecks — `constants`, `providerList`, `themeBuildResolver`, `utils`, `detectedField`, `ttmlMetadata` all passed.
+- `npm run build:ci` — Vite build succeeded with no errors/warnings; the trailing sourcemap upload fails without `SOURCEMAPS_API_KEY` (environment-only).
+- Electron 44.9.1 live `https://music.youtube.com/` smoke (`xvfb-run`, `session.extensions.loadExtension(dist/chrome)`): the content script loaded; `html[blyrics-themesong]` was absent initially; appending `#ThemeSong-MainContainer` to `<body>` set the attribute and made `--blyrics-text-color` resolve to the injected `--ts-primary-text-color` (`rgb(1, 2, 3)`); removing the container cleared both. No extension console errors observed.
+- Pending user QA: layout with the real ThemeSong extension in fullscreen/player-page and miniplayer.

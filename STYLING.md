@@ -998,21 +998,19 @@ Creates styled footer elements including a Discord button with hover effects.
 The `themesong.css` file ensures compatibility with the ThemeSong browser extension:
 
 ```css
-@supports (selector(:root:has(#ThemeSong-MainContainer))) {
-  :root:has(#ThemeSong-MainContainer) {
-    #player-page {
-      top: 0 !important;
-      padding-block: 64px;
-    }
-    
-    [style*="--blyrics-background-img"] {
-      --blyrics-background-img: unset !important;
-    }
+:root:is([blyrics-themesong], #ThemeSong-MainContainer) {
+  #player-page {
+    top: 0 !important;
+    padding-block: 64px;
+  }
+
+  & #layout {
+    --blyrics-background-img: unset !important;
   }
 }
 ```
 
-This CSS feature query detects when ThemeSong is active and adjusts the layout accordingly, including disabling the background image feature to prevent conflicts.
+`src/modules/ui/themeSongCompat.ts` keeps the `blyrics-themesong` root attribute in sync: it checks for `#ThemeSong-MainContainer` on start and when `<body>`'s direct children change. ThemeSong appends that container directly to `<body>`. The attribute gate replaces a `:root:has(#ThemeSong-MainContainer)` selector, which made Blink re-evaluate a root-anchored `:has()` on every DOM mutation — including the lyric scroller's per-frame writes. It also disables the background image feature to prevent conflicts.
 
 ## 16. Translated and Romanized Lyrics
 
