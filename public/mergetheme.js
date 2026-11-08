@@ -2712,12 +2712,26 @@ function pickPrimarySourceContainer(containers) {
   );
 }
 
+const NANKILL_BLYRICS_CONTRIBUTOR_SELECTOR = '.blyrics-footer__contributor';
+
+function stripFooterContributorCredits(container) {
+  for (const credit of Array.from(container.querySelectorAll(NANKILL_BLYRICS_CONTRIBUTOR_SELECTOR))) {
+    const separator = credit.previousSibling;
+    credit.remove();
+    if (separator && separator.nodeType === Node.TEXT_NODE && separator.textContent.trim() === '·') {
+      separator.remove();
+    }
+  }
+}
+
 function sanitizeSourceContainers({ containers, primary, tabsHost }) {
   for (const container of containers) {
     const sourceLink = getSourceLinkInContainer(container);
     if (!sourceLink) {
       continue;
     }
+
+    stripFooterContributorCredits(container);
 
     if (container === primary) {
       sourceLink.id = NANKILL_BLYRICS_SOURCE_LINK_ID;
