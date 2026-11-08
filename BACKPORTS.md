@@ -232,6 +232,7 @@ Evaluation range: upstream `8c2f405d..c6e12997` (41 commits on `upstream/master`
 - `npm run typecheck` — passed.
 - `npx tsx` selfchecks — `constants`, `providerList`, `themeBuildResolver`, `utils`, `detectedField`, `ttmlMetadata` all passed.
 - `npm run build:ci` — Vite build succeeded with no errors/warnings; the trailing sourcemap upload fails without `SOURCEMAPS_API_KEY` (environment-only).
+- Electron 42.5.0 options smoke on a fresh profile: progressive checkbox present and unchecked, `yt-captions` unchecked/disabled, exactly one `d_yt-captions` entry after saving, toggle persists `isProgressiveLyricsEnabled: true`, 0 console errors. Dev engine smoke: 18 provider rows, one disabled `yt-captions` row, one Spicy row, 0 console errors.
 - Spicy provider parser check: `fillTtml` parsed the real `api.betterlyrics.org` TTML sample into 36 word-synced lines under the `spicy-*` keys; live stream-event QA pending.
 - Electron 42.5.0 / Chromium 148 (`xvfb-run`, `session.extensions.loadExtension(dist/chrome)`):
   - `options_ui/page.html` and `pages/unison.html?submit=true` load with 0 console errors; the options controls (including the provider list and blur toggles) are present.
