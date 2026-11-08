@@ -77,8 +77,10 @@ ytmusic-player-page[player-fullscreened] * {
 }
 
 /* Chặn trang web (body) bị cuộn nếu nội dung bị tràn ra ngoài màn hình */
-/* Dùng :has để check nếu đang fullscreen thì khóa body lại */
-body:has(ytmusic-player-page[player-fullscreened]) {
+/* body:has(ytmusic-player-page[player-fullscreened]) đo được ~173-196ms/trace
+   (Blink quét cả subtree mỗi lần match) → class do JS stamp từ observer
+   [player-fullscreened] có sẵn, giữ nguyên predicate và declaration. */
+body.nankill-body-fullscreen {
   overflow: hidden !important;
 }
 
@@ -402,9 +404,10 @@ ytmusic-app-layout::after {
   pointer-events: none; 
 }
 
-/* Khi người dùng click vào search box thì hiện lớp kính ảo lên */
-ytmusic-app-layout:has(ytmusic-search-box:focus-within)::after,
-ytmusic-app-layout:has(ytmusic-search-box[opened])::after {
+/* Khi người dùng click vào search box thì hiện lớp kính ảo lên.
+   :has(ytmusic-search-box:focus-within) đo được ~585-729ms/trace (881 lần
+   thử, 0 khớp) → trigger là class do JS stamp từ focus + [opened]. */
+ytmusic-app-layout.nankill-search-glass-open::after {
   opacity: 1;
   visibility: visible;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7) !important;
@@ -3035,6 +3038,18 @@ const NANKILL_FS_CURSOR_CSS = `
 
 let nankillFsCursorObserver = null;
 
+const NANKILL_BODY_FS_CLASS = 'nankill-body-fullscreen';
+
+function syncFullscreenBodyLock() {
+  const body = document.body;
+  if (!body) return;
+
+  const wanted = Boolean(document.querySelector('ytmusic-player-page[player-fullscreened]'));
+  if (body.classList.contains(NANKILL_BODY_FS_CLASS) !== wanted) {
+    body.classList.toggle(NANKILL_BODY_FS_CLASS, wanted);
+  }
+}
+
 function syncFullscreenCursorStyle() {
   const layout = document.getElementById('layout');
   const wanted = Boolean(layout && layout.hasAttribute('player-fullscreened'));
@@ -3058,6 +3073,7 @@ function syncFullscreenCursorStyle() {
 
 function setupFullscreenCursorObserver() {
   syncFullscreenCursorStyle();
+  syncFullscreenBodyLock();
 
   if (nankillFsCursorObserver) {
     return;
@@ -3067,10 +3083,82 @@ function setupFullscreenCursorObserver() {
 
   // attributeFilter làm observer này gần như miễn phí: Blink chỉ notify khi
   // đúng attribute đó đổi, chứ không phải mọi mutation trong subtree.
-  nankillFsCursorObserver = new MutationObserver(syncFullscreenCursorStyle);
+  // Cùng tín hiệu đó stamp luôn class khóa scroll của body.
+  nankillFsCursorObserver = new MutationObserver(() => {
+    syncFullscreenCursorStyle();
+    syncFullscreenBodyLock();
+  });
   nankillFsCursorObserver.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ['player-fullscreened'],
+    subtree: true,
+  });
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *  SEARCH GLASS STATE — stamp .nankill-search-glass-open thay cho
+ *      ytmusic-app-layout:has(ytmusic-search-box:focus-within)::after
+ *      ytmusic-app-layout:has(ytmusic-search-box[opened])::after
+ *
+ *  Đo được (DevTools Selector stats, watch + playlist): rule :focus-within
+ *  tốn 585-729ms/trace với 881 lần match thử và 0 lần khớp, vì :has() neo
+ *  ở app root buộc Blink quét lại cả subtree mỗi lần match. Điều kiện
+ *  stamp dùng đúng 2 predicate cũ (activeElement.closest + [opened]),
+ *  nên hành vi giữ nguyên; class chỉ đổi khi state thật sự đổi.
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+const NANKILL_SEARCH_GLASS_CLASS = 'nankill-search-glass-open';
+
+let nankillSearchGlassObserver = null;
+
+function isSearchGlassOpen() {
+  return Boolean(
+    document.activeElement?.closest('ytmusic-search-box') ||
+    document.querySelector('ytmusic-search-box[opened]')
+  );
+}
+
+function syncSearchGlassState() {
+  const layout = document.querySelector('ytmusic-app-layout');
+  if (!layout) return;
+
+  const wanted = isSearchGlassOpen();
+  if (layout.classList.contains(NANKILL_SEARCH_GLASS_CLASS) !== wanted) {
+    layout.classList.toggle(NANKILL_SEARCH_GLASS_CLASS, wanted);
+  }
+}
+
+/* focusout chạy trước khi focus mới ổn định → dời sang microtask để
+ * activeElement đã là element mới, tránh nháy class khi focus đổi bên
+ * trong cùng search box. */
+function scheduleSearchGlassSync() {
+  queueMicrotask(syncSearchGlassState);
+}
+
+function setupSearchGlassState() {
+  syncSearchGlassState();
+
+  if (nankillSearchGlassObserver || !document.documentElement) {
+    return;
+  }
+
+  console.info('[GlassyUI] Stamping .nankill-search-glass-open in place of :has(ytmusic-search-box)...');
+
+  document.addEventListener('focusin', syncSearchGlassState, true);
+  document.addEventListener('focusout', scheduleSearchGlassSync, true);
+
+  // attributeFilter giữ observer gần như miễn phí: Blink chỉ notify khi
+  // đúng attribute "opened" đổi, không phải mọi mutation trong subtree.
+  nankillSearchGlassObserver = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.target.localName === 'ytmusic-search-box') {
+        syncSearchGlassState();
+        return;
+      }
+    }
+  });
+  nankillSearchGlassObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['opened'],
     subtree: true,
   });
 }
@@ -3224,6 +3312,7 @@ setupFooterDockingObserver();
 setupNoSyncDomObserver();
 setupFullscreenCursorObserver();
 setupFullscreenMiniPlayerBlocker();
+setupSearchGlassState();
 setupPastLineMarker();
 
 // Chèn lại lần nữa khi trang load xong (đề phòng bị extension ghi đè)
@@ -3234,6 +3323,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setupNoSyncDomObserver();
   setupFullscreenCursorObserver();
   setupFullscreenMiniPlayerBlocker();
+  setupSearchGlassState();
   setupPastLineMarker();
 });
 
@@ -3244,5 +3334,6 @@ window.addEventListener('load', () => {
   setupNoSyncDomObserver();
   setupFullscreenCursorObserver();
   setupFullscreenMiniPlayerBlocker();
+  setupSearchGlassState();
   setupPastLineMarker();
 });
