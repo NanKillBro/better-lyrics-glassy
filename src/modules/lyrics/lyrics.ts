@@ -7,18 +7,18 @@ import { FETCH_LYRICS_LOG, LOG_PREFIX, LYRICS_TAB_HIDDEN_LOG, SERVER_ERROR_LOG, 
 import { AppState, type PlayerDetails } from "@core/appState";
 import { t } from "@core/i18n";
 import { type LyricsData, processLyrics } from "@modules/lyrics/injectLyrics";
-import { stringSimilarity } from "@modules/lyrics/lyricParseUtils";
 import { registerThemeSetting } from "@modules/settings/themeOptions";
+import { animEngineState } from "@modules/ui/animationEngine";
 import { flushLoader, refreshDockSources, renderLoader } from "@modules/ui/dom";
 import { log } from "@utils";
 import { LyricsLoadTimer } from "./lyricsLoadTimings";
 import type { Lyric, LyricSourceKey, LyricSourceResult, ProviderParameters } from "./providers/shared";
-import { createSelection } from "./selection";
 import { getLyrics, newSourceMap, providerPriority } from "./providers/shared";
 import type { YTLyricSourceResult } from "./providers/yt";
 import { getSongAlbum, getSongMetadata, type SegmentMap } from "./requestSniffer/requestSniffer";
+import { createSelection } from "./selection";
+import { agreeingKeys, lyricsMatch } from "./sourceAgreement";
 import { clearCache as clearTranslationCache } from "./translation";
-import { animEngineState } from "@modules/ui/animationEngine";
 
 const hideInstrumentalOnly = registerThemeSetting("blyrics-hide-instrumental-only", true, true);
 
@@ -28,6 +28,18 @@ function isInstrumentalOnly(lyrics: Lyric[]): boolean {
   if (meaningfulLyrics.length === 0) return true;
   const instrumentalPattern = /^(\[|\(|\♪|\s)*(instrumental(\s*only)?|music)(\]|\)|\♪|\s)*$/i;
   return meaningfulLyrics.every(l => instrumentalPattern.test(l.words.trim()) || l.isInstrumental === true);
+}
+
+function lyricText(lyrics: Lyric[]): string {
+  let text = "";
+  lyrics.forEach(lyric => {
+    text += lyric.words + "\n";
+  });
+  return text;
+}
+
+function isCheckedAgainstYt(provider: LyricSourceKey): boolean {
+  return !provider.startsWith("unison") && provider !== "yt-lyrics";
 }
 
 function normalizeArtist(artist: string): string {
@@ -362,10 +374,19 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
         displayNone: showNotFound,
       });
 
-      const tasks = orderedProviders.map(async provider => {
-        const reject = () => selection.report(provider, { kind: "rejected" });
+      const ytMismatches = new Map<LyricSourceKey, LyricSourceResult>();
+      let hasYtMatch = false;
+
+      // A source the listener picked by hand is shown whatever the checks say; they only withhold the rest.
+      const withhold = (provider: LyricSourceKey): boolean => {
+        if (provider === pinnedProvider) return false;
+        selection.report(provider, { kind: "rejected" });
+        return true;
+      };
+
+      const run = async (provider: LyricSourceKey): Promise<void> => {
         if (signal.aborted) {
-          reject();
+          selection.report(provider, { kind: "rejected" });
           return;
         }
 
@@ -375,48 +396,67 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
           lyricsTimer.end(`provider:${provider}`);
 
           if (signal.aborted) {
-            reject();
+            selection.report(provider, { kind: "rejected" });
             return;
           }
           if (!sourceLyrics?.lyrics || sourceLyrics.lyrics.length === 0) {
-            reject();
+            selection.report(provider, { kind: "rejected" });
             return;
           }
 
           recordAvailableProvider(provider, sourceLyrics);
 
-          if (hideInstrumentalOnly.getBooleanValue() && isInstrumentalOnly(sourceLyrics.lyrics)) {
-            reject();
+          if (hideInstrumentalOnly.getBooleanValue() && isInstrumentalOnly(sourceLyrics.lyrics) && withhold(provider)) {
             return;
           }
 
           // Show it now; withdraw it if YouTube's own lyrics say it is a different song. Unison
           // matches on the video id, so it skips this check in the sequential path too.
           selection.report(provider, { kind: "displayable", result: sourceLyrics });
-          if (sourceLyrics.source === "Unison" || provider === "yt-lyrics") return;
+          if (!isCheckedAgainstYt(provider)) return;
 
-          const ytLyrics = (await ytLyricsPromise) as YTLyricSourceResult;
+          const ytLyrics = (await ytLyricsPromise) as YTLyricSourceResult | null;
           if (signal.aborted || ytLyrics === null) return;
 
-          let lyricText = "";
-          sourceLyrics.lyrics.forEach(lyric => {
-            lyricText += lyric.words + "\n";
-          });
-          const matchAmount = stringSimilarity(lyricText.toLowerCase(), ytLyrics.text.toLowerCase());
-          if (matchAmount < 0.5) {
-            log(
-              `Got lyrics from ${sourceLyrics.source}, but they don't match YT lyrics. Rejecting: Match: ${matchAmount}%`
-            );
-            reject();
+          if (lyricsMatch(lyricText(sourceLyrics.lyrics), ytLyrics.text)) {
+            hasYtMatch = true;
+            return;
           }
+          ytMismatches.set(provider, sourceLyrics);
+          const withheld = withhold(provider);
+          log(
+            `Got lyrics from ${sourceLyrics.source}, but they don't match YT lyrics. ` +
+              (withheld ? "Rejecting." : "Keeping them, as this source was picked manually.")
+          );
         } catch (err) {
           log(err);
           lyricsTimer.end(`provider:${provider}`);
-          reject();
+          selection.report(provider, { kind: "rejected" });
         }
-      });
+      };
 
-      await Promise.allSettled(tasks);
+      // When no source matches YouTube's lyrics, the fault is more likely YouTube's (a truncated or
+      // wrong entry) than every source's, provided most of them agree with each other.
+      const reinstateAgreeingSources = (): void => {
+        if (signal.aborted || hasYtMatch) return;
+        const mismatched = orderedProviders.flatMap(key => {
+          const result = ytMismatches.get(key);
+          return result?.lyrics ? [{ key, source: result.source, text: lyricText(result.lyrics), result }] : [];
+        });
+        const agreed = new Set(agreeingKeys(mismatched));
+        if (agreed.size === 0) return;
+        log(`No source matched YT lyrics, but most agree with each other. Allowing: ${[...agreed].join(", ")}`);
+        for (const { key, result } of mismatched) {
+          if (agreed.has(key)) selection.report(key, { kind: "displayable", result });
+        }
+      };
+
+      const ytChecked = orderedProviders.filter(isCheckedAgainstYt);
+      const ytUnchecked = orderedProviders.filter(provider => !isCheckedAgainstYt(provider));
+      await Promise.allSettled([
+        Promise.allSettled(ytChecked.map(run)).then(reinstateAgreeingSources),
+        ...ytUnchecked.map(run),
+      ]);
       if (signal.aborted) {
         selection.dispose();
         return;
@@ -425,6 +465,21 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       if (AppState.availableProviderKeys.length !== availableAtLastDisplay) refreshDockSources();
       selection.dispose();
     } else {
+      const ytMismatches = new Map<LyricSourceKey, LyricSourceResult>();
+
+      const bestAgreeingSource = (): { key: LyricSourceKey; result: LyricSourceResult } | null => {
+        const mismatched = orderedProviders.flatMap(key => {
+          const result = ytMismatches.get(key);
+          return result?.lyrics ? [{ key, source: result.source, text: lyricText(result.lyrics), result }] : [];
+        });
+        const agreed = new Set(agreeingKeys(mismatched));
+        if (agreed.size === 0) return null;
+        const pick = mismatched.find(entry => agreed.has(entry.key));
+        if (!pick) return null;
+        log(`No source matched YT lyrics, but most agree with each other. Allowing: ${[...agreed].join(", ")}`);
+        return { key: pick.key, result: pick.result };
+      };
+
       for (let provider of orderedProviders) {
         if (signal.aborted) {
           return;
@@ -436,32 +491,49 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
           lyricsTimer.end(`provider:${provider}`);
 
           if (sourceLyrics && sourceLyrics.lyrics && sourceLyrics.lyrics.length > 0) {
-            if (hideInstrumentalOnly.getBooleanValue() && isInstrumentalOnly(sourceLyrics.lyrics)) {
+            const manuallyPicked = provider === pinnedProvider;
+            if (hideInstrumentalOnly.getBooleanValue() && isInstrumentalOnly(sourceLyrics.lyrics) && !manuallyPicked) {
               continue;
             }
-            ytLyricsEarlyInjectAbortController.abort("Lyrics are ready"); // May not be ideal when the stringSimilarity fails, but this should be rare anyways
-            let ytLyrics = sourceLyrics.source === "Unison" ? null : ((await ytLyricsPromise) as YTLyricSourceResult);
+            ytLyricsEarlyInjectAbortController.abort("Lyrics are ready"); // May not be ideal when the check fails, but this should be rare anyways
+            let ytLyrics = isCheckedAgainstYt(provider) ? ((await ytLyricsPromise) as YTLyricSourceResult) : null;
 
-            if (ytLyrics !== null) {
-              let lyricText = "";
-              sourceLyrics.lyrics.forEach(lyric => {
-                lyricText += lyric.words + "\n";
-              });
-
-              let matchAmount = stringSimilarity(lyricText.toLowerCase(), ytLyrics.text.toLowerCase());
-              if (matchAmount < 0.5) {
-                log(
-                  `Got lyrics from ${sourceLyrics.source}, but they don't match YT lyrics. Rejecting: Match: ${matchAmount}%`
-                );
+            if (ytLyrics !== null && !lyricsMatch(lyricText(sourceLyrics.lyrics), ytLyrics.text)) {
+              ytMismatches.set(provider, sourceLyrics);
+              if (!manuallyPicked) {
+                log(`Got lyrics from ${sourceLyrics.source}, but they don't match YT lyrics. Rejecting.`);
                 continue;
               }
+              log(
+                `Got lyrics from ${sourceLyrics.source}, but they don't match YT lyrics. Keeping them, as this source was picked manually.`
+              );
             }
+
+            // The YT stub normally wins by priority, but a majority of independent sources is the
+            // stronger signal when YouTube's own entry is truncated or wrong.
+            if (provider === "yt-lyrics" && !manuallyPicked) {
+              const agreed = bestAgreeingSource();
+              if (agreed) {
+                lyrics = agreed.result;
+                selectedProvider = agreed.key;
+                break;
+              }
+            }
+
             lyrics = sourceLyrics;
             selectedProvider = provider;
             break;
           }
         } catch (err) {
           log(err);
+        }
+      }
+
+      if (!lyrics && !signal.aborted) {
+        const agreed = bestAgreeingSource();
+        if (agreed) {
+          lyrics = agreed.result;
+          selectedProvider = agreed.key;
         }
       }
     }
@@ -518,7 +590,8 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
         source: lyrics.source,
         provider: selectedProvider,
         fromCache: selectedProvider
-          ? providerParameters.sourceMap[selectedProvider as keyof typeof providerParameters.sourceMap]?.lastLoadFromCache
+          ? providerParameters.sourceMap[selectedProvider as keyof typeof providerParameters.sourceMap]
+              ?.lastLoadFromCache
           : undefined,
       });
       shouldCleanupLoader = false;
