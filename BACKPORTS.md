@@ -279,3 +279,40 @@ Evaluation range: upstream `c6e12997..205c4751` (6 commits on `upstream/master`,
 - `npm run build:ci` — Vite build succeeded with no errors/warnings; the trailing sourcemap upload fails without `SOURCEMAPS_API_KEY` (environment-only).
 - Electron 44.9.1 live `https://music.youtube.com/` smoke (`xvfb-run`, `session.extensions.loadExtension(dist/chrome)`): the content script loaded; `html[blyrics-themesong]` was absent initially; appending `#ThemeSong-MainContainer` to `<body>` set the attribute and made `--blyrics-text-color` resolve to the injected `--ts-primary-text-color` (`rgb(1, 2, 3)`); removing the container cleared both. No extension console errors observed.
 - Pending user QA: layout with the real ThemeSong extension in fullscreen/player-page and miniplayer.
+
+---
+
+## Batch 7
+
+Evaluation range: upstream `205c4751..5721d210` (through 2026-11-11), evaluated from `extensions-src/better-lyrics-glassy-dev` at `de28f71a`. 2 upstream items backported/adapted. Branch `backport/batch-7` based on `master` @ `08bfce0b`.
+
+### Backported
+
+1. **Pause the Hidden Ad Overlay (PR 1012: `b8da3355`, merged `4eb03109`)** — adapted
+   - `components.css`: pauses `#blyrics-ad-overlay` `::before` spin and `::after` shimmer while the overlay lacks `[active]`. The overlay stays in layout when hidden, so those animations otherwise run on every frame of every song.
+   - Dropped the rest of PR 1012: the rAF → 20 ms timer change (this engine already ticks from `public/script.js`'s `setInterval`), the HDR theme removal (no HDR theme here), and the STYLING docs for the new core sweep.
+   - The footer shaders shimmer slice is superseded by removing the promo entirely (see local change below), so no `IntersectionObserver` is added.
+
+2. **Show Lyrics Most Providers Agree On, and a Manual Pick Override (PR 1061: `9d8b6d30`)** — adapted
+   - New `sourceAgreement.ts` + `sourceAgreement.selfcheck.ts`: `lyricsMatch` (0.5 threshold) and `agreeingKeys` (source variants count once, requires at least two agreeing sources and more than half of the sources that returned text, output best-first).
+   - Progressive path: full upstream behavior — show displayable lyrics first, withdraw them on a YouTube mismatch, then reinstate the agreeing majority when no source matched YouTube. A manually picked source is never withheld by the instrumental-only or mismatch checks.
+   - Classic sequential path: no extra provider requests; the first source that matches YouTube still wins immediately. Agreement is evaluated when `yt-lyrics` would be accepted and again after the loop, using the mismatches already fetched. If a majority agrees, it replaces the short/incorrect YouTube stub.
+   - `providerCycle.ts` already sets `AppState.manualProviderKey = key` unconditionally, which is the behavior PR 1061 introduces, so no change there.
+   - Skipped `5a199614` (save an overriding pick as a pin): this engine has no per-song `providerPin` store. A manual pick still survives same-song reloads and resets on a real song change.
+
+### Local change after Batch 7 (not upstream)
+
+1. **Remove the footer shaders promo**
+   - The host forces `better-lyrics-shaders` on for the default Glassy theme (`src/plugins/better-lyrics/index.ts:471`) and locks it in the menu (`src/menu.ts:52`), so the "Get Shaders" promo is dead UI.
+   - Removed the footer button and its `chrome.storage.local` read (`dom.ts`), the `SHADERS_*` constants, the button CSS and `blyrics-shaders-shimmer` keyframes, and the hidden `isShadersPromoEnabled` options plumbing. The locale strings and `images/icons/shaders.png` remain as unused assets.
+   - This removes the two `background-position` shimmer animations while the footer is visible, one storage read per footer rebuild, and the need for PR 1012's footer observer.
+
+### Batch 7 verification (2026-11-11)
+
+- `npm run typecheck` — passed.
+- `npx tsx src/modules/lyrics/sourceAgreement.selfcheck.ts` and `npx tsx src/modules/lyrics/selection.selfcheck.ts` — both passed.
+- `npx biome check` on all changed TypeScript files — clean.
+- `npm run build:ci` — Vite build succeeded; the trailing sourcemap upload fails without `SOURCEMAPS_API_KEY` (environment-only).
+- Built `dist/chrome/css/blyrics/components.css` in Chromium: hidden overlay `::before`/`::after` computed `animation-play-state: paused`; with `[active]` both become `running`; the removed footer button has `animation-name: none`.
+- Built bundle contains the agreement code; no `isShadersPromoEnabled`/`SHADERS_*` references remain in `dist/chrome`.
+- Pending user QA: a real ad transition, a song where every provider mismatches YouTube (for example `jNmzJOAQyAI`), a manual LRCLib pick followed by a same-song reload, and the footer without the promo.
