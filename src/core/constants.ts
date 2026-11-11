@@ -30,7 +30,6 @@ export const LYRICS_PAGE_TYPE = "MUSIC_PAGE_TYPE_TRACK_LYRICS" as const;
 export const NO_LYRICS_TEXT_SELECTOR =
   "#tab-renderer > ytmusic-message-renderer > yt-formatted-string.text.style-scope.ytmusic-message-renderer" as const;
 export const FULLSCREEN_BUTTON_SELECTOR = ".fullscreen-button" as const;
-export const SHADERS_DETECTION_SELECTOR = '[id^="better-lyrics-kawarp-"]' as const;
 
 // DOM IDs and Attributes
 export const LYRICS_LOADER_ID = "blyrics-loader" as const;
@@ -56,9 +55,6 @@ export const HOMEPAGE_DOMAIN = "betterlyrics.org" as const;
 export const HOMEPAGE_ICON_URL = "https://betterlyrics.org/icon-512.png" as const;
 export const UNISON_API_URL = "https://unison.betterlyrics.org/lyrics" as const;
 export const DISCORD_INVITE_URL = "https://discord.gg/UsHE3d5fWF" as const;
-export const SHADERS_CWS_URL =
-  "https://chromewebstore.google.com/detail/better-lyrics-shaders/mffpncjphfmkppebdoaehdlnagnlpfai" as const;
-export const SHADERS_AMO_URL = "https://addons.mozilla.org/en-US/firefox/addon/better-lyrics-shaders/" as const;
 export const THEME_STORE_API_URL = "https://themes.betterlyrics.org" as const;
 export const UNISON_API_BASE_URL = "https://unison.betterlyrics.org" as const;
 export const UNISON_TRANSLATE_URL = `${UNISON_API_BASE_URL}/translate` as const;
