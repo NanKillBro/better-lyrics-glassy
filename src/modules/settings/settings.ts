@@ -1,4 +1,5 @@
 import {
+  COMPOSITED_LYRICS_ATTR,
   DOCK_CLASS,
   DOCK_CONTROL_ORDER_DEFAULT,
   DOCK_DEFAULT_POSITION,
@@ -112,6 +113,17 @@ function applyPlayerMetadataCacheSetting(enabled: boolean): void {
   document.documentElement.setAttribute("blyrics-player-metadata-cache", enabled ? "true" : "false");
 }
 
+function applyCompositedLyricsSetting(enabled: boolean): void {
+  const root = document.documentElement;
+  const wasEnabled = root.hasAttribute(COMPOSITED_LYRICS_ATTR);
+  root.toggleAttribute(COMPOSITED_LYRICS_ATTR, enabled);
+  AppState.isCompositedLyricsEnabled = enabled;
+  if (wasEnabled !== enabled && AppState.lyricData) {
+    log(LOG_PREFIX, `Composite lyrics ${enabled ? "enabled" : "disabled"}`);
+    reloadLyrics();
+  }
+}
+
 const LYRICS_BLUR_DISABLED_ATTR = "blyrics-disable-lyrics-blur";
 
 function applyLyricsBlurSetting(disabled: boolean): void {
@@ -129,6 +141,7 @@ export function loadPerformanceSettings(): void {
       isFastTabRendererLookupEnabled: true,
       isFastDockProximityEnabled: false,
       isSkipForcedLayoutEnabled: false,
+      isCompositedLyricsEnabled: false,
       isLyricsBlurDisabled: false,
       isPlayerMetadataCacheEnabled: false,
       isProgressiveLyricsEnabled: false,
@@ -145,6 +158,7 @@ export function loadPerformanceSettings(): void {
       AppState.isProgressiveLyricsEnabled = progressiveEnabled;
       applyLyricsTickMs(Number(items.lyricsTickMs));
       applyWillChangeSetting(items.isWillChangeEnabled === true);
+      applyCompositedLyricsSetting(items.isCompositedLyricsEnabled === true);
       applyLyricsBlurSetting(items.isLyricsBlurDisabled === true);
       applyPlayerMetadataCacheSetting(items.isPlayerMetadataCacheEnabled === true);
     }
@@ -176,6 +190,9 @@ export function loadPerformanceSettings(): void {
     }
     if (changes.isSkipForcedLayoutEnabled) {
       AppState.isSkipForcedLayoutEnabled = changes.isSkipForcedLayoutEnabled.newValue === true;
+    }
+    if (changes.isCompositedLyricsEnabled) {
+      applyCompositedLyricsSetting(changes.isCompositedLyricsEnabled.newValue === true);
     }
     if (changes.isLyricsBlurDisabled) {
       applyLyricsBlurSetting(changes.isLyricsBlurDisabled.newValue === true);
@@ -355,6 +372,9 @@ export function listenForPopupMessages(): void {
           log(LOG_PREFIX, `Progressive lyrics loading ${progressiveEnabled ? "enabled" : "disabled"}`);
         }
         AppState.isProgressiveLyricsEnabled = progressiveEnabled;
+      }
+      if (request.settings && typeof request.settings.isCompositedLyricsEnabled === "boolean") {
+        applyCompositedLyricsSetting(request.settings.isCompositedLyricsEnabled);
       }
       clearTranslationCache();
       setUpLog();

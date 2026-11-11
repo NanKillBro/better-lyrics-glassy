@@ -35,6 +35,7 @@ export const FULLSCREEN_BUTTON_SELECTOR = ".fullscreen-button" as const;
 export const LYRICS_LOADER_ID = "blyrics-loader" as const;
 export const LYRICS_WRAPPER_ID = "blyrics-wrapper" as const;
 export const LYRICS_DISABLED_ATTR = "blyrics-dfs" as const;
+export const COMPOSITED_LYRICS_ATTR = "blyrics-composited-lyrics" as const;
 export const THEMESONG_ACTIVE_ATTR = "blyrics-themesong" as const;
 export const THEMESONG_CONTAINER_ID = "ThemeSong-MainContainer" as const;
 export const HIDDEN_CLASS = "blyrics-hidden" as const;

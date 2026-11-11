@@ -198,6 +198,13 @@
 					</label>
 				</div>
 				<div class="container">
+					<span>Composite lyrics<span class="info-tip" data-tooltip="Runs the karaoke sweep and glow on GPU-composited mask and transform layers instead of repainting a gradient and drop-shadow per word. Experimental: custom theme highlight effects are ignored and the visuals may differ. Toggling rebuilds the lyric DOM. Off by default." tabindex="0">i</span></span>
+					<label>
+						<input type="checkbox" id="isCompositedLyricsEnabled">
+						<span class="checkmark"></span>
+					</label>
+				</div>
+				<div class="container">
 					<span>Unblur lyrics<span class="info-tip" data-tooltip="Removes the progressive blur from the 1-6 lines below the active lyric. Filter blur is GPU-heavy, so this reduces GPU work; upcoming lines stay dimmed by opacity. Only applies when the Glassy Merge Theme is selected." tabindex="0">i</span></span>
 					<label>
 						<input type="checkbox" id="isLyricsBlurDisabled">

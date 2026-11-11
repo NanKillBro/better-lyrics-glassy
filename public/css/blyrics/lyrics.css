@@ -291,3 +291,232 @@
 		filter: drop-shadow(0 0 0rem var(--blyrics-glow-color));
 	}
 }
+
+/* Composite lyrics (experimental): the karaoke sweep and glow are painted with a static mask and
+   transform/opacity animations so the browser can run them on the compositor. The legacy
+   ::after gradient/filter path above stays as the fallback when the toggle is off. */
+:root[blyrics-composited-lyrics] .blyrics--word {
+	position: relative;
+	--blyrics-sweep-angle: 90deg;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics-rtl {
+	--blyrics-sweep-angle: 270deg;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word::after {
+	display: none !important;
+}
+
+.blyrics-word-sweep {
+	display: none;
+}
+
+:root[blyrics-composited-lyrics] .blyrics-word-sweep {
+	direction: ltr;
+	display: none;
+	inset: 0;
+	opacity: 0;
+	overflow: clip;
+	overflow-clip-margin: 2rem;
+	pointer-events: none;
+	position: absolute;
+	transition: opacity var(--blyrics-lyric-highlight-fade-out-duration) ease;
+	user-select: none;
+	z-index: 0;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics-rtl .blyrics-word-sweep {
+	direction: rtl;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--pre-animating:not(.blyrics--animating):not(
+		.blyrics-zero-dur-animate
+	) .blyrics-word-sweep {
+	display: block;
+	opacity: 1;
+	transition: none;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating .blyrics-word-sweep {
+	display: block;
+	opacity: 1;
+	transition-duration: var(--blyrics-lyric-highlight-fade-in-duration);
+}
+
+:root[blyrics-composited-lyrics] .blyrics-sweep-mask {
+	-webkit-mask-image: linear-gradient(
+		var(--blyrics-sweep-angle),
+		#000 0%,
+		#000 80.6452%,
+		#0000 83.8710%
+	);
+	-webkit-mask-repeat: no-repeat;
+	box-sizing: content-box;
+	display: block;
+	margin-block: calc(-0.5em - var(--blyrics-highlight-glow-radius-from, 0.8rem));
+	margin-inline-start: -100%;
+	mask-image: linear-gradient(
+		var(--blyrics-sweep-angle),
+		#000 0%,
+		#000 80.6452%,
+		#0000 83.8710%
+	);
+	mask-repeat: no-repeat;
+	padding-block: calc(0.5em + var(--blyrics-highlight-glow-radius-from, 0.8rem));
+	translate: -3.2258% 0;
+	width: 310%;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics-rtl .blyrics-sweep-mask {
+	translate: 3.2258% 0;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--pre-animating:not(.blyrics--animating) .blyrics-sweep-mask {
+	translate: -51.6129% 0;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--pre-animating:not(.blyrics--animating).blyrics-rtl .blyrics-sweep-mask {
+	translate: 51.6129% 0;
+}
+
+:root[blyrics-composited-lyrics] .blyrics-sweep-text {
+	box-sizing: content-box;
+	color: var(--blyrics-lyric-active-color);
+	display: block;
+	isolation: isolate;
+	margin-inline-start: 32.2581%;
+	position: relative;
+	translate: 10% 0;
+	white-space: pre;
+	width: 32.2581%;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics-rtl .blyrics-sweep-text {
+	translate: -10% 0;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--pre-animating:not(.blyrics--animating) .blyrics-sweep-text {
+	translate: 160% 0;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--pre-animating:not(.blyrics--animating).blyrics-rtl .blyrics-sweep-text {
+	translate: -160% 0;
+}
+
+:root[blyrics-composited-lyrics] .blyrics-sweep-glow {
+	--blyrics-sweep-glow-radius: var(--blyrics-highlight-glow-radius-from, 0.8rem);
+	color: transparent;
+	inset: 0;
+	opacity: 0;
+	pointer-events: none;
+	position: absolute;
+	text-shadow: 0 0 var(--blyrics-sweep-glow-radius) var(--blyrics-glow-color);
+	user-select: none;
+	z-index: -1;
+}
+
+:root[blyrics-composited-lyrics] .blyrics-sweep-glow--tight {
+	--blyrics-sweep-glow-radius: calc(var(--blyrics-highlight-glow-radius-from, 0.8rem) * 0.4);
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating .blyrics-sweep-mask {
+	animation: blyrics-composite-mask calc(var(--blyrics-duration, 1ms) * 1.6) linear
+		var(--blyrics-swipe-delay, 0s) backwards;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating .blyrics-sweep-text {
+	animation: blyrics-composite-text calc(var(--blyrics-duration, 1ms) * 1.6) linear
+		var(--blyrics-swipe-delay, 0s) backwards;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating.blyrics-rtl .blyrics-sweep-mask {
+	animation-name: blyrics-composite-mask-rtl;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating.blyrics-rtl .blyrics-sweep-text {
+	animation-name: blyrics-composite-text-rtl;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating .blyrics-sweep-glow {
+	animation-delay: calc(var(--blyrics-anim-delay, 0s) + var(--blyrics-duration, 0ms) * 0.1);
+	animation-duration: max(calc(var(--blyrics-duration, 1ms) * 1.2), 1.2s);
+	animation-fill-mode: none;
+	animation-timing-function: ease;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating .blyrics-sweep-glow--wide {
+	animation-name: blyrics-composite-glow-wide;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating .blyrics-sweep-glow--tight {
+	animation-name: blyrics-composite-glow-tight;
+}
+
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating.blyrics--paused .blyrics-sweep-mask,
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating.blyrics--paused .blyrics-sweep-text,
+:root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating.blyrics--paused .blyrics-sweep-glow {
+	animation-play-state: paused;
+}
+
+@keyframes blyrics-composite-mask {
+	0%,
+	6.25% {
+		translate: -51.6129% 0;
+	}
+	100% {
+		translate: -3.2258% 0;
+	}
+}
+
+@keyframes blyrics-composite-mask-rtl {
+	0%,
+	6.25% {
+		translate: 51.6129% 0;
+	}
+	100% {
+		translate: 3.2258% 0;
+	}
+}
+
+@keyframes blyrics-composite-text {
+	0%,
+	6.25% {
+		translate: 160% 0;
+	}
+	100% {
+		translate: 10% 0;
+	}
+}
+
+@keyframes blyrics-composite-text-rtl {
+	0%,
+	6.25% {
+		translate: -160% 0;
+	}
+	100% {
+		translate: -10% 0;
+	}
+}
+
+@keyframes blyrics-composite-glow-wide {
+	0% {
+		opacity: 1;
+	}
+	60%,
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes blyrics-composite-glow-tight {
+	0% {
+		opacity: 0;
+	}
+	60% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
+}

@@ -258,7 +258,9 @@ function wordsToText(words: NodeListOf<Element>): string {
   for (const w of words) {
     const isBackground = w.classList.contains(BACKGROUND_LYRIC_CLASS);
     if (prevBackground !== null && isBackground !== prevBackground) out += " ";
-    out += (w.textContent ?? "") + (w.classList.contains(HAS_TRAILING_SPACE_CLASS) ? " " : "");
+    out +=
+      (w.getAttribute("data-content") ?? w.textContent ?? "") +
+      (w.classList.contains(HAS_TRAILING_SPACE_CLASS) ? " " : "");
     prevBackground = isBackground;
   }
   return out.replace(/\s+/g, " ").trim();
