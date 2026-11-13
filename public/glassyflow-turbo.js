@@ -164,24 +164,129 @@
     let _viewportCache = { visibleLines: 14, ts: 0 }; // fallback = 14 lines
     const _VIEWPORT_CACHE_TTL = 500; // ms
 
-    function _getLineFullHeight(lineEl) {
-        let target;
-        if (lineEl.classList.contains('blyrics--line')) {
-            // .blyrics--line nằm trong wrapper div → đo wrapper
-            target = lineEl.parentElement;
-            // Safety: nếu parent là container thay vì wrapper → fallback
-            if (!target || target === container) {
-                target = lineEl;
+    let tabRenderer = null;
+    let _vpEl = null;
+    let _vp = { h: 0, top: 0, bottom: 0, innerH: 0 };
+    let _lineGeom = new WeakMap();
+    const _observedLines = new Set();
+    let _lineGeomRO = null;
+    let _vpRO = null;
+
+    if (typeof ResizeObserver !== 'undefined') {
+        _lineGeomRO = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const target = entry.target;
+                let geom = _lineGeom.get(target);
+                if (!geom) {
+                    const style = getComputedStyle(target);
+                    geom = {
+                        h: undefined,
+                        mt: parseFloat(style.marginTop) || 0,
+                        mb: parseFloat(style.marginBottom) || 0,
+                    };
+                    _lineGeom.set(target, geom);
+                }
+                const box = entry.borderBoxSize && entry.borderBoxSize[0];
+                geom.h = Math.round(box ? box.blockSize : entry.contentRect.height);
             }
-        } else {
-            // .blyrics-footer hoặc element trực tiếp → đo chính nó
-            target = lineEl;
+        });
+        _vpRO = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                if (entry.target === _vpEl) {
+                    _vp = _readViewport(_vpEl);
+                    break;
+                }
+            }
+        });
+    }
+
+    function _measureTarget(lineEl) {
+        if (lineEl.classList.contains('blyrics--line')) {
+            const parent = lineEl.parentElement;
+            if (parent && parent !== container) return parent;
+        }
+        return lineEl;
+    }
+
+    function _observeLineTarget(target) {
+        if (!_lineGeomRO || _observedLines.has(target)) return;
+        _observedLines.add(target);
+        _lineGeomRO.observe(target);
+    }
+
+    function _syncLineTargets(lines) {
+        if (!_lineGeomRO) return;
+        const current = new Set();
+        for (const line of lines) {
+            const target = _measureTarget(line);
+            current.add(target);
+            _observeLineTarget(target);
+        }
+        for (const target of _observedLines) {
+            if (!current.has(target)) {
+                _lineGeomRO.unobserve(target);
+                _observedLines.delete(target);
+                _lineGeom.delete(target);
+            }
+        }
+    }
+
+    function _readViewport(el) {
+        if (!el) return { h: 0, top: 0, bottom: 0, innerH: window.innerHeight };
+        const rect = el.getBoundingClientRect();
+        const shift = el === container ? _lastCompensation : 0;
+        return {
+            h: el.clientHeight,
+            top: rect.top - shift,
+            bottom: rect.bottom - shift,
+            innerH: window.innerHeight,
+        };
+    }
+
+    function _getViewportElement() {
+        if (tabRenderer && !tabRenderer.isConnected) {
+            tabRenderer =
+                container?.closest('ytmusic-tab-renderer[page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"]') ||
+                container?.closest('ytmusic-tab-renderer') ||
+                document.querySelector('ytmusic-tab-renderer[page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"]');
+        }
+        return tabRenderer || scrollParent || container;
+    }
+
+    function _refreshViewportElement() {
+        const el = _getViewportElement();
+        if (!el) return false;
+        if (el !== _vpEl) {
+            if (_vpRO && _vpEl) _vpRO.unobserve(_vpEl);
+            _vpEl = el;
+            if (_vpRO) _vpRO.observe(el);
+        }
+        _vp = _readViewport(el);
+        return true;
+    }
+
+    function _getLineFullHeight(lineEl) {
+        const target = _measureTarget(lineEl);
+        const geom = _lineGeom.get(target);
+        if (geom && geom.h !== undefined) {
+            return geom.h > 0 ? geom.h + geom.mt + geom.mb : 0;
         }
 
         const oh = target.offsetHeight;
-        if (oh <= 0) return 0;
+        if (oh <= 0) {
+            _lineGeom.set(target, { h: 0, mt: 0, mb: 0 });
+            _observeLineTarget(target);
+            return 0;
+        }
         const style = getComputedStyle(target);
-        return oh + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+        const targetGeom = {
+            h: oh,
+            mt: parseFloat(style.marginTop) || 0,
+            mb: parseFloat(style.marginBottom) || 0,
+        };
+        _lineGeom.set(target, targetGeom);
+        _observeLineTarget(target);
+        return oh + targetGeom.mt + targetGeom.mb;
     }
 
     function _measureVisibleLines() {
@@ -192,47 +297,31 @@
 
         if (!container) return _viewportCache.visibleLines;
 
-        // ── Viewport height ──
-        // Priority: tab-renderer (BL's actual scroll viewport) → scroll parent → container
-        let viewportH = 0;
-        const tabRenderer = document.querySelector(
-            'ytmusic-tab-renderer[page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"]'
-        );
-        if (tabRenderer) {
-            viewportH = tabRenderer.clientHeight;
-        } else if (scrollParent) {
-            viewportH = scrollParent.clientHeight;
-        } else {
-            viewportH = container.clientHeight;
+        if (!_vp.h || _vp.innerH !== window.innerHeight || _vpEl !== _getViewportElement()) {
+            if (!_refreshViewportElement()) return _viewportCache.visibleLines;
         }
 
-        // ── Clamp to actually visible area ──
-        const vpEl = tabRenderer || scrollParent || container;
-        if (vpEl) {
-            const rect = vpEl.getBoundingClientRect();
-            const visibleTop = Math.max(rect.top, 0);
-            const visibleBottom = Math.min(rect.bottom, window.innerHeight);
-            const actualVisibleH = visibleBottom - visibleTop;
-            if (actualVisibleH > 0 && actualVisibleH < viewportH) {
-                viewportH = actualVisibleH;
-            }
-        }
-
+        let viewportH = _vp.h;
         if (viewportH <= 0) {
             return _viewportCache.visibleLines;
         }
 
-        // ── Count lines that fit in viewport ──
-        const lines = container.querySelectorAll('.blyrics--line, .blyrics-footer, .blyrics-credits');
+        const visibleTop = Math.max(_vp.top, 0);
+        const visibleBottom = Math.min(_vp.bottom, _vp.innerH);
+        const actualVisibleH = visibleBottom - visibleTop;
+        if (actualVisibleH > 0 && actualVisibleH < viewportH) {
+            viewportH = actualVisibleH;
+        }
+
+        const lines = getLines();
         if (!lines.length) return _viewportCache.visibleLines;
 
-        const allLines = Array.from(lines);
-        const ref = getRefIndex(allLines);
+        const ref = getRefIndex(lines);
 
         // Count forward from ref (how many lines fit below)
         let accH = 0, countFwd = 0;
-        for (let i = ref; i < allLines.length; i++) {
-            const h = _getLineFullHeight(allLines[i]);
+        for (let i = ref; i < lines.length; i++) {
+            const h = _getLineFullHeight(lines[i]);
             if (h <= 0) continue;
             countFwd++;          // count BEFORE overflow check → partially visible lines included
             accH += h;
@@ -243,7 +332,7 @@
         accH = 0;
         let countBwd = 0;
         for (let i = ref - 1; i >= 0; i--) {
-            const h = _getLineFullHeight(allLines[i]);
+            const h = _getLineFullHeight(lines[i]);
             if (h <= 0) continue;
             countBwd++;          // count BEFORE overflow check
             accH += h;
@@ -338,6 +427,9 @@
     let resizeTimer = null;
     let suppressTransform = false;
     let lastFlipTime = 0;
+    let _lastCompensation = 0;
+    let _lastSpeedupCheck = 0;
+    let _domObserverTarget = null;
 
     // Deferred delta — tích lũy scroll bị defer khi animation busy
     let deferredDelta = 0;
@@ -368,13 +460,25 @@
     function setScrollOverride(enabled) {
         if (!container) return;
         if (enabled) {
-            container.style.setProperty('--blyrics-lyric-scroll-duration', '0ms', 'important');
-            container.style.setProperty('--blyrics-animate-scroll', '0', 'important');
-            document.documentElement.style.setProperty('--blyrics-animate-scroll', '0', 'important');
+            if (container.style.getPropertyValue('--blyrics-lyric-scroll-duration') !== '0ms') {
+                container.style.setProperty('--blyrics-lyric-scroll-duration', '0ms', 'important');
+            }
+            if (container.style.getPropertyValue('--blyrics-animate-scroll') !== '0') {
+                container.style.setProperty('--blyrics-animate-scroll', '0', 'important');
+            }
+            if (document.documentElement.style.getPropertyValue('--blyrics-animate-scroll') !== '0') {
+                document.documentElement.style.setProperty('--blyrics-animate-scroll', '0', 'important');
+            }
         } else {
-            container.style.removeProperty('--blyrics-lyric-scroll-duration');
-            container.style.removeProperty('--blyrics-animate-scroll');
-            document.documentElement.style.removeProperty('--blyrics-animate-scroll');
+            if (container.style.getPropertyValue('--blyrics-lyric-scroll-duration')) {
+                container.style.removeProperty('--blyrics-lyric-scroll-duration');
+            }
+            if (container.style.getPropertyValue('--blyrics-animate-scroll')) {
+                container.style.removeProperty('--blyrics-animate-scroll');
+            }
+            if (document.documentElement.style.getPropertyValue('--blyrics-animate-scroll')) {
+                document.documentElement.style.removeProperty('--blyrics-animate-scroll');
+            }
         }
     }
 
@@ -387,18 +491,31 @@
         return 0;
     }
 
-    let _linesCache = { lines: null, ts: 0 };
-    const _LINES_CACHE_TTL = 16; // ms — ~1 frame
+    let _linesCache = { lines: null };
+    let _linesObserver = null;
+
+    function _refreshLines() {
+        if (!container) {
+            _linesCache.lines = [];
+            return [];
+        }
+        const lines = Array.from(container.querySelectorAll('.blyrics--line, .blyrics-footer, .blyrics-credits'));
+        _linesCache.lines = lines;
+        _syncLineTargets(lines);
+        return lines;
+    }
 
     function getLines() {
-        const now = performance.now();
-        if (_linesCache.lines && now - _linesCache.ts < _LINES_CACHE_TTL) {
-            return _linesCache.lines;
-        }
-        if (!container) return [];
-        const lines = Array.from(container.querySelectorAll('.blyrics--line, .blyrics-footer, .blyrics-credits'));
-        _linesCache = { lines, ts: now };
-        return lines;
+        if (!_linesCache.lines) return _refreshLines();
+        return _linesCache.lines;
+    }
+
+    function _installLinesObserver(el) {
+        _linesObserver?.disconnect();
+        _linesObserver = new MutationObserver(() => {
+            _linesCache.lines = null;
+        });
+        _linesObserver.observe(el, { childList: true, subtree: true });
     }
 
     function getRefIndex(lines) {
@@ -440,10 +557,13 @@
      * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     function setContainerCompensation(delta) {
         if (!container) return;
-        if (Math.abs(delta) < 0.5) {
+        const value = Math.abs(delta) < 0.5 ? 0 : delta;
+        if (Math.abs(value - _lastCompensation) < 0.01) return;
+        _lastCompensation = value;
+        if (value === 0) {
             container.style.translate = '';
         } else {
-            container.style.translate = `0px ${delta}px`;
+            container.style.translate = `0px ${value}px`;
         }
     }
 
@@ -602,6 +722,7 @@
         if (!lines.length) return;
 
         const ref = getRefIndex(lines);
+        lastRefIndex = ref;
         const lookBehind = getLookBehind();
         let lookAhead = getLookAhead();
 
@@ -675,7 +796,10 @@
      *  Nếu rảnh → flush deferred + apply combined delta.
      * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     function _executeScroll(delta) {
-        if (!isScriptEnabled || isNoSyncMode || Math.abs(delta) < CFG.minDelta) return;
+        if (!isScriptEnabled || isNoSyncMode || Math.abs(delta) < CFG.minDelta) {
+            setContainerCompensation(deferredDelta);
+            return;
+        }
 
         if (isAnimationBusy) {
             // ╔══════════════════════════════════════════════════════════╗
@@ -707,7 +831,7 @@
         } else {
             // ╔══════════════════════════════════════════════════════════╗
             // ║  RẢNH: Gộp deferred + new delta → 1 spring animation     ║
-            // ║  Gỡ container translate trước, rồi apply combined.       ║
+            // ║  Đọc/đo trước, start animation, gỡ compensation sau cùng ║
             // ╚══════════════════════════════════════════════════════════╝
             const combined = delta + deferredDelta;
             if (DEBUG && Math.abs(deferredDelta) > 0.5) {
@@ -717,16 +841,12 @@
                 );
             }
 
-            // Gỡ container compensation TRƯỚC khi apply spring
-            // (cùng frame, browser không render giữa 2 thao tác)
             deferredDelta = 0;
-            setContainerCompensation(0);
-
-            // Cập nhật lastRefIndex cho speedup detection
-            const lines = getLines();
-            if (lines.length) lastRefIndex = getRefIndex(lines);
-
-            applyStagger(combined);
+            try {
+                applyStagger(combined);
+            } finally {
+                setContainerCompensation(0);
+            }
         }
     }
 
@@ -741,6 +861,10 @@
         if (Math.abs(deferredDelta) >= CFG.speedupThreshold) {
             return true;
         }
+
+        const now = Date.now();
+        if (now - _lastSpeedupCheck < 16) return false;
+        _lastSpeedupCheck = now;
 
         const lines = getLines();
         if (lines.length && lastRefIndex >= 0) {
@@ -792,9 +916,6 @@
             const totalDelayed = delayedDelta;
             delayedDelta = 0;
 
-            // Gỡ compensation cho phần delayed (deferred vẫn giữ nếu busy)
-            setContainerCompensation(deferredDelta);
-
             if (DEBUG) console.debug(
                 `[GlassyFlow Turbo] Delay fired — executing ${totalDelayed.toFixed(1)}px`
             );
@@ -828,8 +949,8 @@
                     pendingDelta = 0;
 
                     suppressTransform = true;
-                    el.style.transition = 'none';
-                    el.style.transform = 'none';
+                    if (el.style.transition !== 'none') el.style.transition = 'none';
+                    if (el.style.transform !== 'none') el.style.transform = 'none';
                     lastTransform = 'none';
                     suppressTransform = false;
 
@@ -848,8 +969,8 @@
                 const delta = y;
                 pendingDelta = 0;
                 suppressTransform = true;
-                el.style.transition = 'none';
-                el.style.transform = 'none';
+                if (el.style.transition !== 'none') el.style.transition = 'none';
+                if (el.style.transform !== 'none') el.style.transform = 'none';
                 lastTransform = 'none';
                 suppressTransform = false;
 
@@ -860,8 +981,8 @@
                 pendingDelta = 0;
 
                 suppressTransform = true;
-                el.style.transition = 'none';
-                el.style.transform = 'none';
+                if (el.style.transition !== 'none') el.style.transition = 'none';
+                if (el.style.transform !== 'none') el.style.transform = 'none';
                 lastTransform = 'none';
                 suppressTransform = false;
 
@@ -935,19 +1056,50 @@
         cleanupAllSprings();
 
         container = el;
-        el.classList.add('blyrics--gf-managed');
+        _lastCompensation = 0;
         pendingDelta = 0;
         deferredDelta = 0;
         isAnimationBusy = false;
         timeScale = 1.0;
         lastRefIndex = -1;
+        tabRenderer =
+            el.closest('ytmusic-tab-renderer[page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"]') ||
+            el.closest('ytmusic-tab-renderer') ||
+            document.querySelector('ytmusic-tab-renderer[page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"]');
 
         installStyleObserver(el);
+        _installLinesObserver(el);
         installScrollFallback(el);
-        setScrollOverride(true);
-
-        // No-sync detection: đợi rồi check
         startNoSyncDetection(el);
+
+        if (!isNoSyncMode) {
+            el.classList.add('blyrics--gf-managed');
+            setScrollOverride(true);
+        }
+    }
+
+    function _findContainer() {
+        const wrapper = document.getElementById('blyrics-wrapper');
+        if (!wrapper) return null;
+        const first = wrapper.firstElementChild;
+        if (first && first.classList.contains('blyrics-container')) return first;
+        return wrapper.querySelector('.blyrics-container');
+    }
+
+    function _bindDomObserver() {
+        if (!domObserver) return;
+        domObserver.disconnect();
+        const wrapper = document.getElementById('blyrics-wrapper');
+        let target = wrapper;
+        let subtree = false;
+        if (!target) {
+            target = document.querySelector('ytmusic-tab-renderer[page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"]') ||
+                document.querySelector('ytmusic-tab-renderer') ||
+                document.body;
+            subtree = target === document.body;
+        }
+        _domObserverTarget = target;
+        domObserver.observe(target, { childList: true, subtree });
     }
 
     function boot() {
@@ -957,21 +1109,23 @@
 
         domObserver?.disconnect();
         let domCheckQueued = false;
-        // Narrow scope: observe #side-panel thay vì toàn bộ body
-        const observeTarget = document.querySelector('#side-panel') || document.body;
         domObserver = new MutationObserver(() => {
             if (domCheckQueued) return;
             domCheckQueued = true;
             queueMicrotask(() => {
                 domCheckQueued = false;
-                const el = observeTarget.querySelector('.blyrics-container');
+                const wrapper = document.getElementById('blyrics-wrapper');
+                if (wrapper && _domObserverTarget !== wrapper) {
+                    _bindDomObserver();
+                }
+                const el = _findContainer();
                 if (el && el !== container) {
                     console.info('[GlassyFlow Turbo] New container detected (song change)');
                     attach(el);
                 }
             });
         });
-        domObserver.observe(observeTarget, { childList: true, subtree: true });
+        _bindDomObserver();
     }
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -981,9 +1135,23 @@
      *  live animations rather than clearing inline styles — the inline clears
      *  are kept only as belt-and-braces against leftover state.
      * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    function cleanupAllSprings() {
-        _linesCache = { lines: null, ts: 0 };
+    function _resetGeometry() {
+        _linesCache.lines = null;
+        if (_lineGeomRO) {
+            for (const target of _observedLines) _lineGeomRO.unobserve(target);
+        }
+        _observedLines.clear();
+        _lineGeom = new WeakMap();
+        if (_vpRO && _vpEl) _vpRO.unobserve(_vpEl);
+        _vpEl = null;
+        _vp = { h: 0, top: 0, bottom: 0, innerH: 0 };
+        _viewportCache.ts = 0;
+        _avgLineHeightCache.ts = 0;
+        _lastCompensation = 0;
+        _lastSpeedupCheck = 0;
+    }
 
+    function cleanupAllSprings() {
         for (const line of activeLines) {
             const data = lineState.get(line);
             if (data && data.anim) {
@@ -994,8 +1162,7 @@
                 data.baked = null;
                 anim.cancel();
             }
-            line.style.translate = '';
-            line.style.willChange = '';
+            if (line.style.translate) line.style.translate = '';
         }
         activeLines.clear();
 
@@ -1009,6 +1176,7 @@
         timeScale = 1.0;
         lastRefIndex = -1;
         setContainerCompensation(0);
+        _resetGeometry();
     }
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1065,15 +1233,13 @@
      *  SPA NAVIGATION
      * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     window.addEventListener('yt-navigate-finish', () => {
-        container = null;
         pendingDelta = 0;
         deferredDelta = 0;
         delayedDelta = 0;
         isAnimationBusy = false;
         timeScale = 1.0;
         lastRefIndex = -1;
-        _lastMarkedActive = -1;
-        _linesCache = { lines: null, ts: 0 };
+        _linesCache.lines = null;
         if (scrollDelayTimer !== null) {
             clearTimeout(scrollDelayTimer);
             scrollDelayTimer = null;
@@ -1085,6 +1251,7 @@
         styleObserver?.disconnect();
         removeScrollFallback();
         cleanupAllSprings();
+        container = null;
         boot();
     });
 
@@ -1108,8 +1275,6 @@
         isAnimationBusy = false;
         timeScale = 1.0;
         lastRefIndex = -1;
-        _viewportCache.ts = 0; // Invalidate → recalculate lookBehind/lookAhead after resize
-        _avgLineHeightCache.ts = 0; // Invalidate → recalculate avg line height after resize
         if (scrollDelayTimer !== null) {
             clearTimeout(scrollDelayTimer);
             scrollDelayTimer = null;
