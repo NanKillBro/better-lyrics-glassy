@@ -35,15 +35,32 @@
     `;
   document.head.appendChild(style);
 
-  const observer = new MutationObserver((mutations) => {
+  const MENU_SELECTOR = 'tp-yt-iron-dropdown.ytmusic-popup-container, tp-yt-iron-dropdown#dropdown, tp-yt-iron-dropdown.tp-yt-paper-menu-button';
+  const DIALOG_SELECTOR = 'ytmusic-add-to-playlist-renderer, ytmusic-unified-share-panel-renderer, ytmusic-dialog, ytmusic-engagement-panel-section-list-renderer, tp-yt-paper-dialog';
+  const TARGET_TAGS = new Set([
+    'TP-YT-IRON-DROPDOWN',
+    'YTMUSIC-ADD-TO-PLAYLIST-RENDERER',
+    'YTMUSIC-UNIFIED-SHARE-PANEL-RENDERER',
+    'YTMUSIC-DIALOG',
+    'YTMUSIC-ENGAGEMENT-PANEL-SECTION-LIST-RENDERER',
+    'TP-YT-PAPER-DIALOG',
+  ]);
+  const styleObservedElements = new WeakSet();
+
+  const handleMutations = (mutations) => {
     mutations.forEach((mutation) => {
       const el = mutation.target;
-      if (el.nodeType !== 1) return;
+      if (el.nodeType !== 1 || !TARGET_TAGS.has(el.tagName)) return;
 
-      const isMenu = el.matches('tp-yt-iron-dropdown.ytmusic-popup-container, tp-yt-iron-dropdown#dropdown, tp-yt-iron-dropdown.tp-yt-paper-menu-button');
-      const isDialog = el.matches('ytmusic-add-to-playlist-renderer, ytmusic-unified-share-panel-renderer, ytmusic-dialog, ytmusic-engagement-panel-section-list-renderer, tp-yt-paper-dialog');
+      const isMenu = el.matches(MENU_SELECTOR);
+      const isDialog = !isMenu && el.matches(DIALOG_SELECTOR);
 
       if (!isMenu && !isDialog) return;
+
+      if (!styleObservedElements.has(el)) {
+        styleObservedElements.add(el);
+        styleObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
+      }
 
       // =====================================================================
       // GUARD: Chặn YouTube ghi đè style khi đang fade-out (cả menu & dialog)
@@ -163,11 +180,21 @@
         }
       }
     });
+  };
+
+  const styleObserver = new MutationObserver(handleMutations);
+  const observer = new MutationObserver(handleMutations);
+
+  document.querySelectorAll(`${MENU_SELECTOR}, ${DIALOG_SELECTOR}`).forEach((el) => {
+    if (!styleObservedElements.has(el)) {
+      styleObservedElements.add(el);
+      styleObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
+    }
   });
 
   observer.observe(document.body, {
     attributes: true,
-    attributeFilter: ['opened', 'style', 'aria-hidden'],
+    attributeFilter: ['opened', 'aria-hidden'],
     subtree: true
   });
   console.info('[GlassyUI: Dialogs] Observer started. Smooth fade-outs enabled.');

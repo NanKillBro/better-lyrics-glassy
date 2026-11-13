@@ -11,6 +11,7 @@ import {
   handleSettings,
   hideCursorOnIdle,
   hideDockOnIdleInFullscreen,
+  initPerformanceSettingsListener,
   listenForPopupMessages,
   loadDockSettings,
   loadEndTimeModeSetting,
@@ -21,6 +22,7 @@ import {
 } from "@modules/settings/settings";
 import {
   cleanup as cleanupLyrics,
+  disposeAdObserver,
   injectHeadTags,
   observeLyricsPageType,
   reloadAlbumArt,
@@ -28,6 +30,7 @@ import {
   setupFullscreenPlayerBarReveal,
   unmountDock,
 } from "@modules/ui/dom";
+import { disposeVisibilityCache } from "@modules/ui/visibilityCache";
 import { disposeThemeSongObserver, observeThemeSong } from "@modules/ui/themeSongCompat";
 import {
   disableInertWhenFullscreen,
@@ -114,6 +117,7 @@ async function modify(isDisposed: () => boolean): Promise<void> {
  */
 function init(): () => void {
   const cleanupVideoQualitySettings = startVideoQualitySettingsBridge();
+  const cleanupPerformanceSettings = initPerformanceSettingsListener();
   let disposed = false;
   let modifyStarted = false;
   const runModify = (): void => {
@@ -135,6 +139,9 @@ function init(): () => void {
   return () => {
     disposed = true;
     cleanupVideoQualitySettings();
+    cleanupPerformanceSettings();
+    disposeAdObserver();
+    disposeVisibilityCache();
     document.removeEventListener("DOMContentLoaded", runModify);
     cleanupRequestSniffer();
     disposePictureInPictureBrowserController();

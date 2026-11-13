@@ -44,7 +44,7 @@ function createMainPageStage(): KaraokeStage {
       return translateContributorCreditLabels(key => t(key));
     },
     isVisible: isKaraokeActive,
-    isAdPlaying: () => isAdPlaying(document),
+    isAdPlaying: () => AppState.isAdCheckEnabled && isAdPlaying(document),
     get log(): LogSink {
       return logCore;
     },

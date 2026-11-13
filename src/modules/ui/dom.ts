@@ -281,6 +281,7 @@ function createRequestSyncedButton(meta: RequestButtonMeta): HTMLElement {
 
 let lyricsObserver: MutationObserver | null = null;
 let adStateObserver: MutationObserver | null = null;
+let adRetryTimer: number | null = null;
 /**
  * Creates or reuses the lyrics wrapper element and sets up scroll event handling.
  *
@@ -1325,19 +1326,53 @@ export function isLoaderActive(): boolean {
  * @returns True if an ad is playing
  */
 export function isAdPlaying(): boolean {
+  if (!AppState.isAdCheckEnabled) return false;
   const playerBar = document.querySelector(PLAYER_BAR_SELECTOR);
   return playerBar?.hasAttribute(AD_PLAYING_ATTR) ?? false;
+}
+
+export function disposeAdObserver(): void {
+  if (adRetryTimer !== null) {
+    clearTimeout(adRetryTimer);
+    adRetryTimer = null;
+  }
+  if (adStateObserver) {
+    adStateObserver.disconnect();
+    adStateObserver = null;
+  }
+}
+
+export function syncAdCheckState(): void {
+  if (!AppState.isAdCheckEnabled) {
+    disposeAdObserver();
+    hideAdOverlay();
+    syncKaraoke();
+    return;
+  }
+  setupAdObserver();
+  syncKaraoke();
 }
 
 /**
  * Sets up a MutationObserver to watch for advertisement state changes.
  */
 export function setupAdObserver(): void {
+  if (!AppState.isAdCheckEnabled) {
+    disposeAdObserver();
+    hideAdOverlay();
+    return;
+  }
+
+  if (adRetryTimer !== null) {
+    clearTimeout(adRetryTimer);
+    adRetryTimer = null;
+  }
+
   const playerBar = document.querySelector(PLAYER_BAR_SELECTOR);
   const tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR) as HTMLElement;
 
   if (!playerBar || !tabRenderer) {
-    setTimeout(setupAdObserver, 1000);
+    adRetryTimer = window.setTimeout(setupAdObserver, 1000);
     return;
   }
 
@@ -1354,6 +1389,8 @@ export function setupAdObserver(): void {
 
   if (isAdPlaying()) {
     showAdOverlay();
+  } else {
+    hideAdOverlay();
   }
 
   adStateObserver = new MutationObserver(() => {

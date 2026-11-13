@@ -27,6 +27,7 @@ import {
 } from "@modules/ui/navigation";
 import { getResumeScrollElement } from "@modules/ui/resumeScrollButton";
 import { isLyricsWantedOffTab } from "@modules/ui/secondaryViews";
+import { invalidateViewVisibilityCache } from "@modules/ui/visibilityCache";
 import { logCore, logError } from "@core/logger";
 import {
   addThumbnail,
@@ -274,6 +275,7 @@ export function lyricReloader(): void {
 
     for (let i = 0; i < tabs.length; i++) {
       tabs[i].addEventListener("click", () => {
+        invalidateViewVisibilityCache();
         const tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR) as HTMLElement;
         scrollPositions[currentTab] = tabRenderer.scrollTop;
         tabRenderer.scrollTop = scrollPositions[i];
@@ -324,6 +326,7 @@ export function initializeLyrics(): void {
   hasInitializedLyrics = true;
 
   document.addEventListener("visibilitychange", () => {
+    invalidateViewVisibilityCache();
     mainView.noteVisibilityChange();
     if (document.visibilityState === "visible") {
       runAnimationEngine(performance.now(), true);

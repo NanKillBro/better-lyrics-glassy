@@ -1,8 +1,10 @@
 import { TAB_HEADER_CLASS, TAB_RENDERER_SELECTOR, LYRICS_WRAPPER_ID } from "@constants";
+import { AppState } from "@core/appState";
 import { isKaraokeLayout } from "@modules/karaoke/state";
 import { seekPlayer } from "@modules/lyrics/lyrics";
 import { hideAdOverlay, isAdPlaying, isLoaderActive, showAdOverlay } from "@modules/ui/dom";
 import { getResumeScrollElement } from "@modules/ui/resumeScrollButton";
+import { getCachedViewVisibility } from "@modules/ui/visibilityCache";
 import type { LyricsRendererHost } from "@braccato/core";
 import { resetDebugRender, resizeCanvas } from "./animationEngineDebug";
 import { type LogSink, logCore } from "@core/logger";
@@ -10,34 +12,77 @@ import { type LogSink, logCore } from "@core/logger";
 const PLAYER_PAGE_ID = "player-page";
 const PLAYER_UI_STATE_ATTRIBUTE = "player-ui-state";
 
+let cachedTabRenderer: HTMLElement | null = null;
+let observedLyricsElement: HTMLElement | null = null;
+let animateScrollObserver: MutationObserver | null = null;
+let cachedAnimateScroll: string | null = null;
+
+function getCachedAnimateScroll(lyricsElement: HTMLElement): string {
+  if (observedLyricsElement !== lyricsElement || !animateScrollObserver) {
+    observedLyricsElement = lyricsElement;
+    cachedAnimateScroll = null;
+    animateScrollObserver?.disconnect();
+    animateScrollObserver = new MutationObserver(() => {
+      cachedAnimateScroll = null;
+    });
+    animateScrollObserver.observe(lyricsElement, {
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
+    if (lyricsElement.ownerDocument?.documentElement) {
+      animateScrollObserver.observe(lyricsElement.ownerDocument.documentElement, {
+        attributes: true,
+        attributeFilter: ["style", "class"],
+      });
+    }
+  }
+  if (cachedAnimateScroll === null) {
+    cachedAnimateScroll = getComputedStyle(lyricsElement).getPropertyValue("--blyrics-animate-scroll").trim();
+  }
+  return cachedAnimateScroll;
+}
+
+export function resetScrollHostCache(): void {
+  cachedTabRenderer = null;
+  observedLyricsElement = null;
+  cachedAnimateScroll = null;
+  animateScrollObserver?.disconnect();
+  animateScrollObserver = null;
+}
+
+function computeViewVisibility(): boolean {
+  if (isKaraokeLayout()) return false;
+
+  const tabSelector = document.getElementsByClassName(TAB_HEADER_CLASS)[1];
+  if (!tabSelector || tabSelector.getAttribute("aria-selected") !== "true") {
+    return false;
+  }
+
+  // A missing state is the pre-navigation case: the panel is up but YouTube Music has not written
+  // the attribute yet, and treating that as closed would drop the first lyrics of the song.
+  const playerState = document.getElementById(PLAYER_PAGE_ID)?.getAttribute(PLAYER_UI_STATE_ATTRIBUTE);
+  const stateAllowsLyrics =
+    !playerState ||
+    playerState === "PLAYER_PAGE_OPEN" ||
+    playerState === "FULLSCREEN" ||
+    playerState === "MINIPLAYER_IN_PLAYER_PAGE";
+  if (!stateAllowsLyrics) return false;
+
+  const tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR);
+  return !tabRenderer || tabRenderer.checkVisibility({ visibilityProperty: true });
+}
+
 /**
  * The side panel's answers to what a lyrics view cannot work out on its own. Every lookup runs on
  * demand: this is built at import time, long before YouTube Music has rendered a player page.
  */
 export const ytmHost: LyricsRendererHost = {
   isViewVisible(): boolean {
-    if (isKaraokeLayout()) return false;
-
-    const tabSelector = document.getElementsByClassName(TAB_HEADER_CLASS)[1];
-    if (!tabSelector || tabSelector.getAttribute("aria-selected") !== "true") {
-      return false;
-    }
-
-    // A missing state is the pre-navigation case: the panel is up but YouTube Music has not written
-    // the attribute yet, and treating that as closed would drop the first lyrics of the song.
-    const playerState = document.getElementById(PLAYER_PAGE_ID)?.getAttribute(PLAYER_UI_STATE_ATTRIBUTE);
-    const stateAllowsLyrics =
-      !playerState ||
-      playerState === "PLAYER_PAGE_OPEN" ||
-      playerState === "FULLSCREEN" ||
-      playerState === "MINIPLAYER_IN_PLAYER_PAGE";
-    if (!stateAllowsLyrics) return false;
-
-    const tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR);
-    return !tabRenderer || tabRenderer.checkVisibility({ visibilityProperty: true });
+    return AppState.isVisibilityCacheEnabled ? getCachedViewVisibility(computeViewVisibility) : computeViewVisibility();
   },
   isLoaderActive,
   syncAdState(): boolean {
+    if (!AppState.isAdCheckEnabled) return false;
     if (!isAdPlaying()) {
       hideAdOverlay();
       return false;
@@ -59,7 +104,15 @@ export const ytmHost: LyricsRendererHost = {
    * compares it against the node it observes and reinstalls its ResizeObserver whenever it changed.
    */
   getScrollElement(): HTMLElement | null {
-    const el = document.querySelector<HTMLElement>(TAB_RENDERER_SELECTOR);
+    let el: HTMLElement | null = null;
+    if (AppState.isOptimizedScrollHostEnabled) {
+      if (!cachedTabRenderer || !cachedTabRenderer.isConnected) {
+        cachedTabRenderer = document.querySelector<HTMLElement>(TAB_RENDERER_SELECTOR);
+      }
+      el = cachedTabRenderer;
+    } else {
+      el = document.querySelector<HTMLElement>(TAB_RENDERER_SELECTOR);
+    }
     if (!el) return null;
 
     // Only apply the patch once per element instance
@@ -80,11 +133,16 @@ export const ytmHost: LyricsRendererHost = {
             // GlassyFlow FLIP scroll hack interception
             const lyricsElement = document.getElementById(LYRICS_WRAPPER_ID)?.firstElementChild as HTMLElement;
             if (lyricsElement) {
-              const animateScroll = getComputedStyle(lyricsElement).getPropertyValue("--blyrics-animate-scroll").trim();
+              const optimized = AppState.isOptimizedScrollHostEnabled;
+              const animateScroll = optimized
+                ? getCachedAnimateScroll(lyricsElement)
+                : getComputedStyle(lyricsElement).getPropertyValue("--blyrics-animate-scroll").trim();
               if (animateScroll === "0") {
                 lyricsElement.style.transition = "none";
                 lyricsElement.style.transform = `translate(0px, ${scrollDeltaPx}px)`;
-                lyricsElement.getBoundingClientRect(); // force reflow
+                if (!optimized) {
+                  lyricsElement.getBoundingClientRect(); // force reflow
+                }
               }
             }
           }

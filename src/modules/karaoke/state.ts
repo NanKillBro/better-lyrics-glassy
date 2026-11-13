@@ -1,6 +1,7 @@
 import { KARAOKE_ACTIVE_ATTR, LYRICS_DISABLED_ATTR } from "@constants";
 import { AppState } from "@core/appState";
 import { isAdPlaying } from "@modules/ui/playerControls/playerBarControls";
+import { invalidateViewVisibilityCache } from "@modules/ui/visibilityCache";
 import { type KaraokeConditions, shouldShowKaraoke, wantsKaraokeLyrics } from "@modules/karaoke/gate";
 
 function appLayout(): Element | null {
@@ -24,7 +25,7 @@ function readConditions(): KaraokeConditions {
     fullscreenDisabled: layout?.hasAttribute(LYRICS_DISABLED_ATTR) ?? false,
     videoMode: layout?.hasAttribute("blyrics-video-mode") ?? false,
     synced: readSynced(),
-    adPlaying: isAdPlaying(document),
+    adPlaying: AppState.isAdCheckEnabled && isAdPlaying(document),
   };
 }
 
@@ -47,6 +48,7 @@ export function syncKaraokeAttribute(): boolean {
   const layout = wantsKaraokeLyrics(conditions);
   appLayout()?.toggleAttribute(KARAOKE_ACTIVE_ATTR, layout);
   document.querySelector("#player-page")?.toggleAttribute(KARAOKE_ACTIVE_ATTR, layout);
+  invalidateViewVisibilityCache();
   isStageShown = shouldShowKaraoke(conditions);
   return isStageShown;
 }

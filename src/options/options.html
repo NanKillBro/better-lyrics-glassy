@@ -32,6 +32,7 @@
 					<span class="ui-segmented__pill" aria-hidden="true"></span>
 					<button class="ui-segmented__tab" aria-selected="true" id="general-tab" data-target="#general-content" aria-controls="general-content" role="tab" type="button">__MSG_options_tab_general__</button>
 					<button class="ui-segmented__tab" id="display-tab" data-target="#display-content" aria-controls="display-content" role="tab" type="button">__MSG_options_tab_display__</button>
+					<button class="ui-segmented__tab" id="performance-tab" data-target="#performance-content" aria-controls="performance-content" role="tab" type="button">Performance</button>
 					<button class="ui-segmented__tab" id="language-tab" data-target="#language-content" aria-controls="language-content" role="tab" type="button">__MSG_options_tab_language__</button>
 					<button class="ui-segmented__tab" id="sources-tab" data-target="#sources-content" aria-controls="sources-content" role="tab" type="button">__MSG_options_tab_sources__</button>
 					<button class="ui-segmented__tab" id="identity-tab" data-target="#identity-content" aria-controls="identity-content" role="tab" type="button">__MSG_options_tab_identity__</button>
@@ -105,10 +106,6 @@
 					<div class="ui-card__body">
 						<div class="ui-panel" data-panel="lyrics">
 							<div class="ui-row">
-								<span class="ui-row__label" id="isStylizedAnimationsEnabled-label">__MSG_options_display_stylizedAnimations__ (uses more CPU)</span>
-								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isStylizedAnimationsEnabled" aria-labelledby="isStylizedAnimationsEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
-							</div>
-							<div class="ui-row">
 								<span class="ui-row__label">
 									<span id="letterWaveLabel">__MSG_options_display_letterWave__</span>
 									<span class="ui-badge ui-badge--warning">__MSG_options_display_letterWaveBadge__</span>
@@ -123,10 +120,6 @@
 							<div class="ui-row">
 								<span class="ui-row__label" id="isUnblurUpcomingLyricsEnabled-label">__MSG_options_display_showUpcomingLyricsSooner__<span class="setting-help" tabindex="0" data-tooltip="__MSG_options_display_showUpcomingLyricsSoonerHint__" aria-label="__MSG_options_display_showUpcomingLyricsSoonerHint__">?</span></span>
 								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isUnblurUpcomingLyricsEnabled" aria-labelledby="isUnblurUpcomingLyricsEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
-							</div>
-							<div class="ui-row">
-								<span class="ui-row__label" id="isLyricsBlurDisabled-label">__MSG_options_display_unblurLyrics__<span class="setting-help" tabindex="0" data-tooltip="__MSG_options_display_unblurLyricsTooltip__" aria-label="__MSG_options_display_unblurLyricsTooltip__">?</span></span>
-								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isLyricsBlurDisabled" aria-labelledby="isLyricsBlurDisabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
 							</div>
 							<button class="ui-row" id="offset-settings-btn" type="button">
 								<span class="ui-row__label">__MSG_options_unisonModal_controlOffset__</span>
@@ -191,6 +184,44 @@
 									</span>
 								</span>
 								<div data-dropdown="preferredVideoQuality"></div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+			<section class="page tab-content" id="performance-content" role="tabpanel" aria-labelledby="performance-tab">
+				<div class="ui-card">
+					<div class="ui-card__head">
+						<span class="ui-card__title">
+							Performance
+							<span class="setting-help" tabindex="0" data-tooltip="Experimental performance and visual effect controls." aria-label="Experimental performance and visual effect controls.">?</span>
+						</span>
+					</div>
+					<div class="ui-card__body">
+						<div class="ui-panel is-active">
+							<div class="ui-row">
+								<span class="ui-row__label" id="isStylizedAnimationsEnabled-label">__MSG_options_display_stylizedAnimations__ (uses more CPU)</span>
+								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isStylizedAnimationsEnabled" aria-labelledby="isStylizedAnimationsEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
+							</div>
+							<div class="ui-row">
+								<span class="ui-row__label" id="isLyricsBlurDisabled-label">__MSG_options_display_unblurLyrics__<span class="setting-help" tabindex="0" data-tooltip="__MSG_options_display_unblurLyricsTooltip__" aria-label="__MSG_options_display_unblurLyricsTooltip__">?</span></span>
+								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isLyricsBlurDisabled" aria-labelledby="isLyricsBlurDisabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
+							</div>
+							<div class="ui-row">
+								<span class="ui-row__label" id="isVisibilityCacheEnabled-label">Cache lyrics visibility<span class="setting-help" tabindex="0" data-tooltip="Caches panel visibility between player state, tab, layout, and resize changes instead of re-checking DOM visibility on every tick. Off by default." aria-label="Caches panel visibility between player state, tab, layout, and resize changes instead of re-checking DOM visibility on every tick. Off by default.">?</span></span>
+								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isVisibilityCacheEnabled" aria-labelledby="isVisibilityCacheEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
+							</div>
+							<div class="ui-row">
+								<span class="ui-row__label" id="isAdCheckEnabled-label">Check for advertisements<span class="setting-help" tabindex="0" data-tooltip="Reads is-advertisement from the player bar every tick and shows the ad overlay when an ad plays. Keep off on Premium or ad-blocked setups to skip the check." aria-label="Reads is-advertisement from the player bar every tick and shows the ad overlay when an ad plays. Keep off on Premium or ad-blocked setups to skip the check.">?</span></span>
+								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isAdCheckEnabled" aria-labelledby="isAdCheckEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
+							</div>
+							<div class="ui-row">
+								<span class="ui-row__label" id="isOptimizedScrollHostEnabled-label">Optimize scroll host<span class="setting-help" tabindex="0" data-tooltip="Caches #tab-renderer and --blyrics-animate-scroll lookups and skips synchronous forced reflow inside scrollTop updates. Off by default." aria-label="Caches #tab-renderer and --blyrics-animate-scroll lookups and skips synchronous forced reflow inside scrollTop updates. Off by default.">?</span></span>
+								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isOptimizedScrollHostEnabled" aria-labelledby="isOptimizedScrollHostEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
+							</div>
+							<div class="ui-row">
+								<span class="ui-row__label" id="isOptimizedProgressBarEnabled-label">Optimize fullscreen progress bar<span class="setting-help" tabindex="0" data-tooltip="Isolates fullscreen progress bar layout/style invalidation with CSS containment, pauses updates when hidden or paused, and throttles steady-state playback updates while keeping full-rate scrubbing. Off by default." aria-label="Isolates fullscreen progress bar layout/style invalidation with CSS containment, pauses updates when hidden or paused, and throttles steady-state playback updates while keeping full-rate scrubbing. Off by default.">?</span></span>
+								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isOptimizedProgressBarEnabled" aria-labelledby="isOptimizedProgressBarEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
 							</div>
 						</div>
 					</div>

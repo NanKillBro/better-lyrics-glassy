@@ -14,12 +14,15 @@ import { syncKaraoke } from "@modules/karaoke/karaokeView";
 import { loadKaraokeSettings } from "@modules/karaoke/settings";
 import { migrateFullscreenControlsPref } from "@modules/settings/fullscreenControls";
 import { clearCache as clearTranslationCache } from "@modules/lyrics/translation";
-import { mountDock, mountVotingSegment, reloadAlbumArt, unmountDock, updateDockPosition } from "@modules/ui/dom";
+import { mountDock, mountVotingSegment, reloadAlbumArt, syncAdCheckState, unmountDock, updateDockPosition } from "@modules/ui/dom";
 import { applyGlobalOffsets } from "@modules/ui/lyricsDock/offset";
 import { mainView } from "@modules/ui/mainLyricsView";
 import { isPlayerFullscreened, onFullscreenChange } from "@modules/ui/observer";
 import { publishSecondaryViews } from "@modules/ui/secondaryViews";
 import { applyCustomStyles, getAndApplyCustomStyles } from "@modules/ui/styleInjector";
+import { resetScrollHostCache } from "@modules/ui/lyricsHost";
+import { syncProgressBarOptimizationState } from "@modules/ui/playerControls/progressBar";
+import { disposeVisibilityCache, invalidateViewVisibilityCache } from "@modules/ui/visibilityCache";
 
 let hasInitializedMessageListener = false;
 
@@ -61,26 +64,13 @@ export function handleSettings(): void {
 
   applyFullscreenControlsPref();
 
-  onStylizedAnimationsEnabled(
-    () => {
-      document.getElementById(DISABLE_EFFECTS_STYLE_ID)?.remove();
-    },
-    async () => {
-      let styleElem = document.getElementById(DISABLE_EFFECTS_STYLE_ID);
-      if (!styleElem) {
-        styleElem = document.createElement("style");
-        styleElem.id = DISABLE_EFFECTS_STYLE_ID;
-
-        styleElem.textContent = await fetch(chrome.runtime.getURL("css/disablestylizedanimations.css")).then(res =>
-          res.text()
-        );
-        document.head.appendChild(styleElem);
-      }
-    }
-  );
+  getStorage({ isStylizedAnimationsEnabled: true }, items => {
+    void applyStylizedAnimationsSetting(items.isStylizedAnimationsEnabled !== false);
+  });
 
   loadLyricsBlurSetting();
   loadUnblurUpcomingLyricsSetting();
+  loadPerformanceSettings();
 }
 
 export function onAutoSwitchEnabled(enableAutoSwitch: EnableDisableCallback): void {
@@ -147,17 +137,102 @@ function loadUnblurUpcomingLyricsSetting(): void {
   });
 }
 
-function onStylizedAnimationsEnabled(
-  enableAnimations: EnableDisableCallback,
-  disableAnimations: EnableDisableCallback
-): void {
-  getStorage({ isStylizedAnimationsEnabled: true }, items => {
-    if (items.isStylizedAnimationsEnabled) {
-      enableAnimations();
-    } else {
-      disableAnimations();
+let stylizedAnimationsGeneration = 0;
+
+async function applyStylizedAnimationsSetting(enabled: boolean): Promise<void> {
+  const generation = ++stylizedAnimationsGeneration;
+  if (enabled) {
+    document.getElementById(DISABLE_EFFECTS_STYLE_ID)?.remove();
+    return;
+  }
+
+  if (document.getElementById(DISABLE_EFFECTS_STYLE_ID)) return;
+
+  const cssText = await fetch(chrome.runtime.getURL("css/disablestylizedanimations.css")).then(res => res.text());
+  if (generation !== stylizedAnimationsGeneration) return;
+  if (document.getElementById(DISABLE_EFFECTS_STYLE_ID)) return;
+
+  const styleElem = document.createElement("style");
+  styleElem.id = DISABLE_EFFECTS_STYLE_ID;
+  styleElem.textContent = cssText;
+  document.head.appendChild(styleElem);
+}
+
+function applyVisibilityCacheSetting(enabled: boolean): void {
+  if (AppState.isVisibilityCacheEnabled === enabled) return;
+  AppState.isVisibilityCacheEnabled = enabled;
+  if (enabled) {
+    invalidateViewVisibilityCache();
+  } else {
+    disposeVisibilityCache();
+  }
+}
+
+function applyAdCheckSetting(enabled: boolean): void {
+  if (AppState.isAdCheckEnabled === enabled) return;
+  AppState.isAdCheckEnabled = enabled;
+  syncAdCheckState();
+}
+
+function applyOptimizedScrollHostSetting(enabled: boolean): void {
+  if (AppState.isOptimizedScrollHostEnabled === enabled) return;
+  AppState.isOptimizedScrollHostEnabled = enabled;
+  if (!enabled) {
+    resetScrollHostCache();
+  }
+}
+
+function applyOptimizedProgressBarSetting(enabled: boolean): void {
+  if (AppState.isOptimizedProgressBarEnabled === enabled) return;
+  AppState.isOptimizedProgressBarEnabled = enabled;
+  syncProgressBarOptimizationState(enabled);
+}
+
+export function loadPerformanceSettings(): void {
+  getStorage(
+    {
+      isVisibilityCacheEnabled: false,
+      isAdCheckEnabled: false,
+      isOptimizedScrollHostEnabled: false,
+      isOptimizedProgressBarEnabled: false,
+    },
+    items => {
+      applyVisibilityCacheSetting(items.isVisibilityCacheEnabled === true);
+      applyAdCheckSetting(items.isAdCheckEnabled === true);
+      applyOptimizedScrollHostSetting(items.isOptimizedScrollHostEnabled === true);
+      applyOptimizedProgressBarSetting(items.isOptimizedProgressBarEnabled === true);
     }
-  });
+  );
+}
+
+export function initPerformanceSettingsListener(): () => void {
+  const storageChanged = chrome?.storage?.onChanged;
+  if (!storageChanged) return () => undefined;
+
+  const onStorageChanged = (changes: Record<string, chrome.storage.StorageChange>, areaName: string): void => {
+    if (areaName !== "local") return;
+    if ("isVisibilityCacheEnabled" in changes) {
+      applyVisibilityCacheSetting(changes.isVisibilityCacheEnabled.newValue === true);
+    }
+    if ("isAdCheckEnabled" in changes) {
+      applyAdCheckSetting(changes.isAdCheckEnabled.newValue === true);
+    }
+    if ("isOptimizedScrollHostEnabled" in changes) {
+      applyOptimizedScrollHostSetting(changes.isOptimizedScrollHostEnabled.newValue === true);
+    }
+    if ("isOptimizedProgressBarEnabled" in changes) {
+      applyOptimizedProgressBarSetting(changes.isOptimizedProgressBarEnabled.newValue === true);
+    }
+    if ("isStylizedAnimationsEnabled" in changes) {
+      void applyStylizedAnimationsSetting(changes.isStylizedAnimationsEnabled.newValue !== false);
+    }
+    if ("isLyricsBlurDisabled" in changes) {
+      applyLyricsBlurSetting(changes.isLyricsBlurDisabled.newValue === true);
+    }
+  };
+
+  storageChanged.addListener(onStorageChanged);
+  return () => storageChanged.removeListener(onStorageChanged);
 }
 
 function onAutoHideCursor(

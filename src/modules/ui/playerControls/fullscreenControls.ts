@@ -117,7 +117,7 @@ export function createFullscreenControls(doc: Document): FullscreenControlsHandl
   applyRating(false);
 
   const syncAvailability = (): void => {
-    element.toggleAttribute("data-ad", isAdPlaying(doc));
+    element.toggleAttribute("data-ad", AppState.isAdCheckEnabled && isAdPlaying(doc));
   };
   syncAvailability();
 

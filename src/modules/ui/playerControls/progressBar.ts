@@ -22,6 +22,18 @@ const GLIDE_MS = 260;
 const SEEK_LATCH_TOLERANCE_S = 1;
 const SEEK_LATCH_TIMEOUT_MS = 2000;
 const JUMP_GLIDE_THRESHOLD_S = 0.75;
+const OPTIMIZED_STEADY_INTERVAL_MS = 66;
+const OPTIMIZED_IDLE_INTERVAL_MS = 250;
+
+let optimizedProgressBarEnabled = false;
+const activeProgressBars = new Set<{ syncMode: () => void }>();
+
+export function syncProgressBarOptimizationState(enabled = optimizedProgressBarEnabled): void {
+  optimizedProgressBarEnabled = enabled;
+  for (const instance of activeProgressBars) {
+    instance.syncMode();
+  }
+}
 
 export function createProgressBar(options: ProgressBarOptions): ProgressBarHandle {
   const { doc, getSnapshot, onSeek, initialEndMode, onEndModeChange } = options;
@@ -68,7 +80,37 @@ export function createProgressBar(options: ProgressBarOptions): ProgressBarHandl
   let pendingSeekS: number | null = null;
   let pendingSeekWall = 0;
   let frame = 0;
+  let timer = 0;
   let running = false;
+
+  const syncContainStyle = (): void => {
+    if (optimizedProgressBarEnabled) {
+      element.style.contain = "layout style paint";
+      bar.style.contain = "layout style paint";
+    } else {
+      element.style.removeProperty("contain");
+      bar.style.removeProperty("contain");
+    }
+  };
+  syncContainStyle();
+
+  const cancelScheduled = (): void => {
+    if (frame !== 0) {
+      win.cancelAnimationFrame(frame);
+      frame = 0;
+    }
+    if (timer !== 0) {
+      win.clearTimeout(timer);
+      timer = 0;
+    }
+  };
+
+  const isControlsHiddenInOptimizedMode = (): boolean => {
+    if (doc.documentElement?.hasAttribute("blyrics-no-fs-controls")) return true;
+    const layout = doc.getElementById("layout");
+    if (layout && !layout.hasAttribute("player-fullscreened")) return true;
+    return false;
+  };
 
   const barWidthObservation = observeLayoutWidth(
     () => bar,
@@ -91,7 +133,9 @@ export function createProgressBar(options: ProgressBarOptions): ProgressBarHandl
 
   const paint = (currentS: number, durationS: number): void => {
     const pct = durationS > 0 ? clamp01(currentS / durationS) : 0;
-    const step = 1 / (PROGRESS_PAINT_STEPS_PER_DEVICE_PX * (win.devicePixelRatio || 1));
+    const stepsPerDevicePx =
+      optimizedProgressBarEnabled && !dragging && !gliding ? 1 : PROGRESS_PAINT_STEPS_PER_DEVICE_PX;
+    const step = 1 / (stepsPerDevicePx * (win.devicePixelRatio || 1));
     const knobPx = Math.round((pct * barWidth) / step) * step;
     const fillValue = `scaleX(${barWidth > 0 ? knobPx / barWidth : pct})`;
     const knobValue = `translateX(${knobPx}px)`;
@@ -120,10 +164,28 @@ export function createProgressBar(options: ProgressBarOptions): ProgressBarHandl
     return pendingSeekS;
   };
 
+  const scheduleNext = (snapshot: PlaybackSnapshot | null): void => {
+    if (!running) return;
+    if (!optimizedProgressBarEnabled || dragging || gliding) {
+      frame = win.requestAnimationFrame(tick);
+      return;
+    }
+    const idle = isControlsHiddenInOptimizedMode() || !snapshot || !snapshot.isPlaying;
+    const delayMs = idle ? OPTIMIZED_IDLE_INTERVAL_MS : OPTIMIZED_STEADY_INTERVAL_MS;
+    timer = win.setTimeout(tick, delayMs) as unknown as number;
+  };
+
   const tick = (): void => {
+    frame = 0;
+    timer = 0;
     const snapshot = getSnapshot();
     const durationS = snapshot?.durationS ?? 0;
     const now = win.performance.now();
+
+    if (optimizedProgressBarEnabled && !dragging && !gliding && isControlsHiddenInOptimizedMode()) {
+      scheduleNext(snapshot);
+      return;
+    }
 
     if (gliding) {
       const target = glideTracksLive ? liveTarget(snapshot, now) : glideTarget;
@@ -148,23 +210,33 @@ export function createProgressBar(options: ProgressBarOptions): ProgressBarHandl
     }
 
     paint(displayedS ?? 0, durationS);
-    if (running) frame = win.requestAnimationFrame(tick);
+    scheduleNext(snapshot);
   };
 
   const start = (): void => {
     if (running) return;
     running = true;
     barWidth = measureWidth(bar) ?? barWidth;
-    frame = win.requestAnimationFrame(tick);
+    scheduleNext(getSnapshot());
   };
 
   const stop = (): void => {
     if (!running) return;
     running = false;
-    win.cancelAnimationFrame(frame);
+    cancelScheduled();
     gliding = false;
     displayedS = null;
   };
+
+  const instanceController = {
+    syncMode(): void {
+      syncContainStyle();
+      if (!running) return;
+      cancelScheduled();
+      tick();
+    },
+  };
+  activeProgressBars.add(instanceController);
 
   const onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0) return;
@@ -180,6 +252,10 @@ export function createProgressBar(options: ProgressBarOptions): ProgressBarHandl
     scrubValue = clicked;
     glideStart = win.performance.now();
     gliding = true;
+    if (running && timer !== 0) {
+      cancelScheduled();
+      frame = win.requestAnimationFrame(tick);
+    }
   };
 
   const onPointerMove = (event: PointerEvent): void => {
@@ -237,6 +313,7 @@ export function createProgressBar(options: ProgressBarOptions): ProgressBarHandl
     element,
     destroy(): void {
       stop();
+      activeProgressBars.delete(instanceController);
       barWidthObservation.destroy();
       visibilityObserver.disconnect();
     },

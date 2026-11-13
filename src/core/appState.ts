@@ -74,6 +74,10 @@ interface AppStateType {
   endTimeMode: "total" | "remaining";
   playbackRate: number;
   isKaraokeEnabled: boolean;
+  isVisibilityCacheEnabled: boolean;
+  isAdCheckEnabled: boolean;
+  isOptimizedScrollHostEnabled: boolean;
+  isOptimizedProgressBarEnabled: boolean;
 }
 
 export const AppState: AppStateType = {
@@ -124,6 +128,10 @@ export const AppState: AppStateType = {
   endTimeMode: "total",
   playbackRate: 1,
   ...KARAOKE_DEFAULTS,
+  isVisibilityCacheEnabled: false,
+  isAdCheckEnabled: false,
+  isOptimizedScrollHostEnabled: false,
+  isOptimizedProgressBarEnabled: false,
 };
 
 export function reloadLyrics(): void {

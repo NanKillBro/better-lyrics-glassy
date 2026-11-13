@@ -97,6 +97,10 @@ interface Options extends VideoQualitySettings {
   isPassiveScrollEnabled: boolean;
   isUnblurUpcomingLyricsEnabled: boolean;
   isLyricsBlurDisabled: boolean;
+  isVisibilityCacheEnabled: boolean;
+  isAdCheckEnabled: boolean;
+  isOptimizedScrollHostEnabled: boolean;
+  isOptimizedProgressBarEnabled: boolean;
   isPictureInPictureEnabled: boolean;
   isPictureInPictureAutoRestoreEnabled: boolean;
   pipWindowLayout: string;
@@ -172,6 +176,11 @@ const getOptionsFromForm = (): Options => {
     isUnblurUpcomingLyricsEnabled: (document.getElementById("isUnblurUpcomingLyricsEnabled") as HTMLInputElement)
       .checked,
     isLyricsBlurDisabled: (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked,
+    isVisibilityCacheEnabled: (document.getElementById("isVisibilityCacheEnabled") as HTMLInputElement).checked,
+    isAdCheckEnabled: (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked,
+    isOptimizedScrollHostEnabled: (document.getElementById("isOptimizedScrollHostEnabled") as HTMLInputElement).checked,
+    isOptimizedProgressBarEnabled: (document.getElementById("isOptimizedProgressBarEnabled") as HTMLInputElement)
+      .checked,
     isPictureInPictureEnabled: (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked,
     isPictureInPictureAutoRestoreEnabled: (
       document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement
@@ -372,6 +381,10 @@ const restoreOptions = (): void => {
     isPassiveScrollEnabled: true,
     isUnblurUpcomingLyricsEnabled: false,
     isLyricsBlurDisabled: false,
+    isVisibilityCacheEnabled: false,
+    isAdCheckEnabled: false,
+    isOptimizedScrollHostEnabled: false,
+    isOptimizedProgressBarEnabled: false,
     isPictureInPictureEnabled: true,
     isPictureInPictureAutoRestoreEnabled: false,
     pipWindowLayout: "horizontal",
@@ -476,6 +489,12 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isUnblurUpcomingLyricsEnabled") as HTMLInputElement).checked =
     items.isUnblurUpcomingLyricsEnabled;
   (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked = items.isLyricsBlurDisabled;
+  (document.getElementById("isVisibilityCacheEnabled") as HTMLInputElement).checked = items.isVisibilityCacheEnabled;
+  (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked = items.isAdCheckEnabled;
+  (document.getElementById("isOptimizedScrollHostEnabled") as HTMLInputElement).checked =
+    items.isOptimizedScrollHostEnabled;
+  (document.getElementById("isOptimizedProgressBarEnabled") as HTMLInputElement).checked =
+    items.isOptimizedProgressBarEnabled;
   (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked = items.isPictureInPictureEnabled;
   (document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement).checked =
     items.isPictureInPictureAutoRestoreEnabled;
