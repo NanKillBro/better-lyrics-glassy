@@ -1408,11 +1408,21 @@ ytmusic-play-button-renderer[size="MUSIC_PLAY_BUTTON_SIZE_HUGE"] .content-wrappe
   transform: scale(1.2);
 }
 
+/* YTM A/B tests two player bars: ytmusic-miniplayer uses a 50px tabs offset,
+   while the legacy ytmusic-player-bar layout still needs 100px. */
+:root {
+    --nankill-tabs-top-offset: 50px;
+}
+
+:root[data-nankill-player-bar="legacy"] {
+    --nankill-tabs-top-offset: 100px;
+}
+
 ytmusic-tabs#tabs {
     /* Thu gọn và căn giữa (Giữ nguyên của bạn) */
     width: 50% !important;  
     margin: 10px auto 0 auto !important;      
-    top: calc(var(--menu-bar-height, 0px) + 50px) !important;
+    top: calc(var(--menu-bar-height, 0px) + var(--nankill-tabs-top-offset, 50px)) !important;
 
     /* Bo tròn và padding (Giữ nguyên) */
     border-radius: 16px !important; 
@@ -2689,6 +2699,60 @@ function setupFullscreenMiniPlayerBlocker() {
   }
 }
 
+let nankillPlayerBarVersionInstalled = false;
+
+// Keep this contract in sync with fix.js findBar(): the new bar wins when both exist.
+function getNankillPlayerBarVersion() {
+  if (document.querySelector('ytmusic-miniplayer')) {
+    return 'miniplayer';
+  }
+  if (document.querySelector('ytmusic-player-bar')) {
+    return 'legacy';
+  }
+  return 'unknown';
+}
+
+function syncNankillPlayerBarVersion() {
+  const root = document.documentElement;
+  if (!root) {
+    return false;
+  }
+
+  const version = getNankillPlayerBarVersion();
+  if (version === 'legacy') {
+    root.setAttribute('data-nankill-player-bar', 'legacy');
+  } else {
+    root.removeAttribute('data-nankill-player-bar');
+  }
+
+  return version !== 'unknown';
+}
+
+function setupNankillPlayerBarVersion() {
+  if (nankillPlayerBarVersionInstalled) {
+    return;
+  }
+
+  nankillPlayerBarVersionInstalled = true;
+
+  // The legacy bar is normally present before playback. The new bar only shows up
+  // once playback starts, and the 50px default already covers that state.
+  let attempts = 0;
+  const sync = () => {
+    if (syncNankillPlayerBarVersion()) {
+      return;
+    }
+    if (attempts++ < 4) {
+      setTimeout(sync, 500);
+    }
+  };
+
+  sync();
+  window.addEventListener('DOMContentLoaded', syncNankillPlayerBarVersion);
+  window.addEventListener('load', syncNankillPlayerBarVersion);
+  document.addEventListener('yt-navigate-finish', syncNankillPlayerBarVersion);
+}
+
 const NANKILL_BLYRICS_SOURCE_LINK_ID = 'betterLyricsFooterLink';
 
 function getSourceLinkInContainer(container) {
@@ -3249,6 +3313,7 @@ setupFooterDockingObserver();
 setupNoSyncDomObserver();
 setupFullscreenCursorObserver();
 setupFullscreenMiniPlayerBlocker();
+setupNankillPlayerBarVersion();
 setupSearchGlassState();
 setupPastLineMarker();
 
@@ -3260,6 +3325,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setupNoSyncDomObserver();
   setupFullscreenCursorObserver();
   setupFullscreenMiniPlayerBlocker();
+  setupNankillPlayerBarVersion();
   setupSearchGlassState();
   setupPastLineMarker();
 });
@@ -3271,6 +3337,7 @@ window.addEventListener('load', () => {
   setupNoSyncDomObserver();
   setupFullscreenCursorObserver();
   setupFullscreenMiniPlayerBlocker();
+  setupNankillPlayerBarVersion();
   setupSearchGlassState();
   setupPastLineMarker();
 });
