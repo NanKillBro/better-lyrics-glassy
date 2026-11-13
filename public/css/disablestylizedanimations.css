@@ -17,3 +17,6 @@
 .blyrics-container > div > div > span > span.blyrics--animating {
     animation: none;
 }
+.blyrics-sweep-glow {
+    animation: none !important;
+}

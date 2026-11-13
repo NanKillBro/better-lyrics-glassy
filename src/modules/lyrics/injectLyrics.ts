@@ -1,5 +1,6 @@
 import {
   BACKGROUND_LYRIC_CLASS,
+  COMPOSITED_LYRICS_ATTR,
   EXPLICIT_WORD_CLASS,
   HAS_TRAILING_SPACE_CLASS,
   LOG_PREFIX,
@@ -340,6 +341,10 @@ function createLyricsLine(parts: LyricPart[], line: LineData, lyricElement: HTML
         span.classList.add(EXPLICIT_WORD_CLASS);
       }
 
+      if (isCompositedLyricsEnabled()) {
+        span.appendChild(createCompositedWordOverlay(part.words));
+      }
+
       // Non-final sub-parts signal a group-flush (wrap opportunity) without a trailing-space
       // visual gap — the original text was contiguous.
       if (!isLastSub) {
@@ -371,6 +376,40 @@ function createLyricsLine(parts: LyricPart[], line: LineData, lyricElement: HTML
   }
 
   groupByWordAndInsert(lyricElement, lyricElementsBuffer);
+}
+
+function isCompositedLyricsEnabled(): boolean {
+  return AppState.isCompositedLyricsEnabled || document.documentElement.hasAttribute(COMPOSITED_LYRICS_ATTR);
+}
+
+/**
+ * Adds the GPU-composited karaoke sweep layer for one word. The word itself stays the
+ * visible inactive text; the overlay holds a copy that is revealed by a static mask,
+ * with the mask and the copy moving in opposite directions via transform only.
+ */
+function createCompositedWordOverlay(text: string): HTMLSpanElement {
+  const overlay = document.createElement("span");
+  overlay.className = "blyrics-word-sweep";
+  overlay.setAttribute("aria-hidden", "true");
+
+  const mask = document.createElement("span");
+  mask.className = "blyrics-sweep-mask";
+
+  const textCopy = document.createElement("span");
+  textCopy.className = "blyrics-sweep-text";
+
+  const wideGlow = document.createElement("span");
+  wideGlow.className = "blyrics-sweep-glow blyrics-sweep-glow--wide";
+  wideGlow.textContent = text;
+
+  const tightGlow = document.createElement("span");
+  tightGlow.className = "blyrics-sweep-glow blyrics-sweep-glow--tight";
+  tightGlow.textContent = text;
+
+  textCopy.append(wideGlow, tightGlow, document.createTextNode(text));
+  mask.appendChild(textCopy);
+  overlay.appendChild(mask);
+  return overlay;
 }
 
 function createBreakElem(lyricElement: HTMLElement, order: number) {

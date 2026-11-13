@@ -31,6 +31,7 @@ interface Options {
   isFastTabRendererLookupEnabled: boolean;
   isFastDockProximityEnabled: boolean;
   isSkipForcedLayoutEnabled: boolean;
+  isCompositedLyricsEnabled: boolean;
   isLyricsBlurDisabled: boolean;
   isPlayerMetadataCacheEnabled: boolean;
   isProgressiveLyricsEnabled: boolean;
@@ -96,6 +97,7 @@ const getOptionsFromForm = (): Options => {
       .checked,
     isFastDockProximityEnabled: (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked,
     isSkipForcedLayoutEnabled: (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked,
+    isCompositedLyricsEnabled: (document.getElementById("isCompositedLyricsEnabled") as HTMLInputElement).checked,
     isLyricsBlurDisabled: (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked,
     isPlayerMetadataCacheEnabled: (document.getElementById("isPlayerMetadataCacheEnabled") as HTMLInputElement).checked,
     isProgressiveLyricsEnabled: (document.getElementById("isProgressiveLyricsEnabled") as HTMLInputElement).checked,
@@ -280,6 +282,7 @@ const restoreOptions = (): void => {
     isFastTabRendererLookupEnabled: true,
     isFastDockProximityEnabled: true,
     isSkipForcedLayoutEnabled: false,
+    isCompositedLyricsEnabled: false,
     isLyricsBlurDisabled: false,
     isPlayerMetadataCacheEnabled: true,
     isProgressiveLyricsEnabled: false,
@@ -349,6 +352,7 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked =
     items.isFastDockProximityEnabled;
   (document.getElementById("isSkipForcedLayoutEnabled") as HTMLInputElement).checked = items.isSkipForcedLayoutEnabled;
+  (document.getElementById("isCompositedLyricsEnabled") as HTMLInputElement).checked = items.isCompositedLyricsEnabled;
   (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked = items.isLyricsBlurDisabled;
   (document.getElementById("isPlayerMetadataCacheEnabled") as HTMLInputElement).checked =
     items.isPlayerMetadataCacheEnabled;
