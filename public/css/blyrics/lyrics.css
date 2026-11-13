@@ -321,7 +321,12 @@
 	overflow-clip-margin: 2rem;
 	pointer-events: none;
 	position: absolute;
-	transition: opacity var(--blyrics-lyric-highlight-fade-out-duration) ease;
+	/* Past words keep the lit end pose and fade like the legacy ::after; allow-discrete
+	   holds display:block until the opacity transition ends, then releases the layer. */
+	transition-behavior: allow-discrete;
+	transition-duration: var(--blyrics-lyric-highlight-fade-out-duration);
+	transition-property: opacity, display;
+	transition-timing-function: ease;
 	user-select: none;
 	z-index: 0;
 }
@@ -405,7 +410,9 @@
 }
 
 :root[blyrics-composited-lyrics] .blyrics-sweep-glow {
-	--blyrics-sweep-glow-radius: var(--blyrics-highlight-glow-radius-from, 0.8rem);
+	/* text-shadow's blur radius is half the Gaussian sigma of filter: drop-shadow at the
+	   same value, so the legacy 0.8rem drop-shadow needs a 1.6rem text-shadow to match. */
+	--blyrics-sweep-glow-radius: calc(var(--blyrics-highlight-glow-radius-from, 0.8rem) * 2);
 	color: transparent;
 	inset: 0;
 	opacity: 0;
@@ -417,7 +424,8 @@
 }
 
 :root[blyrics-composited-lyrics] .blyrics-sweep-glow--tight {
-	--blyrics-sweep-glow-radius: calc(var(--blyrics-highlight-glow-radius-from, 0.8rem) * 0.4);
+	/* Same 2x text-shadow compensation; 0.4x is the legacy radius at the 60% crossfade. */
+	--blyrics-sweep-glow-radius: calc(var(--blyrics-highlight-glow-radius-from, 0.8rem) * 0.8);
 }
 
 :root[blyrics-composited-lyrics] .blyrics--word.blyrics--animating .blyrics-sweep-mask {
