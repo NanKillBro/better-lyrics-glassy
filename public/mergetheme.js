@@ -41,6 +41,10 @@ ytmusic-app {
   /* -- [ Layout Variables ] -- */
   --yt-cover-size: 650px;
   --side-panel-width: 55%;
+  --side-panel-video-width: 50%;
+  --side-panel-fullscreen-video-width: 40%;
+  --blyrics-video-panel-size: 50%;
+  --blyrics-fullscreen-video-panel-size: 40%;
   --blyrics-bottom-spacing: 50px;
 
   /* -- [ Glassmorphism Variables ] -- */
@@ -1131,12 +1135,25 @@ ytmusic-player-page[mini-player-enabled]:not([player-page-open]):not([player-ful
   background-color: var(--blyrics-bg-color) !important;
   border-radius: var(--blyrics-border-radius) !important;
   box-shadow: var(--blyrics-box-shadow) !important;
-  min-width: var(--side-panel-width) !important;
   z-index: 1; 
   
   margin-bottom: var(--blyrics-bottom-spacing) !important;
   height: auto !important;
   max-height: calc(100vh - 120px) !important; 
+}
+
+/* Keep audio docked/fullscreen at --side-panel-width (55%), give video mode 50% (normal) / 40% (fullscreen), and leave dfs/karaoke untouched */
+ytmusic-player-page:not([player-fullscreened]):not([blyrics-video-mode]):not([video-mode]) #side-panel,
+ytmusic-player-page[player-fullscreened]:not([blyrics-video-mode]):not([video-mode]):not([blyrics-dfs]):not([blyrics-karaoke]) #side-panel {
+  min-width: var(--side-panel-width) !important;
+}
+
+ytmusic-player-page:not([player-fullscreened]):is([blyrics-video-mode], [video-mode]) #side-panel {
+  min-width: var(--side-panel-video-width, 50%) !important;
+}
+
+ytmusic-player-page[player-fullscreened]:is([blyrics-video-mode], [video-mode]):not([blyrics-dfs]):not([blyrics-karaoke]) #side-panel {
+  min-width: var(--side-panel-fullscreen-video-width, 40%) !important;
 }
 
 /* STYLE LYRIC */
