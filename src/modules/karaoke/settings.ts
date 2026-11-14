@@ -4,7 +4,7 @@ import { KARAOKE_DEFAULTS } from "@modules/karaoke/defaults";
 
 export function loadKaraokeSettings(onLoaded: () => void): void {
   getStorage(KARAOKE_DEFAULTS, items => {
-    AppState.isKaraokeEnabled = items.isKaraokeEnabled !== false;
+    AppState.isKaraokeEnabled = items.isKaraokeEnabled === true;
     onLoaded();
   });
 }

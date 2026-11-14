@@ -203,7 +203,7 @@ export function publishPictureInPictureResources(): void {
       marqueeEnabled: items.pipMarqueeEnabled !== false,
       progressBarEnabled: items.pipProgressBarEnabled !== false,
       videoEnabled: items.pipVideoEnabled !== false,
-      karaokeEnabled: items.isKaraokeEnabled !== false,
+      karaokeEnabled: items.isKaraokeEnabled === true,
       windowLayout: String(items.pipWindowLayout),
       logsEnabled: items.isLogsEnabled !== false,
     });
