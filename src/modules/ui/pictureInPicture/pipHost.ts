@@ -2,9 +2,11 @@ import { DISABLE_EFFECTS_STYLE_ID, FOOTER_CLASS, PLAYER_TIME_EVENT } from "@cons
 import { translateContributorCreditLabels } from "@modules/lyrics/contributorCredit";
 import type { PlayerDetails } from "@core/appState";
 import { CUSTOM_THEME_STYLE_ID } from "@braccato/core/constants";
+import { lyricBuildSettingsKey } from "@braccato/core/themeSettings";
 import { applyLyricDecorations } from "@modules/lyrics/lyricDecorations";
 import type { Lyric, LyricsRenderer } from "@braccato/core";
 import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
+import { ensureLetterWaveSetting } from "@modules/settings/letterWave";
 import { VIDEO_QUALITY_BOOST_EVENT } from "@modules/settings/videoQuality";
 import { shouldShowWindowStage } from "@modules/karaoke/gate";
 import { createKaraokeStage, type KaraokeStage } from "@modules/karaoke/stage";
@@ -274,16 +276,21 @@ export function createPictureInPictureHost(
     // change. Re-applying identical CSS is not free: the sheet is re-parsed, so every face the theme
     // imports is re-resolved and the font event that follows re-arms the header marquee.
     let appliedThemeCss: string | null = null;
+    let appliedBuildSettingsKey: string | null = null;
     const syncTheme = (): boolean => {
-      const css = document.getElementById(CUSTOM_THEME_STYLE_ID)?.textContent ?? "";
+      const css = ensureLetterWaveSetting(document.getElementById(CUSTOM_THEME_STYLE_ID)?.textContent ?? "");
       if (css === appliedThemeCss) return false;
       // Recorded only once it is applied. A guard written first would go on claiming a theme that
       // threw on the way in, and nothing else in the window's life reads that stylesheet again.
       const needsLyricRebuild = renderer.setTheme(css);
       activeStage?.setTheme(css);
       activeView?.syncStageTextScale();
+      const nextBuildSettingsKey = lyricBuildSettingsKey();
+      const buildSettingsChanged =
+        appliedBuildSettingsKey !== null && appliedBuildSettingsKey !== nextBuildSettingsKey;
       appliedThemeCss = css;
-      return needsLyricRebuild;
+      appliedBuildSettingsKey = nextBuildSettingsKey;
+      return needsLyricRebuild || buildSettingsChanged;
     };
     // The theme goes in ahead of the effects sheet, which is the order that decides anything: the
     // effects sheet switches off what the theme declares. The marquee's own sheet is ahead of both,

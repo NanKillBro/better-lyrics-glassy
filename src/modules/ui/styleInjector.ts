@@ -1,3 +1,4 @@
+import { CUSTOM_THEME_STYLE_ID } from "@braccato/core/constants";
 import { reloadLyrics } from "@core/appState";
 import { decompressString, isCompressed } from "@core/compression";
 import {
@@ -11,22 +12,32 @@ import { applyKaraokeTheme } from "@modules/karaoke/karaokeView";
 import { mainView } from "./mainLyricsView";
 import { publishSecondaryViews } from "@modules/ui/secondaryViews";
 import { logCore, logError } from "@core/logger";
-import { migrateLetterWavePref, type LetterWavePref } from "@modules/settings/letterWave";
+import {
+  migrateLetterWavePref,
+  withLetterWaveSetting,
+  type LetterWavePref,
+} from "@modules/settings/letterWave";
 
 let hasSubscribedToStyles = false;
 let letterWavePref: LetterWavePref = "off";
 
-// Position decides precedence: parseThemeConfig is last-wins. "auto" sits before
-// the theme so the theme can override it (today's behaviour); "on"/"off" sit
-// after, so the user's choice is the last word.
-function withLetterWaveSetting(css: string): string {
-  switch (letterWavePref) {
-    case "on":
-      return `${css}\n/* blyrics-letter-wave = true; */`;
-    case "off":
-      return `${css}\n/* blyrics-letter-wave = false; */`;
-    default:
-      return `/* blyrics-letter-wave = false; */\n${css}`;
+function isGlassyMergeThemeActive(activePearTheme?: string): boolean {
+  return (
+    activePearTheme === "glassy-merge-theme" ||
+    (activePearTheme !== "better-lyrics-theme" &&
+      document.getElementById("force-nankill-skibidi-theme") !== null)
+  );
+}
+
+function syncCustomThemeStyleElement(themeCss: string): void {
+  let styleElement = document.getElementById(CUSTOM_THEME_STYLE_ID) as HTMLStyleElement | null;
+  if (!styleElement) {
+    styleElement = document.createElement("style");
+    styleElement.id = CUSTOM_THEME_STYLE_ID;
+    document.head.appendChild(styleElement);
+  }
+  if (styleElement.textContent !== themeCss) {
+    styleElement.textContent = themeCss;
   }
 }
 
@@ -37,7 +48,8 @@ function withLetterWaveSetting(css: string): string {
  * compressed, and compiling the RICS source it is written in.
  */
 export function applyCustomStyles(css: string): void {
-  const themeCss = withLetterWaveSetting(css);
+  const themeCss = withLetterWaveSetting(css, letterWavePref);
+  syncCustomThemeStyleElement(themeCss);
   const needsLyricReload = mainView.setTheme(themeCss);
   applyKaraokeTheme(themeCss);
   publishSecondaryViews();
@@ -72,12 +84,7 @@ export async function getAndApplyCustomStyles(retryContext?: { attempt: number; 
       "activePearTheme",
     ]);
 
-    const activePearTheme = syncData.activePearTheme;
-    if (activePearTheme === "glassy-merge-theme") {
-      const existing = document.getElementById("blyrics-custom-style");
-      if (existing) {
-        existing.remove();
-      }
+    if (isGlassyMergeThemeActive(syncData.activePearTheme)) {
       applyCustomStyles("");
       return;
     }
@@ -105,6 +112,9 @@ export async function getAndApplyCustomStyles(retryContext?: { attempt: number; 
       return; // Successfully applied, no retry needed
     }
 
+    // Apply current letterWavePref immediately even before retries complete
+    applyCustomStyles("");
+
     // No CSS found - schedule retry if we have attempts remaining
     if (retryContext && retryContext.attempt < retryContext.maxAttempts) {
       const nextAttempt = retryContext.attempt + 1;
@@ -113,18 +123,12 @@ export async function getAndApplyCustomStyles(retryContext?: { attempt: number; 
       setTimeout(() => {
         getAndApplyCustomStyles({ ...retryContext, attempt: nextAttempt });
       }, delay);
-    } else {
-      applyCustomStyles("");
     }
   } catch (error) {
     logError(error);
     try {
       const { activePearTheme } = await getLocalStorage<{ activePearTheme?: string }>(["activePearTheme"]);
-      if (activePearTheme === "glassy-merge-theme") {
-        const existing = document.getElementById("blyrics-custom-style");
-        if (existing) {
-          existing.remove();
-        }
+      if (isGlassyMergeThemeActive(activePearTheme)) {
         applyCustomStyles("");
         return;
       }
@@ -160,6 +164,8 @@ export async function getAndApplyCustomStyles(retryContext?: { attempt: number; 
         return;
       }
 
+      applyCustomStyles("");
+
       // All fallbacks failed, schedule retry if available
       if (retryContext && retryContext.attempt < retryContext.maxAttempts) {
         const nextAttempt = retryContext.attempt + 1;
@@ -194,6 +200,11 @@ export function subscribeToCustomStyles(): void {
     return;
   }
   hasSubscribedToStyles = true;
+
+  // Seed default letterWavePref ("off") and #blyrics-custom-style synchronously
+  // before async storage resolution so early song or PiP builds do not fall back
+  // to @braccato/core's built-in blyrics-letter-wave = true default.
+  applyCustomStyles("");
 
   chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area === "local" && (changes.customCSS || changes.letterWavePref || changes.activePearTheme)) {
