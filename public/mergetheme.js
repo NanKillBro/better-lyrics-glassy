@@ -1294,6 +1294,12 @@ ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-sc
               transform 1.3s ease;
 }
 
+/* Credits focus fade: override @braccato/core's 0.35s ease-out-quart curve so
+   credits ramp up smoothly alongside lyric lines rather than snapping bright. */
+.blyrics-container:not([data-layout="stage"]) > .blyrics-credits {
+  transition: opacity 0.7s ease;
+}
+
 /* Translated & Romanized */
 .blyrics-container > div > span.blyrics--translated,
 .blyrics-container > div > span.blyrics--romanized {
