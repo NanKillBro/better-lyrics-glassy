@@ -120,7 +120,7 @@ export const AppState: AppStateType = {
   isDockTranslateEnabled: true,
   isDockRomanizeEnabled: true,
   isDockOffsetEnabled: true,
-  isDockRefreshEnabled: false,
+  isDockRefreshEnabled: true,
   isDockPictureInPictureEnabled: false,
   dockControlsOrder: [...DOCK_CONTROL_ORDER_DEFAULT],
   currentUnisonData: null,

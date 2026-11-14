@@ -603,18 +603,19 @@
 							</label>
 						</div>
 					</div>
-					<div class="position-section unison-modal-row--dependent">
+					<div class="position-section position-section--locked unison-modal-row--dependent">
 						<span class="position-section__label" id="unison-position-label">__MSG_options_unisonModal_position__</span>
 						<div class="position-picker">
-							<div class="position-frame" id="unison-position-frame" role="radiogroup" aria-labelledby="unison-position-label">
+							<div class="position-frame" id="unison-position-frame" role="radiogroup" aria-labelledby="unison-position-label" aria-disabled="true" inert="">
 								<div class="position-cell" role="radio" aria-checked="false" tabindex="-1" data-pos="top-left" data-tooltip="__MSG_options_unisonModal_position_topLeft__" aria-label="__MSG_options_unisonModal_position_topLeft__"></div>
 								<div class="position-cell" role="radio" aria-checked="false" tabindex="-1" data-pos="top-center" data-tooltip="__MSG_options_unisonModal_position_topCenter__" aria-label="__MSG_options_unisonModal_position_topCenter__"></div>
 								<div class="position-cell" role="radio" aria-checked="false" tabindex="-1" data-pos="top-right" data-tooltip="__MSG_options_unisonModal_position_topRight__" aria-label="__MSG_options_unisonModal_position_topRight__"></div>
 								<div class="position-cell" role="radio" aria-checked="false" tabindex="-1" data-pos="bottom-left" data-tooltip="__MSG_options_unisonModal_position_bottomLeft__" aria-label="__MSG_options_unisonModal_position_bottomLeft__"></div>
-								<div class="position-cell" role="radio" aria-checked="false" tabindex="-1" data-pos="bottom-center" data-tooltip="__MSG_options_unisonModal_position_bottomCenter__" aria-label="__MSG_options_unisonModal_position_bottomCenter__"></div>
+								<div class="position-cell" role="radio" aria-checked="true" tabindex="-1" data-pos="bottom-center" data-selected="true" data-tooltip="__MSG_options_unisonModal_position_bottomCenter__" aria-label="__MSG_options_unisonModal_position_bottomCenter__"></div>
 								<div class="position-cell" role="radio" aria-checked="false" tabindex="-1" data-pos="bottom-right" data-tooltip="__MSG_options_unisonModal_position_bottomRight__" aria-label="__MSG_options_unisonModal_position_bottomRight__"></div>
 							</div>
 						</div>
+						<p class="unison-modal-row__hint position-section__note">__MSG_options_unisonModal_position_lockedHint__</p>
 					</div>
 				</div>
 				<div class="ui-modal__foot">

@@ -201,7 +201,7 @@ const getOptionsFromForm = (): Options => {
     translationDisabledLanguages: translationDisabledLanguages,
     uiLanguage: (document.getElementById("uiLanguage") as HTMLInputElement).value,
     isControlsDockEnabled: (document.getElementById("isUnisonPinnedDockEnabled") as HTMLInputElement).checked,
-    controlsDockPosition: getSelectedUnisonPosition(),
+    controlsDockPosition: DOCK_DEFAULT_POSITION,
     isControlsDockAutoHideInFullscreenEnabled: (
       document.getElementById("isUnisonAutoHideInFullscreenEnabled") as HTMLInputElement
     ).checked,
@@ -218,11 +218,6 @@ const getOptionsFromForm = (): Options => {
     lineOffsetTrim: parseFloat((document.getElementById("lineOffsetTrim") as HTMLInputElement).value) || 0,
   };
 };
-
-function getSelectedUnisonPosition(): string {
-  const selected = document.querySelector<HTMLElement>("#unison-position-frame .position-cell[data-selected='true']");
-  return selected?.dataset.pos ?? DOCK_DEFAULT_POSITION;
-}
 
 function getDockControlsOrder(): string[] {
   const cells = document.querySelectorAll<HTMLElement>(".controls-shown-picker .control-cell");
@@ -427,7 +422,7 @@ const restoreOptions = (): void => {
     isDockTranslateEnabled: true,
     isDockRomanizeEnabled: true,
     isDockOffsetEnabled: true,
-    isDockRefreshEnabled: false,
+    isDockRefreshEnabled: true,
     isDockPictureInPictureEnabled: true,
     dockControlsOrder: [...DOCK_CONTROL_ORDER_DEFAULT],
     globalLyricOffset: 0,
@@ -440,7 +435,6 @@ const restoreOptions = (): void => {
     "isLetterWaveEnabled",
     "isFullscreenControlsEnabled",
     "isUnisonPinnedDockEnabled",
-    "unisonPinnedDockPosition",
     "isUnisonAutoHideInFullscreenEnabled",
   ];
 
@@ -452,8 +446,7 @@ const restoreOptions = (): void => {
       fullscreenControlsPref: migrateFullscreenControlsPref(raw),
       isControlsDockEnabled:
         raw.isControlsDockEnabled ?? raw.isUnisonPinnedDockEnabled ?? defaultOptions.isControlsDockEnabled,
-      controlsDockPosition:
-        raw.controlsDockPosition ?? raw.unisonPinnedDockPosition ?? defaultOptions.controlsDockPosition,
+      controlsDockPosition: DOCK_DEFAULT_POSITION,
       isControlsDockAutoHideInFullscreenEnabled:
         raw.isControlsDockAutoHideInFullscreenEnabled ??
         raw.isUnisonAutoHideInFullscreenEnabled ??
@@ -512,7 +505,7 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isUnisonPinnedDockEnabled") as HTMLInputElement).checked = items.isControlsDockEnabled;
   (document.getElementById("isUnisonAutoHideInFullscreenEnabled") as HTMLInputElement).checked =
     items.isControlsDockAutoHideInFullscreenEnabled;
-  setUnisonPositionInForm(items.controlsDockPosition);
+  setUnisonPositionInForm(DOCK_DEFAULT_POSITION);
   (document.getElementById("isDockSourceEnabled") as HTMLInputElement).checked = items.isDockSourceEnabled;
   (document.getElementById("isDockTranslateEnabled") as HTMLInputElement).checked = items.isDockTranslateEnabled;
   (document.getElementById("isDockRomanizeEnabled") as HTMLInputElement).checked = items.isDockRomanizeEnabled;
@@ -1602,23 +1595,8 @@ function setUnisonPositionInForm(position: string): void {
     if (selected) cell.dataset.selected = "true";
     else delete cell.dataset.selected;
     cell.setAttribute("aria-checked", String(selected));
-    cell.tabIndex = selected ? 0 : -1;
+    cell.tabIndex = -1;
   });
-}
-
-const POSITION_GRID_COLUMNS = 3;
-const POSITION_KEY_STEPS: Record<string, number> = {
-  ArrowLeft: -1,
-  ArrowRight: 1,
-  ArrowUp: -POSITION_GRID_COLUMNS,
-  ArrowDown: POSITION_GRID_COLUMNS,
-};
-
-function choosePosition(cell: HTMLElement, focus: boolean): void {
-  if (!cell.dataset.pos) return;
-  setUnisonPositionInForm(cell.dataset.pos);
-  if (focus) cell.focus();
-  saveOptions();
 }
 
 function syncUnisonModalDependentState(enabled: boolean): void {
@@ -1637,7 +1615,7 @@ function resetDockSettings(): void {
   (document.getElementById("isDockTranslateEnabled") as HTMLInputElement).checked = true;
   (document.getElementById("isDockRomanizeEnabled") as HTMLInputElement).checked = true;
   (document.getElementById("isDockOffsetEnabled") as HTMLInputElement).checked = true;
-  (document.getElementById("isDockRefreshEnabled") as HTMLInputElement).checked = false;
+  (document.getElementById("isDockRefreshEnabled") as HTMLInputElement).checked = true;
   (document.getElementById("isDockPictureInPictureEnabled") as HTMLInputElement).checked = true;
   setUnisonPositionInForm(DOCK_DEFAULT_POSITION);
   setDockControlsOrderInForm([...DOCK_CONTROL_ORDER_DEFAULT]);
@@ -1648,34 +1626,13 @@ function resetDockSettings(): void {
 function setupUnisonActionsModal(): void {
   const openBtn = document.getElementById("unison-actions-btn");
   const overlay = document.getElementById("unison-actions-modal-overlay");
-  const frame = document.getElementById("unison-position-frame");
   const pinnedToggle = document.getElementById("isUnisonPinnedDockEnabled") as HTMLInputElement | null;
   const autoHideToggle = document.getElementById("isUnisonAutoHideInFullscreenEnabled") as HTMLInputElement | null;
 
-  if (!openBtn || !overlay || !frame || !pinnedToggle || !autoHideToggle) return;
+  if (!openBtn || !overlay || !pinnedToggle || !autoHideToggle) return;
 
   const modal = createModal(overlay);
   openBtn.addEventListener("click", () => modal.open());
-
-  frame.addEventListener("click", e => {
-    const cell = (e.target as HTMLElement).closest<HTMLElement>(".position-cell");
-    if (cell) choosePosition(cell, false);
-  });
-  frame.addEventListener("keydown", e => {
-    if (frame.closest<HTMLElement>("[inert]")) return;
-    const cells = Array.from(frame.querySelectorAll<HTMLElement>(".position-cell"));
-    const current = cells.indexOf(document.activeElement as HTMLElement);
-    if (current < 0) return;
-    if (e.key === " " || e.key === "Enter") {
-      e.preventDefault();
-      choosePosition(cells[current], true);
-      return;
-    }
-    const step = POSITION_KEY_STEPS[e.key];
-    if (!step) return;
-    e.preventDefault();
-    choosePosition(cells[(current + step + cells.length) % cells.length], true);
-  });
 
   pinnedToggle.addEventListener("change", () => {
     syncUnisonModalDependentState(pinnedToggle.checked);

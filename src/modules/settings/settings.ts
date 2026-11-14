@@ -413,10 +413,8 @@ export function loadDockSettings(callback?: () => void): void {
   getStorage(
     [
       "isControlsDockEnabled",
-      "controlsDockPosition",
       "isControlsDockAutoHideInFullscreenEnabled",
       "isUnisonPinnedDockEnabled",
-      "unisonPinnedDockPosition",
       "isUnisonAutoHideInFullscreenEnabled",
       "isDockSourceEnabled",
       "isDockTranslateEnabled",
@@ -428,15 +426,14 @@ export function loadDockSettings(callback?: () => void): void {
     ],
     items => {
       AppState.isControlsDockEnabled = items.isControlsDockEnabled ?? items.isUnisonPinnedDockEnabled ?? true;
-      AppState.controlsDockPosition =
-        items.controlsDockPosition ?? items.unisonPinnedDockPosition ?? DOCK_DEFAULT_POSITION;
+      AppState.controlsDockPosition = DOCK_DEFAULT_POSITION;
       AppState.isControlsDockAutoHideInFullscreenEnabled =
         items.isControlsDockAutoHideInFullscreenEnabled ?? items.isUnisonAutoHideInFullscreenEnabled ?? true;
       AppState.isDockSourceEnabled = items.isDockSourceEnabled ?? true;
       AppState.isDockTranslateEnabled = items.isDockTranslateEnabled ?? true;
       AppState.isDockRomanizeEnabled = items.isDockRomanizeEnabled ?? true;
       AppState.isDockOffsetEnabled = items.isDockOffsetEnabled ?? true;
-      AppState.isDockRefreshEnabled = items.isDockRefreshEnabled ?? false;
+      AppState.isDockRefreshEnabled = items.isDockRefreshEnabled ?? true;
       AppState.isDockPictureInPictureEnabled = items.isDockPictureInPictureEnabled ?? true;
       AppState.dockControlsOrder = normalizeDockControlsOrder(items.dockControlsOrder);
       callback?.();
