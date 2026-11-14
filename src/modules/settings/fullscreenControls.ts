@@ -8,5 +8,5 @@ export function migrateFullscreenControlsPref(raw: {
 }): FullscreenControlsPref {
   const pref = raw.fullscreenControlsPref;
   if (pref === "off" || pref === "auto" || pref === "on") return pref;
-  return raw.isFullscreenControlsEnabled === false ? "off" : "auto";
+  return "off";
 }

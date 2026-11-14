@@ -14,7 +14,7 @@ import { logCore, logError } from "@core/logger";
 import { migrateLetterWavePref, type LetterWavePref } from "@modules/settings/letterWave";
 
 let hasSubscribedToStyles = false;
-let letterWavePref: LetterWavePref = "on";
+let letterWavePref: LetterWavePref = "off";
 
 // Position decides precedence: parseThemeConfig is last-wins. "auto" sits before
 // the theme so the theme can override it (today's behaviour); "on"/"off" sit
