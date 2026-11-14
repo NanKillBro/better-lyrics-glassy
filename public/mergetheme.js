@@ -1188,37 +1188,38 @@ ytmusic-player-page[player-fullscreened]:is([blyrics-video-mode], [video-mode]):
 }
 
 /* downwards blurring */
-/* credit to Apple Music theme by tposejank, but some custom has been made for this to work properly */
+/* credit to Apple Music theme by tposejank, stamped via .blyrics--gf-below-1..6
+   to avoid specificity inversion on overlapping .blyrics--active lines */
 
 /* The Display-tab "Unblur lyrics" switch sets blyrics-disable-lyrics-blur on
    <html>, which makes these six rules stop matching. */
 /* 1 line below */
-:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-below-1:not(.blyrics--gf-sharpen) {
   filter: blur(2px) !important;
 }
 
 /* 2 lines below */
-:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-below-2:not(.blyrics--gf-sharpen) {
   filter: blur(3.5px) !important;
 }
 
 /* 3 line below */
-:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-below-3:not(.blyrics--gf-sharpen) {
   filter: blur(5px) !important;
 }
 
 /* 4 lines below */
-:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-below-4:not(.blyrics--gf-sharpen) {
   filter: blur(6.5px) !important;
 }
 
 /* 5 lines below */
-:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-below-5:not(.blyrics--gf-sharpen) {
   filter: blur(8px) !important;
 }
 
 /* 6 lines below */
-:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--active+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line+.blyrics--line:not(.blyrics--animating) {
+:root:not([blyrics-disable-lyrics-blur]) .blyrics-container:not(.blyrics-user-scrolling)>.blyrics--line.blyrics--gf-below-6:not(.blyrics--gf-sharpen) {
   filter: blur(9.5px) !important;
 }
 
@@ -1266,7 +1267,7 @@ ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-sc
   }
 }
 
-.blyrics-container.blyrics--entering-sync > div:not(.blyrics--animating) {
+.blyrics-container.blyrics--entering-sync > div:not(.blyrics--gf-sharpen) {
   animation: blyricsBlurIn 0.7s ease-out forwards !important;
 }
 
@@ -1275,20 +1276,23 @@ ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-sc
   filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
 }
 
-/* Active Lyric Animation */
-.blyrics-container > div.blyrics--animating:not(:empty):not(.blyrics--translated):not(.blyrics--romanized) {
+/* Active Lyric Animation (stamped 0.3s before line time via .blyrics--gf-sharpen) */
+.blyrics-container > div.blyrics--gf-sharpen:not(:empty):not(.blyrics--translated):not(.blyrics--romanized) {
   opacity: 1;
   filter: blur(0px) !important;
   transform: scale(1.02);
   
-  transition: opacity 0.7s ease calc(var(--blyrics-anim-delay, 0s) - 0.3s), 
-              filter 0.7s ease calc(var(--blyrics-anim-delay, 0s) - 0.3s),
-              transform 1.3s ease calc(var(--blyrics-anim-delay, 0s) - 0.3s);
+  transition: opacity 0.7s ease, 
+              filter 0.7s ease,
+              transform 1.3s ease;
 }
 
 /* Display option "Show upcoming lyrics sooner": drop the synced delay so the
    active line sharpens immediately. The extension toggles the attribute on <html>. */
 :root[blyrics-unblur-upcoming] .blyrics-container > div.blyrics--animating:not(:empty):not(.blyrics--translated):not(.blyrics--romanized) {
+  opacity: 1;
+  filter: blur(0px) !important;
+  transform: scale(1.02);
   transition: opacity 0.7s ease,
               filter 0.7s ease,
               transform 1.3s ease;
@@ -1334,7 +1338,7 @@ ytmusic-player-page[player-fullscreened] #side-panel {
 }
 
 /* RESPONSIVE */
-.blyrics-user-scrolling > div:not(.blyrics--animating) {
+.blyrics-user-scrolling > div:not(.blyrics--gf-sharpen) {
   opacity: 1 !important;
   filter: blur(0px) !important; 
   transition: opacity 0.4s ease, filter 0.4s ease;
@@ -3364,48 +3368,345 @@ function setupSearchGlassState() {
  *  (GlassyFlow hay SmoothScroll) hoặc có engine nào đang chạy hay không.
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const NANKILL_BEHIND_CLASS = 'blyrics--gf-behind';
+const NANKILL_SHARPEN_CLASS = 'blyrics--gf-sharpen';
+const NANKILL_BELOW_PREFIX = 'blyrics--gf-below-';
+const NANKILL_SHARPEN_LEAD_S = 0.3;
 
 let nankillBehindHostObserver = null;
 let nankillBehindLineObserver = null;
+let nankillBehindRootObserver = null;
 let nankillBehindContainer = null;
-let nankillBehindLastActive = -1;
+let nankillBehindLastAnchor = -1;
+let nankillBehindLastBelowAnchor = -1;
 let nankillBehindLineCount = -1;
+let nankillPrevBelowNodes = [];
+let nankillPrevBelowRanks = [];
 
-/* Chỉ ghi khi state thực sự khác. Nhờ vậy khi observer bị gọi lại vì chính
- * write của hàm này, nó ra về sau đúng 1 vòng quét ngược và 0 attribute
- * write — không cần cờ chống tái nhập (cờ đó cũng không dùng được, vì
- * callback của MutationObserver chạy sau khi code đồng bộ đã xong).       */
-function syncBehindClasses(force) {
+const nankillSharpenTimers = new Map();
+const nankillSharpenDelayMap = new WeakMap();
+const nankillPausedLines = new WeakSet();
+let nankillRateVideo = null;
+
+function getNankillPlaybackRate() {
+  const v =
+    nankillRateVideo && nankillRateVideo.isConnected
+      ? nankillRateVideo
+      : (nankillRateVideo = document.querySelector('video'));
+  const r = v ? v.playbackRate : 1;
+  return r > 0 && Number.isFinite(r) ? r : 1;
+}
+
+function onNankillRateChange() {
   const container = nankillBehindContainer;
-  if (!container || !container.isConnected) return;
-
-  const children = container.children;
-
-  // :has(~ .blyrics--active) khớp mọi dòng đứng TRƯỚC dòng active xa nhất về
-  // phía sau. Nhiều dòng có thể mang .blyrics--active cùng lúc do overlap
-  // timing, nên phải quét từ cuối lên.
-  let lastActive = -1;
-  for (let i = children.length - 1; i >= 0; i--) {
-    if (children[i].classList.contains('blyrics--active')) {
-      lastActive = i;
-      break;
-    }
+  if (!container || !container.isConnected || nankillSharpenTimers.size === 0) return;
+  for (const line of Array.from(nankillSharpenTimers.keys())) {
+    syncNankillSharpenForLine(container, line, true);
   }
+  syncBehindClasses(false);
+}
 
-  if (!force && lastActive === nankillBehindLastActive && children.length === nankillBehindLineCount) {
+function ensureNankillRateWatcher() {
+  const video = document.querySelector('video');
+  if (nankillRateVideo === video) return;
+  if (nankillRateVideo) {
+    nankillRateVideo.removeEventListener('ratechange', onNankillRateChange);
+  }
+  nankillRateVideo = video;
+  if (video) {
+    video.addEventListener('ratechange', onNankillRateChange, { passive: true });
+  }
+}
+
+function ensureNankillRootWatcher() {
+  if (nankillBehindRootObserver || !document.documentElement) return;
+  nankillBehindRootObserver = new MutationObserver(() => {
+    const container = nankillBehindContainer;
+    if (!container || !container.isConnected) return;
+    for (const child of container.children) {
+      syncNankillSharpenForLine(container, child, false);
+    }
+    syncBehindClasses(false);
+  });
+  nankillBehindRootObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['blyrics-unblur-upcoming', 'blyrics-disable-lyrics-blur'],
+  });
+}
+
+function cancelNankillSharpenTimer(line) {
+  const entry = nankillSharpenTimers.get(line);
+  if (entry !== undefined) {
+    clearTimeout(entry.id);
+    nankillSharpenTimers.delete(line);
+  }
+}
+
+function clearAllNankillSharpenTimers() {
+  for (const entry of nankillSharpenTimers.values()) {
+    clearTimeout(entry.id);
+  }
+  nankillSharpenTimers.clear();
+}
+
+function parseNankillAnimDelayS(val) {
+  if (!val) return 0;
+  const trimmed = val.trim();
+  if (!trimmed) return 0;
+  if (trimmed.endsWith('ms')) return (parseFloat(trimmed) || 0) / 1000;
+  return parseFloat(trimmed) || 0;
+}
+
+function isNankillSyncElement(el) {
+  return Boolean(
+    el &&
+      el.classList &&
+      (el.classList.contains('blyrics--line') || el.classList.contains('blyrics--instrumental')),
+  );
+}
+
+/* Decouple engine pre-arming (.blyrics--animating 2s early) from visual sharpen at t - 0.3s. */
+function syncNankillSharpenForLine(container, line, forceReschedule) {
+  if (!isNankillSyncElement(line)) return;
+
+  if (document.documentElement.hasAttribute('blyrics-unblur-upcoming')) {
+    nankillPausedLines.delete(line);
+    nankillSharpenDelayMap.delete(line);
+    cancelNankillSharpenTimer(line);
+    if (line.classList.contains(NANKILL_SHARPEN_CLASS)) {
+      line.classList.remove(NANKILL_SHARPEN_CLASS);
+    }
     return;
   }
-  nankillBehindLastActive = lastActive;
-  nankillBehindLineCount = children.length;
+
+  const isAnimating = line.classList.contains('blyrics--animating');
+  const isPaused = line.classList.contains('blyrics--paused');
+
+  if (!isAnimating) {
+    nankillPausedLines.delete(line);
+    nankillSharpenDelayMap.delete(line);
+    cancelNankillSharpenTimer(line);
+    if (line.classList.contains(NANKILL_SHARPEN_CLASS)) {
+      line.classList.remove(NANKILL_SHARPEN_CLASS);
+    }
+    return;
+  }
+
+  if (isPaused) {
+    nankillPausedLines.add(line);
+    cancelNankillSharpenTimer(line);
+    return;
+  }
+
+  const wasPaused = nankillPausedLines.has(line);
+  nankillPausedLines.delete(line);
+
+  const delayStr = line.style.getPropertyValue('--blyrics-anim-delay');
+  const delayChanged = nankillSharpenDelayMap.get(line) !== delayStr;
+
+  if (line.classList.contains(NANKILL_SHARPEN_CLASS) && !wasPaused && !delayChanged) {
+    return;
+  }
+  const existingEntry = nankillSharpenTimers.get(line);
+  if (existingEntry && !wasPaused && !delayChanged && !forceReschedule) {
+    return;
+  }
+
+  const rate = getNankillPlaybackRate();
+  let remainingDelayS;
+  if (forceReschedule && existingEntry && !delayChanged && !wasPaused) {
+    const elapsedWallS = (performance.now() - existingEntry.installedAt) / 1000;
+    remainingDelayS = existingEntry.delayS - elapsedWallS * existingEntry.rate;
+  } else {
+    remainingDelayS = parseNankillAnimDelayS(delayStr);
+  }
+
+  nankillSharpenDelayMap.set(line, delayStr);
+  cancelNankillSharpenTimer(line);
+
+  const waitMs = ((remainingDelayS - NANKILL_SHARPEN_LEAD_S) * 1000) / rate;
+  if (waitMs <= 0) {
+    if (!line.classList.contains(NANKILL_SHARPEN_CLASS)) {
+      line.classList.add(NANKILL_SHARPEN_CLASS);
+    }
+    return;
+  }
+
+  if (line.classList.contains(NANKILL_SHARPEN_CLASS)) {
+    line.classList.remove(NANKILL_SHARPEN_CLASS);
+  }
+
+  const id = setTimeout(() => {
+    nankillSharpenTimers.delete(line);
+    if (
+      line.isConnected &&
+      line.parentElement === container &&
+      line.classList.contains('blyrics--animating') &&
+      !line.classList.contains('blyrics--paused') &&
+      !document.documentElement.hasAttribute('blyrics-unblur-upcoming')
+    ) {
+      if (!line.classList.contains(NANKILL_SHARPEN_CLASS)) {
+        line.classList.add(NANKILL_SHARPEN_CLASS);
+      }
+      syncBehindClasses(false);
+    }
+  }, waitMs);
+
+  nankillSharpenTimers.set(line, { id, delayS: remainingDelayS, installedAt: performance.now(), rate });
+}
+
+function setNankillBelowRank(el, rank, prevRank) {
+  if (prevRank && rank && prevRank !== rank) {
+    const prevCls = NANKILL_BELOW_PREFIX + prevRank;
+    const nextCls = NANKILL_BELOW_PREFIX + rank;
+    if (el.classList.contains(prevCls)) {
+      el.classList.replace(prevCls, nextCls);
+    } else if (!el.classList.contains(nextCls)) {
+      el.classList.add(nextCls);
+    }
+  } else if (prevRank && !rank) {
+    el.classList.remove(NANKILL_BELOW_PREFIX + prevRank);
+  } else if (rank) {
+    const nextCls = NANKILL_BELOW_PREFIX + rank;
+    if (!el.classList.contains(nextCls)) {
+      el.classList.add(nextCls);
+    }
+  }
+}
+
+function clearNankillBelow(el, prevRank) {
+  if (!el || !el.classList) return;
+  if (prevRank) {
+    el.classList.remove(NANKILL_BELOW_PREFIX + prevRank);
+    return;
+  }
+  for (let r = 1; r <= 6; r++) {
+    el.classList.remove(NANKILL_BELOW_PREFIX + r);
+  }
+}
+
+/* Chỉ ghi khi state thực sự khác; anchor tách behindAnchor (first) và belowAnchor (last). */
+function syncBehindClasses(force) {
+  const container = nankillBehindContainer;
+  if (!container || !container.isConnected) {
+    clearAllNankillSharpenTimers();
+    return;
+  }
+
+  ensureNankillRateWatcher();
+  const children = container.children;
+  if (children.length === 0) {
+    clearAllNankillSharpenTimers();
+  }
+
+  let firstSharpen = -1;
+  let lastSharpen = -1;
+  let firstActive = -1;
+  let lastActive = -1;
 
   for (let i = 0; i < children.length; i++) {
-    const line = children[i];
-    if (!line.classList.contains('blyrics--line')) continue;
-    // lastActive < 0 → không dòng nào active → :has() cũ không khớp gì → xoá hết
-    const want = lastActive >= 0 && i < lastActive;
-    if (line.classList.contains(NANKILL_BEHIND_CLASS) !== want) {
-      line.classList.toggle(NANKILL_BEHIND_CLASS, want);
+    const cl = children[i].classList;
+    if (cl.contains(NANKILL_SHARPEN_CLASS)) {
+      if (firstSharpen === -1) firstSharpen = i;
+      lastSharpen = i;
     }
+    if (cl.contains('blyrics--active')) {
+      if (firstActive === -1) firstActive = i;
+      lastActive = i;
+    }
+  }
+
+  const blurDisabled = document.documentElement.hasAttribute('blyrics-disable-lyrics-blur');
+  const behindAnchor = firstSharpen >= 0 ? firstSharpen : firstActive;
+  const belowAnchor = blurDisabled ? -2 : (lastSharpen >= 0 ? lastSharpen : lastActive);
+
+  if (
+    !force &&
+    behindAnchor === nankillBehindLastAnchor &&
+    belowAnchor === nankillBehindLastBelowAnchor &&
+    children.length === nankillBehindLineCount
+  ) {
+    return;
+  }
+
+  const prevBehind = nankillBehindLastAnchor;
+  const prevBelow = nankillBehindLastBelowAnchor;
+  const structuralChanged = force || children.length !== nankillBehindLineCount;
+
+  nankillBehindLastAnchor = behindAnchor;
+  nankillBehindLastBelowAnchor = belowAnchor;
+  nankillBehindLineCount = children.length;
+
+  if (structuralChanged) {
+    for (let i = 0; i < children.length; i++) {
+      const line = children[i];
+      if (!line.classList.contains('blyrics--line')) continue;
+      const wantBehind = behindAnchor >= 0 && i < behindAnchor;
+      if (line.classList.contains(NANKILL_BEHIND_CLASS) !== wantBehind) {
+        line.classList.toggle(NANKILL_BEHIND_CLASS, wantBehind);
+      }
+    }
+  } else if (behindAnchor !== prevBehind) {
+    const effPrev = prevBehind >= 0 ? prevBehind : 0;
+    const effNew = behindAnchor >= 0 ? behindAnchor : 0;
+    const start = Math.min(effPrev, effNew);
+    const end = Math.max(effPrev, effNew);
+    const wantBehind = effNew > effPrev;
+    for (let i = start; i < end; i++) {
+      const line = children[i];
+      if (!line || !line.classList.contains('blyrics--line')) continue;
+      if (line.classList.contains(NANKILL_BEHIND_CLASS) !== wantBehind) {
+        line.classList.toggle(NANKILL_BEHIND_CLASS, wantBehind);
+      }
+    }
+  }
+
+  if (structuralChanged) {
+    for (let i = 0; i < nankillPrevBelowNodes.length; i++) {
+      clearNankillBelow(nankillPrevBelowNodes[i], nankillPrevBelowRanks[i]);
+    }
+    for (let i = 0; i < children.length; i++) {
+      clearNankillBelow(children[i], 0);
+    }
+    nankillPrevBelowNodes = [];
+    nankillPrevBelowRanks = [];
+    if (belowAnchor >= 0) {
+      let rank = 1;
+      for (let i = belowAnchor + 1; i < children.length && rank <= 6; i++) {
+        const line = children[i];
+        if (!line.classList.contains('blyrics--line')) continue;
+        setNankillBelowRank(line, rank, 0);
+        nankillPrevBelowNodes.push(line);
+        nankillPrevBelowRanks.push(rank);
+        rank++;
+      }
+    }
+  } else if (belowAnchor !== prevBelow) {
+    const nextNodes = [];
+    const nextRanks = [];
+    if (belowAnchor >= 0) {
+      let rank = 1;
+      for (let i = belowAnchor + 1; i < children.length && rank <= 6; i++) {
+        const line = children[i];
+        if (!line.classList.contains('blyrics--line')) continue;
+        nextNodes.push(line);
+        nextRanks.push(rank);
+        rank++;
+      }
+    }
+    for (let i = 0; i < nankillPrevBelowNodes.length; i++) {
+      const oldEl = nankillPrevBelowNodes[i];
+      if (!nextNodes.includes(oldEl)) {
+        clearNankillBelow(oldEl, nankillPrevBelowRanks[i]);
+      }
+    }
+    for (let i = 0; i < nextNodes.length; i++) {
+      const newEl = nextNodes[i];
+      const prevIdx = nankillPrevBelowNodes.indexOf(newEl);
+      const prevRank = prevIdx >= 0 ? nankillPrevBelowRanks[prevIdx] : 0;
+      setNankillBelowRank(newEl, nextRanks[i], prevRank);
+    }
+    nankillPrevBelowNodes = nextNodes;
+    nankillPrevBelowRanks = nextRanks;
   }
 }
 
@@ -3415,25 +3716,47 @@ function attachBehindObserver(container) {
   if (nankillBehindLineObserver) {
     nankillBehindLineObserver.disconnect();
   }
+  clearAllNankillSharpenTimers();
   nankillBehindContainer = container;
-  nankillBehindLastActive = -1;
+  nankillBehindLastAnchor = -1;
+  nankillBehindLastBelowAnchor = -1;
   nankillBehindLineCount = -1;
+  nankillPrevBelowNodes = [];
+  nankillPrevBelowRanks = [];
 
-  // attributeFilter ['class'] + lọc theo con trực tiếp: .blyrics--active chỉ
-  // nằm trên con trực tiếp của container, nên class đổi ở word level (hàng
-  // trăm lần mỗi 10s trong census) không kéo theo việc quét lại.
   nankillBehindLineObserver = new MutationObserver((records) => {
     let relevant = false;
     let structural = false;
     for (const r of records) {
       if (r.type === 'childList') {
-        structural = true;
-        relevant = true;
+        if (r.target === container) {
+          structural = true;
+          relevant = true;
+          for (const node of r.removedNodes) {
+            if (node.nodeType === 1) {
+              cancelNankillSharpenTimer(node);
+              nankillSharpenDelayMap.delete(node);
+              nankillPausedLines.delete(node);
+            }
+          }
+          for (const node of r.addedNodes) {
+            if (node.nodeType === 1) {
+              syncNankillSharpenForLine(container, node, false);
+            }
+          }
+        }
       } else if (r.target.parentElement === container) {
         relevant = true;
+        syncNankillSharpenForLine(container, r.target, false);
       }
     }
-    // childList → lyrics vừa render lại, index cũ vô nghĩa → bắt buộc stamp lại
+    if (structural && nankillSharpenTimers.size > 0) {
+      for (const line of Array.from(nankillSharpenTimers.keys())) {
+        if (!line.isConnected || line.parentElement !== container) {
+          cancelNankillSharpenTimer(line);
+        }
+      }
+    }
     if (relevant) {
       syncBehindClasses(structural);
     }
@@ -3446,10 +3769,16 @@ function attachBehindObserver(container) {
     subtree: true,
   });
 
+  ensureNankillRootWatcher();
+  ensureNankillRateWatcher();
+  for (const child of container.children) {
+    syncNankillSharpenForLine(container, child, false);
+  }
   syncBehindClasses(true);
 }
 
 function setupPastLineMarker() {
+  ensureNankillRootWatcher();
   const existing = document.querySelector('.blyrics-container');
   if (existing) {
     attachBehindObserver(existing);
@@ -3461,7 +3790,7 @@ function setupPastLineMarker() {
     return;
   }
 
-  console.info('[GlassyUI] Stamping .blyrics--gf-behind in place of :has(~ .blyrics--active)...');
+  console.info('[GlassyUI] Stamping .blyrics--gf-behind, .blyrics--gf-sharpen & .blyrics--gf-below-1..6...');
 
   let queued = false;
   nankillBehindHostObserver = new MutationObserver(() => {
