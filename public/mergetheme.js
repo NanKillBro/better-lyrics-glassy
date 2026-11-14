@@ -1102,6 +1102,14 @@ html[blyrics-no-fs-controls] ytmusic-player-page:not([is-mweb-modernization-enab
   text-align: left;
 }
 
+html[blyrics-no-fs-controls] ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs], [blyrics-karaoke]) #blyrics-fs-column #blyrics-song-info > p#blyrics-title,
+html[blyrics-no-fs-controls] ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs], [blyrics-karaoke]) #blyrics-fs-column #blyrics-song-info > p#blyrics-artist {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: break-word;
+}
+
 #blyrics-song-info > p#blyrics-title {
   font-size: 2.5rem;
   color: color(display-p3 1 1 1);
