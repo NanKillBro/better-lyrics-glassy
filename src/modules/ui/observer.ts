@@ -40,6 +40,7 @@ import {
   resetThumbnailState,
   showYtThumbnail,
   updateFullscreenControlsSnapshot,
+  updateSongAlbum,
 } from "./dom";
 
 let wakeLock: WakeLockSentinel | null = null;
@@ -472,7 +473,7 @@ export function initializeLyrics(): void {
       injectSongAttributes(detail.song, detail.artist);
       void getSongAlbum(detail.videoId).then(album => {
         if (album && document.getElementById("blyrics-title")?.textContent === detail.song) {
-          injectSongAttributes(detail.song, detail.artist, album);
+          updateSongAlbum(detail.song, album);
         }
       });
     }

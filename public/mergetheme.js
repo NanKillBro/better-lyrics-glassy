@@ -1017,20 +1017,15 @@ ytmusic-player-page {
   }
 }
 
-ytmusic-player[player-ui-state="FULLSCREEN"],
-ytmusic-player-page[player-fullscreened] #player.ytmusic-player-page {
-    animation: blyrics-fullscreen-artwork 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both !important;
-    transform-origin: center center;
-    will-change: transform, opacity;
-}
-
-ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-video-mode]):not([video-mode]) ytmusic-player:not([video-mode]) {
-  border-radius: 2rem !important;
-  --yt-img-border-radius: 2rem !important;
-}
-
-ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs]) #player.ytmusic-player-page {
-  box-shadow: rgba(0, 0, 0, 0.1) 0px 54px 55px, rgba(0, 0, 0, 0.06) 0px -12px 30px, rgba(0, 0, 0, 0.06) 0px 4px 6px, rgba(0, 0, 0, 0.09) 0px 12px 13px, rgba(0, 0, 0, 0.04) 0px -3px 5px !important;
+@keyframes blyrics-fullscreen-artwork {
+  from {
+    transform: scale(0.7);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @keyframes blyrics-song-info-slide {
@@ -1044,19 +1039,63 @@ ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:no
   }
 }
 
-ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs]) #blyrics-song-info {
-  text-align: left;
-  width: 100%;
-  max-width: var(--blyrics-img-max-width);
-  margin-bottom: 4rem;
-  transform: translateY(-64px);
-  box-sizing: border-box;
-  transition: max-width 0.5s ease-in-out;
-  transition-delay: var(--blyrics-no-lyrics-slide-delay);
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-video-mode]):not([video-mode]) ytmusic-player:not([video-mode]) {
+  border-radius: 2rem !important;
+  --yt-img-border-radius: 2rem !important;
 }
 
-ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened][video-mode]:not([blyrics-dfs]) #blyrics-song-info {
-  max-width: unset;
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs]) #player.ytmusic-player-page {
+  box-shadow: rgba(0, 0, 0, 0.1) 0px 54px 55px, rgba(0, 0, 0, 0.06) 0px -12px 30px, rgba(0, 0, 0, 0.06) 0px 4px 6px, rgba(0, 0, 0, 0.09) 0px 12px 13px, rgba(0, 0, 0, 0.04) 0px -3px 5px !important;
+}
+
+/* Prevent #blyrics-fs-column inline pixel width and nowrap titles from locking #main-panel min-width: auto */
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs], [blyrics-karaoke]) #main-panel.ytmusic-player-page {
+  min-width: 0 !important;
+}
+
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs], [blyrics-karaoke]) #blyrics-fs-column {
+  min-width: 0 !important;
+  max-width: min(100%, var(--blyrics-img-max-width, 576px)) !important;
+  margin-inline: auto !important;
+  contain: inline-size;
+}
+
+ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:is([blyrics-video-mode], [video-mode]):not([blyrics-dfs], [blyrics-karaoke]) #blyrics-fs-column {
+  max-width: 100% !important;
+}
+
+.blyrics-fs-info-row #blyrics-song-info {
+  flex-basis: 0px !important;
+}
+
+/* Isolate #main-panel so #blyrics-fs-column (z-index: -1) stays behind #player shadow without dropping behind page bg */
+html[blyrics-no-fs-controls] ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs], [blyrics-karaoke]) #main-panel.ytmusic-player-page {
+  isolation: isolate;
+}
+
+html[blyrics-no-fs-controls] ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs], [blyrics-karaoke]) #player.ytmusic-player-page {
+  animation: blyrics-fullscreen-artwork 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both !important;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+html[blyrics-no-fs-controls] ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs], [blyrics-karaoke]) #blyrics-fs-column {
+  gap: 0;
+  margin: 0 auto 8rem;
+  z-index: -1;
+  animation: blyrics-song-info-slide 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s both;
+  will-change: transform, opacity;
+}
+
+html[blyrics-no-fs-controls] ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened]:not([blyrics-dfs], [blyrics-karaoke]) #blyrics-fs-column #blyrics-song-info {
+  width: 100%;
+  padding: 2rem;
+  outline: 1px dashed rgb(255 255 255 / 15%);
+  border-radius: 2rem !important;
+  background: rgba(var(--ytmusic-album-color-dark, 20, 20, 20), 0.5) !important;
+  box-sizing: border-box;
+  box-shadow: rgba(0, 0, 0, 0.1) 0px 20px 20px 0px;
+  text-align: left;
 }
 
 #blyrics-song-info > p#blyrics-title {
@@ -1067,10 +1106,6 @@ ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened][vi
 #blyrics-song-info > p#blyrics-artist {
   color: color(display-p3 1 1 1 / 0.5);
   opacity: 1;
-}
-
-ytmusic-player-page[player-fullscreened]:not([blyrics-video-mode]):not([blyrics-dfs])[blyrics-no-lyrics] #blyrics-song-info {
-  max-width: 500px !important;
 }
 
 /* TRẠNG THÁI MỞ PLAYER BÌNH THƯỜNG */
@@ -2631,12 +2666,50 @@ ytmusic-player[player-ui-state="FULLSCREEN"] .top-row-buttons,
 }
 `;
 
+function ensureStyleAfterBlyrics(styleEl) {
+  if (!styleEl || !document.head) return;
+  const blyricsStyles = document.head.querySelectorAll('[id^="blyrics-style-"]');
+  const lastBlyricsStyle = blyricsStyles[blyricsStyles.length - 1];
+  if (lastBlyricsStyle) {
+    if (
+      styleEl.parentNode !== document.head ||
+      (lastBlyricsStyle.compareDocumentPosition(styleEl) & Node.DOCUMENT_POSITION_PRECEDING) !== 0
+    ) {
+      lastBlyricsStyle.after(styleEl);
+    }
+    return;
+  }
+  if (styleEl.parentNode !== document.head) {
+    document.head.appendChild(styleEl);
+  }
+}
+
+function scheduleHeadOrderSync() {
+  if (!document.head || document.getElementById('blyrics-style-css/themesong') || window.__nankillBlyricsHeadObserver) {
+    return;
+  }
+  const observer = new MutationObserver(() => {
+    const styleEl = document.getElementById('force-nankill-skibidi-theme');
+    if (styleEl) {
+      ensureStyleAfterBlyrics(styleEl);
+    }
+    if (document.getElementById('blyrics-style-css/themesong')) {
+      observer.disconnect();
+      delete window.__nankillBlyricsHeadObserver;
+    }
+  });
+  window.__nankillBlyricsHeadObserver = observer;
+  observer.observe(document.head, { childList: true });
+}
+
 function injectStyles() {
+  scheduleHeadOrderSync();
   const existingStyle = document.getElementById('force-nankill-skibidi-theme');
   if (existingStyle) {
     if (existingStyle.textContent !== MY_CUSTOM_CSS) {
       existingStyle.textContent = MY_CUSTOM_CSS;
     }
+    ensureStyleAfterBlyrics(existingStyle);
     return;
   }
 

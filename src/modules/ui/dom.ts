@@ -1970,6 +1970,10 @@ export function updateFullscreenControlsSnapshot(snapshot: PlaybackSnapshot | nu
 
 function trackFullscreenColumnWidth(column: HTMLElement): void {
   fullscreenColumnWidth?.destroy();
+  const initialWidth = measureWidth(document.querySelector<HTMLElement>("#player.ytmusic-player-page"));
+  if (initialWidth !== null) {
+    column.style.width = `${initialWidth}px`;
+  }
   fullscreenColumnWidth = observeLayoutWidth(
     () => document.querySelector<HTMLElement>("#player.ytmusic-player-page"),
     width => {
@@ -2019,6 +2023,14 @@ function refreshSongInfoLinks(): void {
   if (!artistElm || !lastSongInfo) return;
   if (document.getElementById("blyrics-title")?.textContent !== lastSongInfo.song) return;
   populateArtistElement(artistElm, lastSongInfo.artist, lastSongInfo.album);
+}
+
+export function updateSongAlbum(title: string, album: string): void {
+  const artistElm = document.getElementById("blyrics-artist");
+  if (!artistElm || !lastSongInfo || lastSongInfo.song !== title) return;
+  if (document.getElementById("blyrics-title")?.textContent !== title) return;
+  lastSongInfo = { ...lastSongInfo, album };
+  populateArtistElement(artistElm, lastSongInfo.artist, album);
 }
 
 export function injectSongAttributes(title: string, artist: string, album?: string): void {
