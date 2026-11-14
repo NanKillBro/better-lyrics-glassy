@@ -2,7 +2,7 @@ import { AppState } from "@core/appState";
 import { t } from "@core/i18n";
 import { translateContributorCreditLabels } from "@modules/lyrics/contributorCredit";
 import { type LogSink, logCore } from "@core/logger";
-import { type ObserverHandle, observeResize } from "@modules/ui/layout/layoutWidth";
+import { disposePlayerPanelRefit, refitPlayerPanel } from "@modules/ui/layout/playerRefit";
 import type { LyricDecorations } from "@modules/lyrics/injectLyrics";
 import { currentViewLyrics } from "@modules/lyrics/viewLyrics";
 import { currentTickOptions, lyricsElementAdded } from "@modules/ui/mainLyricsView";
@@ -131,25 +131,6 @@ function relayoutKaraoke(): void {
 
 // -- Sync --------------------------
 
-const PANEL_SETTLE_MS = 1000;
-let panelRefit: ObserverHandle | null = null;
-
-function refitPlayerPanel(): void {
-  const mainPanel = document.querySelector<HTMLElement>("ytmusic-player-page #main-panel");
-  const sidePanel = document.querySelector<HTMLElement>("ytmusic-player-page #side-panel");
-  if (!mainPanel || !sidePanel) return;
-  panelRefit?.destroy();
-  const handle = observeResize([sidePanel], () => {
-    mainPanel.style.removeProperty("padding");
-    window.dispatchEvent(new Event("resize"));
-  });
-  panelRefit = handle;
-  window.setTimeout(() => {
-    handle.destroy();
-    if (panelRefit === handle) panelRefit = null;
-  }, PANEL_SETTLE_MS);
-}
-
 export function syncKaraoke(): void {
   const active = syncKaraokeAttribute();
 
@@ -180,8 +161,7 @@ export function disposeKaraoke(): void {
   clearKaraokeLyrics();
   stage.destroy();
   stage = createMainPageStage();
-  panelRefit?.destroy();
-  panelRefit = null;
+  disposePlayerPanelRefit();
   wasActive = false;
   wasLayout = false;
 }

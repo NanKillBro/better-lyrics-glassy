@@ -11,6 +11,7 @@ import {
 import { AppState, handleModifications, type PlayerDetails, reloadLyrics } from "@core/appState";
 import { syncKaraoke, tickKaraoke } from "@modules/karaoke/karaokeView";
 import { isKaraokeActive } from "@modules/karaoke/state";
+import { refitPlayerPanel } from "@modules/ui/layout/playerRefit";
 import { preFetchLyrics } from "@modules/lyrics/lyrics";
 import { getArtworkMetadata, getSongAlbum, getSongMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
 import type { ThumbnailElement } from "@modules/lyrics/requestSniffer/NextResponse";
@@ -697,12 +698,15 @@ export function setUpVideoModeListener(): void {
   }
 
   videoModeObserver?.disconnect();
+  let wasVideo = playerPage.hasAttribute("video-mode");
 
   const syncVideoMode = () => {
     const isVideo = playerPage.hasAttribute("video-mode");
     playerPage.toggleAttribute("blyrics-video-mode", isVideo);
     document.querySelector("ytmusic-app-layout")?.toggleAttribute("blyrics-video-mode", isVideo);
     syncKaraoke();
+    if (wasVideo && !isVideo) refitPlayerPanel();
+    wasVideo = isVideo;
   };
 
   videoModeObserver = new MutationObserver(syncVideoMode);
