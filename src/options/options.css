@@ -2224,6 +2224,33 @@ input.cm-textfield:focus-visible {
 	border-bottom-right-radius: 12px;
 }
 
+.position-section--locked .position-section__label,
+.position-section--locked .position-picker {
+	opacity: 0.45;
+	filter: grayscale(1);
+}
+
+.position-section__note {
+	text-align: center;
+}
+
+.position-section--locked .position-picker {
+	cursor: not-allowed;
+}
+
+.position-section--locked .position-frame {
+	pointer-events: none;
+	user-select: none;
+}
+
+.position-section--locked .position-cell[data-selected="true"] {
+	background: rgba(255, 255, 255, 0.15);
+}
+
+.position-section--locked .position-cell[data-selected="true"]::before {
+	background: rgba(255, 255, 255, 0.85);
+}
+
 .controls-shown-picker {
 	display: grid;
 	grid-template-columns: repeat(4, 1fr);

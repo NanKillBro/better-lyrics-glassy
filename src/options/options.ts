@@ -110,7 +110,7 @@ const getOptionsFromForm = (): Options => {
     translationDisabledLanguages: translationDisabledLanguages,
     uiLanguage: (document.getElementById("uiLanguage") as HTMLSelectElement).value,
     isControlsDockEnabled: (document.getElementById("isUnisonPinnedDockEnabled") as HTMLInputElement).checked,
-    controlsDockPosition: getSelectedUnisonPosition(),
+    controlsDockPosition: DOCK_DEFAULT_POSITION,
     isControlsDockAutoHideInFullscreenEnabled: (
       document.getElementById("isUnisonAutoHideInFullscreenEnabled") as HTMLInputElement
     ).checked,
@@ -124,11 +124,6 @@ const getOptionsFromForm = (): Options => {
     lineOffsetTrim: parseFloat((document.getElementById("lineOffsetTrim") as HTMLInputElement).value) || 0,
   };
 };
-
-function getSelectedUnisonPosition(): string {
-  const selected = document.querySelector<HTMLElement>("#unison-position-frame .position-cell[data-selected='true']");
-  return selected?.dataset.pos ?? DOCK_DEFAULT_POSITION;
-}
 
 function getDockControlsOrder(): string[] {
   const cells = document.querySelectorAll<HTMLElement>(".controls-shown-picker .control-cell");
@@ -365,7 +360,7 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isUnisonPinnedDockEnabled") as HTMLInputElement).checked = items.isControlsDockEnabled;
   (document.getElementById("isUnisonAutoHideInFullscreenEnabled") as HTMLInputElement).checked =
     items.isControlsDockAutoHideInFullscreenEnabled;
-  setUnisonPositionInForm(items.controlsDockPosition);
+  setUnisonPositionInForm(DOCK_DEFAULT_POSITION);
   (document.getElementById("isDockSourceEnabled") as HTMLInputElement).checked = items.isDockSourceEnabled;
   (document.getElementById("isDockTranslateEnabled") as HTMLInputElement).checked = items.isDockTranslateEnabled;
   (document.getElementById("isDockRomanizeEnabled") as HTMLInputElement).checked = items.isDockRomanizeEnabled;
@@ -1451,11 +1446,10 @@ function setupUnisonActionsModal(): void {
   const openBtn = document.getElementById("unison-actions-btn");
   const overlay = document.getElementById("unison-actions-modal-overlay");
   const closeBtn = document.getElementById("unison-actions-modal-close");
-  const frame = document.getElementById("unison-position-frame");
   const pinnedToggle = document.getElementById("isUnisonPinnedDockEnabled") as HTMLInputElement | null;
   const autoHideToggle = document.getElementById("isUnisonAutoHideInFullscreenEnabled") as HTMLInputElement | null;
 
-  if (!openBtn || !overlay || !closeBtn || !frame || !pinnedToggle || !autoHideToggle) return;
+  if (!openBtn || !overlay || !closeBtn || !pinnedToggle || !autoHideToggle) return;
 
   const closeModal = (): void => overlay.classList.remove("active");
 
@@ -1468,13 +1462,6 @@ function setupUnisonActionsModal(): void {
 
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && overlay.classList.contains("active")) closeModal();
-  });
-
-  frame.addEventListener("click", e => {
-    const cell = (e.target as HTMLElement).closest<HTMLElement>(".position-cell");
-    if (!cell?.dataset.pos) return;
-    setUnisonPositionInForm(cell.dataset.pos);
-    saveOptions();
   });
 
   pinnedToggle.addEventListener("change", () => {

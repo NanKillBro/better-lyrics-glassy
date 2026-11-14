@@ -158,6 +158,10 @@
     "message": "Bottom right",
     "description": "Tooltip for the bottom-right cell in the Unison position picker"
   },
+  "options_unisonModal_position_lockedHint": {
+    "message": "Locked to bottom center because other positions have bugs.",
+    "description": "Note below the dock position grid explaining why it is fixed to bottom center"
+  },
   "options_unisonModal_controlsShown": {
     "message": "Controls shown",
     "description": "Label above the toggles that pick which controls appear in the lyrics dock"

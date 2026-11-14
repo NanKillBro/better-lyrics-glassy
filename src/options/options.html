@@ -826,10 +826,10 @@
 						</label>
 					</div>
 				</div>
-				<div class="position-section unison-modal-row--dependent">
+				<div class="position-section position-section--locked unison-modal-row--dependent">
 					<span class="position-section__label">__MSG_options_unisonModal_position__</span>
 					<div class="position-picker">
-						<div class="position-frame" id="unison-position-frame">
+						<div class="position-frame" id="unison-position-frame" inert aria-disabled="true">
 							<div class="position-cell" data-pos="top-left"
 								title="__MSG_options_unisonModal_position_topLeft__"></div>
 							<div class="position-cell" data-pos="top-center"
@@ -838,12 +838,13 @@
 								title="__MSG_options_unisonModal_position_topRight__"></div>
 							<div class="position-cell" data-pos="bottom-left"
 								title="__MSG_options_unisonModal_position_bottomLeft__"></div>
-							<div class="position-cell" data-pos="bottom-center"
+							<div class="position-cell" data-pos="bottom-center" data-selected="true"
 								title="__MSG_options_unisonModal_position_bottomCenter__"></div>
 							<div class="position-cell" data-pos="bottom-right"
 								title="__MSG_options_unisonModal_position_bottomRight__"></div>
 						</div>
 					</div>
+					<p class="modal-row-hint position-section__note">__MSG_options_unisonModal_position_lockedHint__</p>
 				</div>
 			</div>
 			<div class="modal-footer">

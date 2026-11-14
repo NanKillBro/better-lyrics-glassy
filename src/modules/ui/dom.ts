@@ -5,6 +5,7 @@ import {
   DISCORD_INVITE_URL,
   DISCORD_LOGO_SRC,
   DOCK_CLASS,
+  DOCK_DEFAULT_POSITION,
   FONT_LINK,
   FOOTER_CLASS,
   FOOTER_NOT_VISIBLE_LOG,
@@ -756,7 +757,7 @@ export function refreshDockSources(): void {
   mountDock(AppState.controlsDockPosition);
 }
 
-export function mountDock(position: string): void {
+export function mountDock(_position: string = DOCK_DEFAULT_POSITION): void {
   let dock = document.getElementsByClassName(DOCK_CLASS)[0] as HTMLElement | undefined;
   let inner: HTMLElement | null;
 
@@ -784,7 +785,7 @@ export function mountDock(position: string): void {
     sidePanel.classList.add(DOCK_HOST_CLASS);
   }
 
-  dock.dataset.position = position;
+  dock.dataset.position = DOCK_DEFAULT_POSITION;
   closeSourceMenu();
 
   dockControlsSwapFinalize?.();
@@ -852,9 +853,9 @@ export function unmountDock(): void {
   document.querySelector("#side-panel")?.classList.remove(DOCK_HOST_CLASS);
 }
 
-export function updateDockPosition(position: string): void {
+export function updateDockPosition(_position: string = DOCK_DEFAULT_POSITION): void {
   const dock = document.getElementsByClassName(DOCK_CLASS)[0] as HTMLElement | undefined;
-  if (dock) dock.dataset.position = position;
+  if (dock) dock.dataset.position = DOCK_DEFAULT_POSITION;
 }
 
 function createSubmitterBlock(submitter: NonNullable<UnisonData["submitter"]>): HTMLElement {
