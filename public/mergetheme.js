@@ -1210,8 +1210,8 @@ ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-sc
   animation: blyricsBlurIn 0.7s ease-out forwards !important;
 }
 
-.blyrics-container > div > span {
-  display: inline;
+.blyrics-container > .blyrics--line > .blyrics-line-main,
+.blyrics-container > .blyrics--line > .blyrics-background-line {
   filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
 }
 
