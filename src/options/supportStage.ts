@@ -1,4 +1,5 @@
-import { createLyricsRenderer, type Lyric } from "@braccato/core";
+import type { Lyric } from "@braccato/core";
+import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
 import { versionedStylesheetUrl } from "@core/extensionStylesheet";
 import { onReducedMotionChange, prefersReducedMotion } from "@/ui/motion";
 

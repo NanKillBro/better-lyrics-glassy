@@ -1,7 +1,8 @@
 import type { LogSink } from "@core/logger";
 import { applyLyricDecorations } from "@modules/lyrics/lyricDecorations";
 import type { LyricDecorations } from "@modules/lyrics/injectLyrics";
-import { createLyricsRenderer, type Lyric, type LyricsRenderer, type TickOptions } from "@braccato/core";
+import type { Lyric, LyricsRenderer, TickOptions } from "@braccato/core";
+import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
 import { decorateEndCard } from "@modules/karaoke/endCard";
 import type { ContributorCreditLabels } from "@modules/lyrics/contributorCredit";
 import type { LyricContributor } from "@modules/lyrics/providers/shared";

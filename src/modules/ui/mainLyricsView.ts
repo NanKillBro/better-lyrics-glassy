@@ -1,6 +1,7 @@
 import { AppState } from "@core/appState";
 import { ytmHost } from "@modules/ui/lyricsHost";
-import { createLyricsRenderer, type LyricsRenderer, type TickOptions } from "@braccato/core";
+import type { LyricsRenderer, TickOptions } from "@braccato/core";
+import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
 
 // -- The side panel's view --------------------------
 
