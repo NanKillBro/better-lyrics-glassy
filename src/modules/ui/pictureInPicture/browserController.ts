@@ -9,7 +9,7 @@ import { versionedStylesheetUrl } from "@core/extensionStylesheet";
 import { t } from "@core/i18n";
 import { getStorage } from "@core/storage";
 import { getArtworkMetadata, getSongMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
-import { resumeAllAutoscroll } from "@braccato/core";
+import { resumeAllAutoscroll } from "@modules/ui/lyricsRenderer";
 import { getPictureInPictureCapability } from "@modules/ui/pictureInPicture/capability";
 import { onSignal, sendInit, sendMetadata } from "@modules/ui/pictureInPicture/bridge";
 import { createGatedToggle } from "@modules/ui/pictureInPicture/controller";

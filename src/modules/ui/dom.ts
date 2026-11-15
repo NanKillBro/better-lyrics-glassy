@@ -43,6 +43,7 @@ import type { LyricContributor } from "@modules/lyrics/providers/shared";
 import type { ThumbnailElement } from "@modules/lyrics/requestSniffer/NextResponse";
 import { getArtworkMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
 import { measureWidth, type ObserverHandle, observeLayoutWidth, observeResize } from "@modules/ui/layout/layoutWidth";
+import { syncRendererModeFromStorage } from "@modules/settings/rendererModeSettings";
 import { lyricsElementAdded, mainView } from "@modules/ui/mainLyricsView";
 import { publishSecondaryViews } from "@modules/ui/secondaryViews";
 import { syncKaraoke } from "@modules/karaoke/karaokeView";
@@ -1896,6 +1897,8 @@ export async function injectHeadTags(): Promise<void> {
     link.id = id;
     document.head.appendChild(link);
   }
+
+  await syncRendererModeFromStorage(document);
 }
 
 /**

@@ -157,6 +157,14 @@ export function applyKaraokeTheme(css: string): void {
   stage.setTheme(css);
 }
 
+/** Forces the main-page karaoke stage to rebuild on the next tick or immediately if active. */
+export function rebuildKaraoke(): void {
+  if (builtFrom === null && !isKaraokeWanted()) return;
+  builtFrom = null;
+  decorationSignature = "";
+  if (isKaraokeActive()) publishKaraokeLyrics();
+}
+
 export function disposeKaraoke(): void {
   clearKaraokeLyrics();
   stage.destroy();

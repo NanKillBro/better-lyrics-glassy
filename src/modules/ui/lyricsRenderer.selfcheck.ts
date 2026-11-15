@@ -1,9 +1,25 @@
 import assert from "node:assert/strict";
-import { BIDI_SENSITIVE_CLASS, LONG_WORD_GROUP_CLASS, WORD_CLASS, WORD_GROUP_CLASS } from "@braccato/core/constants";
 import {
+  BIDI_SENSITIVE_CLASS,
+  LONG_WORD_GROUP_CLASS,
+  ROMANIZED_LYRICS_CLASS,
+  SWEEP_CELL_CLASS,
+  TRANSLATED_LYRICS_CLASS,
+  WORD_CLASS,
+  WORD_GROUP_CLASS,
+} from "@braccato/core/constants";
+import { parseThemeConfig as parseLegacyThemeConfig, setThemeSettings as setLegacyThemeSettings } from "@braccato/core-legacy/themeSettings";
+import { parseThemeConfig as parseModernThemeConfig, setThemeSettings as setModernThemeSettings } from "@braccato/core/themeSettings";
+import { COMPOSITE_LYRICS_ATTR, readRendererMode } from "@modules/ui/rendererMode";
+import {
+  injectRomanization,
+  injectTranslation,
   installWordWobblePatch,
+  lyricBuildSettingsKey,
   normalizeWordWobbleAnimateArgs,
+  registerThemeSetting,
   retargetPerWordWobble,
+  type LineData,
   type WobbleLineData,
 } from "@modules/ui/lyricsRenderer";
 
@@ -155,7 +171,7 @@ function makeFakeElement(
         duration: 1.015,
         lyricElement: wifeSpan,
         highlightElement: wifeHighlight,
-        imageLayers: { glow: wifeGlowHighlight, glowLetters: [], highlight: wifeGlowHighlight },
+        imageLayers: { highlight: wifeGlowHighlight },
         wobbleElements: [],
         animations: [],
         wordState: "upcoming",
@@ -204,6 +220,161 @@ function makeFakeElement(
 
   retargetPerWordWobble([line]);
   assert.deepEqual(line.parts[4].wobbleElements, [romSpan, romHighlight]);
+}
+
+// 5. Dual-registry theme settings stay synchronized across modern and legacy docs
+{
+  const flag = registerThemeSetting("blyrics-selfcheck-dual-flag", false, true);
+  assert.equal(flag.getBooleanValue(), false);
+  const css = "/* blyrics-selfcheck-dual-flag = true; */";
+  setModernThemeSettings(parseModernThemeConfig(css));
+  setLegacyThemeSettings(parseLegacyThemeConfig(css));
+  assert.equal(flag.getBooleanValue(), true);
+  const legacyDoc = { documentElement: { hasAttribute: () => false } } as unknown as Document;
+  const compositeDoc = { documentElement: { hasAttribute: (a: string) => a === COMPOSITE_LYRICS_ATTR } } as unknown as Document;
+  assert.equal(readRendererMode(legacyDoc), false);
+  assert.equal(readRendererMode(compositeDoc), true);
+  const sortedSettings = (d: Document) => lyricBuildSettingsKey(d).split(";").sort().join(";");
+  assert.equal(sortedSettings(compositeDoc), sortedSettings(legacyDoc));
+  assert.ok(lyricBuildSettingsKey(legacyDoc).includes("blyrics-selfcheck-dual-flag=true"));
+}
+
+// 6. Mode-aware injectRomanization and injectTranslation delegate by document mode
+{
+  const makeMiniDoc = (composite: boolean) => {
+    const createNode = (tagName: string, text?: string): Record<string, unknown> => {
+      const classes = new Set<string>();
+      const attrs = new Map<string, string>();
+      const styles = new Map<string, string>();
+      const children: Array<Record<string, unknown>> = [];
+      let textValue = text ?? "";
+      const node: Record<string, unknown> = {
+        tagName: tagName.toUpperCase(),
+        nodeType: tagName === "#text" ? 3 : 1,
+        children,
+        childNodes: children,
+        parentNode: null as unknown,
+        parentElement: null as unknown,
+        ownerDocument: null as unknown,
+        dataset: {} as Record<string, string>,
+        dir: "",
+        get className() {
+          return Array.from(classes).join(" ");
+        },
+        classList: {
+          add: (...tokens: string[]) => tokens.forEach(t => classes.add(t)),
+          contains: (t: string) => classes.has(t),
+          remove: (...tokens: string[]) => tokens.forEach(t => classes.delete(t)),
+        },
+        style: {
+          setProperty: (k: string, v: string) => styles.set(k, v),
+          getPropertyValue: (k: string) => styles.get(k) ?? "",
+        },
+        setAttribute: (k: string, v: string) => attrs.set(k, v),
+        getAttribute: (k: string) => attrs.get(k) ?? null,
+        hasAttribute: (k: string) => attrs.has(k),
+        get textContent(): string {
+          if (this.nodeType === 3) return textValue;
+          return children.map(c => String(c.textContent ?? "")).join("");
+        },
+        set textContent(v: string) {
+          textValue = String(v);
+          children.length = 0;
+        },
+        appendChild(child: Record<string, unknown>) {
+          child.parentNode = node;
+          child.parentElement = node;
+          children.push(child);
+          return child;
+        },
+        insertBefore(newChild: Record<string, unknown>, refChild: Record<string, unknown> | null) {
+          newChild.parentNode = node;
+          newChild.parentElement = node;
+          const idx = refChild ? children.indexOf(refChild) : -1;
+          if (idx >= 0) children.splice(idx, 0, newChild);
+          else children.push(newChild);
+          return newChild;
+        },
+        remove() {
+          const parent = node.parentElement as { children?: Array<Record<string, unknown>> } | null;
+          if (!parent?.children) return;
+          const idx = parent.children.indexOf(node);
+          if (idx >= 0) parent.children.splice(idx, 1);
+        },
+        querySelector(selector: string): Record<string, unknown> | null {
+          const wanted = selector.startsWith(".") ? selector.slice(1) : null;
+          for (const child of children) {
+            if (child.nodeType !== 1) continue;
+            if (wanted && (child.classList as { contains: (t: string) => boolean }).contains(wanted)) return child;
+            const nested = (child.querySelector as (s: string) => Record<string, unknown> | null)(selector);
+            if (nested) return nested;
+          }
+          return null;
+        },
+        closest: () => null,
+      };
+      return node;
+    };
+
+    const doc: Record<string, unknown> = {
+      documentElement: { hasAttribute: (attr: string) => composite && attr === COMPOSITE_LYRICS_ATTR },
+      createElement: (tag: string) => {
+        const el = createNode(tag);
+        el.ownerDocument = doc;
+        return el;
+      },
+      createTextNode: (t: string) => {
+        const txt = createNode("#text", t);
+        txt.ownerDocument = doc;
+        return txt;
+      },
+    };
+    return { doc: doc as unknown as Document, createNode };
+  };
+
+  const makeLine = (createNode: (tag: string) => Record<string, unknown>, doc: Document) => {
+    const lyricEl = createNode("div");
+    lyricEl.ownerDocument = doc;
+    const line: LineData = {
+      time: 1,
+      duration: 3,
+      lyricElement: lyricEl as unknown as HTMLElement,
+      animations: [],
+      parts: [],
+      isScrolled: false,
+      isAnimationPlayStatePlaying: false,
+      accumulatedOffsetMs: 0,
+      isAnimating: false,
+      lastAnimSetupAt: 0,
+      isSelected: false,
+      height: -1,
+      position: -1,
+      decorations: new Map(),
+    };
+    return { lyricEl: lyricEl as unknown as HTMLElement, line };
+  };
+
+  const timedParts = [{ startTimeMs: 1000, durationMs: 1500, words: "konnichiwa", isBackground: false }];
+
+  const legacyEnv = makeMiniDoc(false);
+  const legacyTarget = makeLine(legacyEnv.createNode, legacyEnv.doc);
+  injectRomanization(legacyEnv.doc, legacyTarget.lyricEl, legacyTarget.line, "konnichiwa", timedParts);
+  injectTranslation(legacyEnv.doc, legacyTarget.lyricEl, "hello", "en");
+  assert.ok(legacyTarget.lyricEl.querySelector(`.${ROMANIZED_LYRICS_CLASS}`), "legacy timed romanization mounted");
+  assert.ok(legacyTarget.lyricEl.querySelector(`.${TRANSLATED_LYRICS_CLASS}`), "legacy translation mounted");
+  assert.equal(legacyTarget.lyricEl.querySelector(`.${SWEEP_CELL_CLASS}`), null, "legacy mode must not emit 1.21.0 sweep DOM");
+  assert.equal(legacyTarget.line.parts.length, 1);
+  assert.equal(legacyTarget.line.parts[0].sweep, undefined);
+
+  const compositeEnv = makeMiniDoc(true);
+  const compositeTarget = makeLine(compositeEnv.createNode, compositeEnv.doc);
+  injectRomanization(compositeEnv.doc, compositeTarget.lyricEl, compositeTarget.line, "konnichiwa", timedParts);
+  injectTranslation(compositeEnv.doc, compositeTarget.lyricEl, "hello", "en");
+  assert.ok(compositeTarget.lyricEl.querySelector(`.${ROMANIZED_LYRICS_CLASS}`), "composite timed romanization mounted");
+  assert.ok(compositeTarget.lyricEl.querySelector(`.${TRANSLATED_LYRICS_CLASS}`), "composite translation mounted");
+  assert.ok(compositeTarget.lyricEl.querySelector(`.${SWEEP_CELL_CLASS}`), "composite mode emits 1.21.0 sweep DOM");
+  assert.equal(compositeTarget.line.parts.length, 1);
+  assert.ok(Array.isArray(compositeTarget.line.parts[0].sweep), "composite mode populates PartData.sweep");
 }
 
 console.log("lyricsRenderer selfcheck passed");

@@ -1,5 +1,7 @@
 import type { Lyric } from "@braccato/core";
 import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
+import { observeRendererModeChange, readRendererMode } from "@modules/ui/rendererMode";
+import { syncOptionsRendererModeStyles } from "@/options/rendererModeControls";
 import { versionedStylesheetUrl } from "@core/extensionStylesheet";
 import { onReducedMotionChange, prefersReducedMotion } from "@/ui/motion";
 
@@ -51,9 +53,20 @@ function linkRendererStylesheets(): void {
 
 export function createSupportStage(mount: HTMLElement): SupportStage {
   linkRendererStylesheets();
+  let renderedComposite = readRendererMode(document);
+  syncOptionsRendererModeStyles({ isCompositeLyricsEnabled: renderedComposite });
   const renderer = createLyricsRenderer({ document, window, host: { getScrollElement: () => mount } });
   const { lyrics, loopMs } = timedLines();
   renderer.setLyrics(lyrics, { mount });
+
+  const syncRendererMode = (): void => {
+    const nextComposite = readRendererMode(document);
+    if (nextComposite === renderedComposite) return;
+    renderedComposite = nextComposite;
+    renderer.setLyrics(lyrics, { mount });
+  };
+
+  observeRendererModeChange(document, syncRendererMode);
 
   let frame = 0;
   let elapsedMs = 0;
@@ -89,6 +102,7 @@ export function createSupportStage(mount: HTMLElement): SupportStage {
 
   return {
     play() {
+      syncRendererMode();
       visible = true;
       start();
     },

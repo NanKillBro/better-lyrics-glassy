@@ -83,6 +83,7 @@ interface AppStateType {
   isOptimizedScrollHostEnabled: boolean;
   isOptimizedProgressBarEnabled: boolean;
   isFastPipArtworkEnabled: boolean;
+  isCompositeLyricsEnabled: boolean;
 }
 
 export const AppState: AppStateType = {
@@ -138,6 +139,7 @@ export const AppState: AppStateType = {
   isOptimizedScrollHostEnabled: false,
   isOptimizedProgressBarEnabled: false,
   isFastPipArtworkEnabled: false,
+  isCompositeLyricsEnabled: false,
 };
 
 export function reloadLyrics(): void {

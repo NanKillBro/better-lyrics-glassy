@@ -43,6 +43,7 @@
     },
     "dependencies": {
         "@braccato/core": "1.21.0",
+        "@braccato/core-legacy": "npm:@braccato/core@^1.20.0",
         "@braccato/highlight": "0.3.2",
         "@braccato/parsers": "0.4.1",
         "@codemirror/autocomplete": "^6.20.4",
@@ -53,9 +54,9 @@
         "@codemirror/view": "^6.43.15",
         "@formkit/auto-animate": "^0.10.2",
         "@fsegurai/codemirror-theme-material-dark": "^6.2.7",
+        "@plasmohq/edge-addons-api": "^2.0.0",
         "@prefresh/core": "^1.5.9",
         "@prefresh/utils": "^1.2.1",
-        "@plasmohq/edge-addons-api": "^2.0.0",
         "codemirror-lang-rics": "^0.3.22",
         "dompurify": "^3.4.17",
         "fast-xml-parser": "^5.12.0",

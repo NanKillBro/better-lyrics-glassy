@@ -227,6 +227,10 @@
 								<span class="ui-row__label" id="isFastPipArtworkEnabled-label">Fast PiP artwork loading<span class="setting-help" tabindex="0" data-tooltip="Preloads PiP artwork and resolves covers immediately from player and DOM thumbnails with a 2000ms stale grace instead of waiting up to 5s on queue metadata. May swap artwork once late metadata arrives. Off by default." aria-label="Preloads PiP artwork and resolves covers immediately from player and DOM thumbnails with a 2000ms stale grace instead of waiting up to 5s on queue metadata. May swap artwork once late metadata arrives. Off by default.">?</span></span>
 								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isFastPipArtworkEnabled" aria-labelledby="isFastPipArtworkEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
 							</div>
+							<div class="ui-row">
+								<span class="ui-row__label" id="isCompositeLyricsEnabled-label">Composite lyrics<span class="setting-help" tabindex="0" data-tooltip="Uses @braccato/core 1.21.0 compositor-promoted translate and opacity word animations instead of the default 1.20.0 legacy renderer. Eliminates non-composited main-thread word paints at the cost of sharper gradient edges and more DOM nodes. Off by default." aria-label="Uses @braccato/core 1.21.0 compositor-promoted translate and opacity word animations instead of the default 1.20.0 legacy renderer. Eliminates non-composited main-thread word paints at the cost of sharper gradient edges and more DOM nodes. Off by default.">?</span></span>
+								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isCompositeLyricsEnabled" aria-labelledby="isCompositeLyricsEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
+							</div>
 						</div>
 					</div>
 				</div>

@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dedupePopupBundle } from "./tooling/dedupePopupBundle.mjs";
+import { emitLegacyRendererCss } from "./tooling/legacyRendererCss.mjs";
 
 const require = createRequire(import.meta.url);
 const projectRoot = dirname(fileURLToPath(import.meta.url));
@@ -150,7 +151,7 @@ const config = {
     const isDevelopment = rspackConfig.mode !== "production";
     const shouldBuildSourcemaps = isDevelopment || process.env.SOURCEMAPS_ENABLED === "true";
 
-    rspackConfig.plugins.push(emitRendererStyles, versionStylesheetImports);
+    rspackConfig.plugins.push(emitRendererStyles, emitLegacyRendererCss, versionStylesheetImports);
 
     if (!isDevelopment) {
       console.log(

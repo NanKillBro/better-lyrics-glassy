@@ -1,11 +1,15 @@
-import { DISABLE_EFFECTS_STYLE_ID, FOOTER_CLASS, PLAYER_TIME_EVENT } from "@constants";
+import {
+  DISABLE_EFFECTS_STYLE_ID,
+  FOOTER_CLASS,
+  PLAYER_TIME_EVENT,
+} from "@constants";
+import { registerPipBaseProperties, syncPipRendererMode } from "@modules/ui/rendererMode";
 import { translateContributorCreditLabels } from "@modules/lyrics/contributorCredit";
 import type { PlayerDetails } from "@core/appState";
 import { CUSTOM_THEME_STYLE_ID } from "@braccato/core/constants";
-import { lyricBuildSettingsKey } from "@braccato/core/themeSettings";
 import { applyLyricDecorations } from "@modules/lyrics/lyricDecorations";
 import type { Lyric, LyricsRenderer } from "@braccato/core";
-import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
+import { createLyricsRenderer, lyricBuildSettingsKey } from "@modules/ui/lyricsRenderer";
 import { ensureLetterWaveSetting } from "@modules/settings/letterWave";
 import { VIDEO_QUALITY_BOOST_EVENT } from "@modules/settings/videoQuality";
 import { shouldShowWindowStage } from "@modules/karaoke/gate";
@@ -38,20 +42,6 @@ const STYLESHEET_REVEAL_TIMEOUT_MS = 1000;
 const WINDOW_FRAME_STORAGE_KEY = "blyrics-pip-window-frame";
 const NO_WINDOW_FRAME: WindowSize = { width: 0, height: 0 };
 const WINDOW_FRAME_SETTLE_MS = 1000;
-
-// Gecko ignores @property in a stylesheet that is cross-origin to the document, and ours are served
-// from moz-extension:// into a window of the page's own origin. An unregistered custom property
-// interpolates discretely, so the marquee snapped straight to its end offset and the highlight swipe
-// stepped instead of sweeping. Mirrors of the declarations in picture-in-picture.css and lyrics.css;
-// Chromium has already registered them from those sheets, where re-registering throws and is skipped.
-const ANIMATABLE_PROPERTIES: readonly PropertyDefinition[] = [
-  { name: "--blyrics-pip-marquee-shift", syntax: "<length>", inherits: true, initialValue: "0px" },
-  { name: "--blyrics-pip-marquee-fade-start", syntax: "<length>", inherits: true, initialValue: "0px" },
-  { name: "--blyrics-pip-marquee-fade-end", syntax: "<length>", inherits: true, initialValue: "0px" },
-  { name: "--blyrics-pip-marquee-alpha", syntax: "<number>", inherits: true, initialValue: "1" },
-  { name: "--lyric-transition-amount-start", syntax: "<number>", inherits: true, initialValue: "-0.2" },
-  { name: "--lyric-transition-amount-end", syntax: "<number>", inherits: true, initialValue: "-0.1" },
-];
 
 // Lines cross the bridge as JSON, so the array is new every time and only its contents can say
 // whether the song changed. Start time and text are enough: nothing else about a line moves without
@@ -117,17 +107,6 @@ function importSourceFooter(source: Element, targetDocument: Document): HTMLElem
     focusable.setAttribute("tabindex", "-1");
   }
   return footer;
-}
-
-function registerAnimatableProperties(pipWindow: Window): void {
-  const { CSS: pipCss } = pipWindow as Window & typeof globalThis;
-  for (const definition of ANIMATABLE_PROPERTIES) {
-    try {
-      pipCss.registerProperty(definition);
-    } catch {
-      // Already registered from the stylesheet. Expected on Chromium, and on a reopened window.
-    }
-  }
 }
 
 // Everything here touches only the page document and the Picture-in-Picture document, so it runs
@@ -285,7 +264,7 @@ export function createPictureInPictureHost(
       const needsLyricRebuild = renderer.setTheme(css);
       activeStage?.setTheme(css);
       activeView?.syncStageTextScale();
-      const nextBuildSettingsKey = lyricBuildSettingsKey();
+      const nextBuildSettingsKey = lyricBuildSettingsKey(pipWindow.document);
       const buildSettingsChanged =
         appliedBuildSettingsKey !== null && appliedBuildSettingsKey !== nextBuildSettingsKey;
       appliedThemeCss = css;
@@ -308,8 +287,20 @@ export function createPictureInPictureHost(
     pipWindow.document.head.appendChild(effectsStyle);
 
     styleObserver = new MutationObserver(() => {
-      if (syncTheme()) buildLyrics();
+      const modeSync = syncPipRendererMode(pipWindow, document, environment.stylesheetUrls().lyrics, CUSTOM_THEME_STYLE_ID);
+      const themeChanged = syncTheme();
       syncEffects();
+      if (modeSync.changed) {
+        if (modeSync.settled) {
+          void modeSync.settled.then(() => {
+            if (activeWindow === pipWindow) buildLyrics();
+          });
+        } else {
+          buildLyrics();
+        }
+      } else if (themeChanged) {
+        buildLyrics();
+      }
     });
     styleObserver.observe(document.head, { childList: true, subtree: true, characterData: true });
   }
@@ -323,6 +314,7 @@ export function createPictureInPictureHost(
       void whenStylesheetSettled(link);
       pipWindow.document.head.appendChild(link);
     }
+    syncPipRendererMode(pipWindow, document, lyrics, CUSTOM_THEME_STYLE_ID);
   }
 
   function applySettings(view: PictureInPictureLyricsView): void {
@@ -572,7 +564,7 @@ export function createPictureInPictureHost(
     document.documentElement.setAttribute(PIP_OPEN_ATTRIBUTE, "");
     environment.onOpened();
     pipWindow.document.title = environment.windowTitle();
-    registerAnimatableProperties(pipWindow);
+    registerPipBaseProperties(pipWindow);
     injectLyricStyles(pipWindow);
     activeView = new PictureInPictureLyricsView(pipWindow, document, environment.view, liveWindowSize);
     const view = activeView;

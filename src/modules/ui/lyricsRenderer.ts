@@ -1,17 +1,95 @@
 import {
-  createLyricsRenderer as createBaseLyricsRenderer,
+  createLyricsRenderer as createModernLyricsRenderer,
+  resetPlaybackClock as resetModernPlaybackClock,
+  resumeAllAutoscroll as resumeModernAutoscroll,
   type LyricsRenderer,
   type LyricsRendererOptions,
 } from "@braccato/core";
+import {
+  createLyricsRenderer as createLegacyLyricsRenderer,
+  resetPlaybackClock as resetLegacyPlaybackClock,
+  resumeAllAutoscroll as resumeLegacyAutoscroll,
+} from "@braccato/core-legacy";
 import { BIDI_SENSITIVE_CLASS, LONG_WORD_GROUP_CLASS, WORD_CLASS, WORD_GROUP_CLASS } from "@braccato/core/constants";
 import { testJoiningScript } from "@braccato/core/text";
+import {
+  injectRomanization as injectModernRomanization,
+  injectTranslation as injectModernTranslation,
+  type LineData,
+  type LyricPart,
+} from "@braccato/core";
+import {
+  injectRomanization as injectLegacyRomanization,
+  injectTranslation as injectLegacyTranslation,
+} from "@braccato/core-legacy";
+import {
+  lyricBuildSettingsKey as getModernBuildSettingsKey,
+  parseThemeConfig as parseModernThemeConfig,
+  registerThemeSetting as registerModernThemeSetting,
+  setThemeSettings as setModernThemeSettings,
+} from "@braccato/core/themeSettings";
+import {
+  lyricBuildSettingsKey as getLegacyBuildSettingsKey,
+  parseThemeConfig as parseLegacyThemeConfig,
+  registerThemeSetting as registerLegacyThemeSetting,
+  setThemeSettings as setLegacyThemeSettings,
+} from "@braccato/core-legacy/themeSettings";
+import { readRendererMode } from "@modules/ui/rendererMode";
 
 type AnimateMethod = Element["animate"];
 type AnimateKeyframes = Parameters<AnimateMethod>[0];
 type AnimateOptions = Parameters<AnimateMethod>[1];
+export type { LineData, LyricsRenderer };
+
+/**
+ * Injects a romanized line through the active renderer package (`@braccato/core`
+ * when composite lyrics are active, `@braccato/core-legacy` otherwise) so
+ * timed romanization DOM matches the running engine.
+ */
+export function injectRomanization(
+  doc: Document,
+  lyricElement: HTMLElement,
+  lineData: LineData,
+  text: string,
+  timedRomanization?: LyricPart[] | null
+): void {
+  const modeDoc = doc ?? lyricElement.ownerDocument;
+  if (readRendererMode(modeDoc)) {
+    injectModernRomanization(doc, lyricElement, lineData, text, timedRomanization);
+    return;
+  }
+  injectLegacyRomanization(
+    doc,
+    lyricElement,
+    lineData as unknown as Parameters<typeof injectLegacyRomanization>[2],
+    text,
+    timedRomanization
+  );
+}
+
+/**
+ * Injects a translated line through the active renderer package so decoration
+ * bookkeeping stays bound to the active engine instance.
+ */
+export function injectTranslation(
+  doc: Document,
+  lyricElement: HTMLElement,
+  text: string,
+  language?: string | null
+): void {
+  const modeDoc = doc ?? lyricElement.ownerDocument;
+  if (readRendererMode(modeDoc)) {
+    injectModernTranslation(doc, lyricElement, text, language);
+    return;
+  }
+  injectLegacyTranslation(doc, lyricElement, text, language);
+}
+
 type WindowWithElement = { Element?: { prototype?: object } };
-export type WobbleLineData = Pick<LyricsRenderer["lines"][number], "parts">;
-type WobblePartData = WobbleLineData["parts"][number];
+type WobblePartData = LyricsRenderer["lines"][number]["parts"][number] & {
+  imageLayers?: { highlight?: HTMLElement };
+};
+export type WobbleLineData = { parts: WobblePartData[] };
 
 const patchedPrototypes = new WeakSet<object>();
 const normalizedLineState = new WeakMap<WobbleLineData, { length: number; lastPart: WobblePartData | undefined }>();
@@ -158,29 +236,161 @@ export function retargetPerWordWobble(lines: readonly WobbleLineData[]): void {
   }
 }
 
+let lastAppliedThemeCss: string | null = null;
+
+function syncOtherThemeSettings(activeIsComposite: boolean, css: string): void {
+  if (activeIsComposite) {
+    setLegacyThemeSettings(parseLegacyThemeConfig(css));
+  } else {
+    setModernThemeSettings(parseModernThemeConfig(css));
+  }
+}
+
 /**
- * Creates a `@braccato/core` lyrics renderer with legacy CSS word-wobble easing parity
- * and per-word/per-syllable wobble targets applied.
+ * Registers a custom `blyrics-*` theme setting on both modern (`1.21.0`) and legacy (`1.20.0`)
+ * theme registries so mode switches observe the same build configuration.
+ */
+export function registerThemeSetting(
+  key: string,
+  defaultValue: number | boolean | string,
+  requiresLyricReload = false
+) {
+  registerLegacyThemeSetting(key, defaultValue, requiresLyricReload);
+  return registerModernThemeSetting(key, defaultValue, requiresLyricReload);
+}
+
+/**
+ * Reads the active engine's build-setting signature for `doc`.
+ */
+export function lyricBuildSettingsKey(doc?: Document): string {
+  return readRendererMode(doc) ? getModernBuildSettingsKey() : getLegacyBuildSettingsKey();
+}
+
+/**
+ * Resets the shared playback clock across both renderer engines.
+ */
+export function resetPlaybackClock(): void {
+  resetModernPlaybackClock();
+  resetLegacyPlaybackClock();
+}
+
+/**
+ * Resumes autoscroll across both renderer engines.
+ */
+export function resumeAllAutoscroll(): void {
+  resumeModernAutoscroll();
+  resumeLegacyAutoscroll();
+}
+
+/**
+ * Creates a delegating lyrics renderer selecting legacy `@braccato/core-legacy` (`1.20.0`, default)
+ * or composite `@braccato/core` (`1.21.0`) from `options.document`.
  */
 export function createLyricsRenderer(options: LyricsRendererOptions): LyricsRenderer {
   installWordWobblePatch(options.window);
-  const renderer = createBaseLyricsRenderer(options);
-  const originalSetLyrics = renderer.setLyrics;
-  const originalTick = renderer.tick;
-  const originalRetick = renderer.retickFromPlaybackClock;
 
-  renderer.setLyrics = function setLyricsWithPerWordWobble(lyrics, setOptions) {
-    originalSetLyrics.call(this, lyrics, setOptions);
-    retargetPerWordWobble(renderer.lines);
-  };
-  renderer.tick = function tickWithPerWordWobble(currentTimeS, tickOptions) {
-    retargetPerWordWobble(renderer.lines);
-    return originalTick.call(this, currentTimeS, tickOptions);
-  };
-  renderer.retickFromPlaybackClock = function retickWithPerWordWobble(buildTickOptions) {
-    retargetPerWordWobble(renderer.lines);
-    return originalRetick.call(this, buildTickOptions);
+  let destroyed = false;
+  let activeComposite = readRendererMode(options.document);
+  let currentMount = options.mount;
+  let appliedThemeCss = lastAppliedThemeCss;
+
+  const buildInnerRenderer = (composite: boolean): LyricsRenderer => {
+    const nextOptions: LyricsRendererOptions =
+      currentMount && currentMount !== options.mount ? { ...options, mount: currentMount } : options;
+    return composite ? createModernLyricsRenderer(nextOptions) : createLegacyLyricsRenderer(nextOptions);
   };
 
-  return renderer;
+  let inner = buildInnerRenderer(activeComposite);
+
+  const syncEngineMode = (applySavedTheme: boolean): boolean => {
+    if (destroyed) return false;
+    const nextComposite = readRendererMode(options.document);
+    if (nextComposite === activeComposite) {
+      return false;
+    }
+
+    inner.destroy();
+    activeComposite = nextComposite;
+    inner = buildInnerRenderer(activeComposite);
+    if (applySavedTheme && appliedThemeCss !== null) {
+      inner.setTheme(appliedThemeCss);
+    }
+    return true;
+  };
+
+  const decorateLines = (): void => {
+    retargetPerWordWobble(inner.lines);
+  };
+
+  return {
+    get container() {
+      return inner.container;
+    },
+    get lines() {
+      return inner.lines;
+    },
+    get syncType() {
+      return inner.syncType;
+    },
+    setLyrics(lyrics, setOptions) {
+      if (destroyed) {
+        inner.setLyrics(lyrics, setOptions);
+        return;
+      }
+      if (setOptions?.mount) {
+        currentMount = setOptions.mount;
+      }
+      syncEngineMode(true);
+      const effectiveOptions =
+        currentMount && !setOptions?.mount ? { ...setOptions, mount: currentMount } : setOptions;
+      inner.setLyrics(lyrics, effectiveOptions);
+      decorateLines();
+    },
+    setLanguage(language) {
+      inner.setLanguage(language);
+    },
+    setTheme(css) {
+      if (destroyed) return false;
+      appliedThemeCss = css;
+      lastAppliedThemeCss = css;
+      const switched = syncEngineMode(false);
+      const changed = inner.setTheme(css);
+      syncOtherThemeSettings(activeComposite, css);
+      return switched || changed;
+    },
+    tick(currentTimeS, tickOptions) {
+      decorateLines();
+      return inner.tick(currentTimeS, tickOptions);
+    },
+    relayout(measureLines) {
+      inner.relayout(measureLines);
+    },
+    clear() {
+      inner.clear();
+    },
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      inner.destroy();
+    },
+    noteUserScroll() {
+      inner.noteUserScroll();
+    },
+    noteVisibilityChange() {
+      inner.noteVisibilityChange();
+    },
+    resumeAutoscroll() {
+      inner.resumeAutoscroll();
+    },
+    clearOnScreenLyrics() {
+      return inner.clearOnScreenLyrics();
+    },
+    scheduleLyricPositionUpdate(isTicking, retick) {
+      inner.scheduleLyricPositionUpdate(isTicking, retick);
+    },
+    retickFromPlaybackClock(buildTickOptions) {
+      decorateLines();
+      return inner.retickFromPlaybackClock(buildTickOptions);
+    },
+  };
 }

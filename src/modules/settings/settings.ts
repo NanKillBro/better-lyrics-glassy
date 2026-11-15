@@ -13,9 +13,11 @@ import { configureLogging, logContent } from "@core/logger";
 import { syncKaraoke } from "@modules/karaoke/karaokeView";
 import { loadKaraokeSettings } from "@modules/karaoke/settings";
 import { migrateFullscreenControlsPref } from "@modules/settings/fullscreenControls";
+import { applyRendererModeSettings } from "@modules/settings/rendererModeSettings";
 import { clearCache as clearTranslationCache } from "@modules/lyrics/translation";
 import { mountDock, mountVotingSegment, reloadAlbumArt, syncAdCheckState, unmountDock, updateDockPosition } from "@modules/ui/dom";
 import { applyGlobalOffsets } from "@modules/ui/lyricsDock/offset";
+import { RENDERER_MODE_DEFAULTS } from "@modules/ui/rendererMode";
 import { mainView } from "@modules/ui/mainLyricsView";
 import { isPlayerFullscreened, onFullscreenChange } from "@modules/ui/observer";
 import { publishSecondaryViews } from "@modules/ui/secondaryViews";
@@ -201,6 +203,7 @@ export function loadPerformanceSettings(): void {
       isOptimizedScrollHostEnabled: false,
       isOptimizedProgressBarEnabled: false,
       isFastPipArtworkEnabled: false,
+      ...RENDERER_MODE_DEFAULTS,
     },
     items => {
       applyVisibilityCacheSetting(items.isVisibilityCacheEnabled === true);
@@ -208,6 +211,7 @@ export function loadPerformanceSettings(): void {
       applyOptimizedScrollHostSetting(items.isOptimizedScrollHostEnabled === true);
       applyOptimizedProgressBarSetting(items.isOptimizedProgressBarEnabled === true);
       applyFastPipArtworkSetting(items.isFastPipArtworkEnabled === true);
+      void applyRendererModeSettings(items);
     }
   );
 }
@@ -232,6 +236,9 @@ export function initPerformanceSettingsListener(): () => void {
     }
     if ("isFastPipArtworkEnabled" in changes) {
       applyFastPipArtworkSetting(changes.isFastPipArtworkEnabled.newValue === true);
+    }
+    if ("isCompositeLyricsEnabled" in changes) {
+      void applyRendererModeSettings({ isCompositeLyricsEnabled: changes.isCompositeLyricsEnabled.newValue });
     }
     if ("isStylizedAnimationsEnabled" in changes) {
       void applyStylizedAnimationsSetting(changes.isStylizedAnimationsEnabled.newValue !== false);
@@ -381,7 +388,13 @@ export function listenForPopupMessages(): void {
         }
       );
       getAndApplyCustomStyles();
-      reloadLyrics();
+      if (request.settings) {
+        void applyRendererModeSettings(request.settings).then(() => {
+          reloadLyrics();
+        });
+      } else {
+        reloadLyrics();
+      }
     } else if (request.action === "reloadLyrics") {
       reloadLyrics();
       sendResponse({ success: true });

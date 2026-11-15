@@ -85,7 +85,15 @@ import { attachDeclaredScrollFades, attachScrollFade } from "@/ui/scrollFade";
 import { createSyncIcon, createSyncTag, syncTypeLabel } from "@/ui/syncTag";
 import { initTooltips } from "@/ui/tooltip";
 
-interface Options extends VideoQualitySettings {
+import {
+  readRendererModeForm,
+  RENDERER_MODE_DEFAULTS,
+  type RendererModeOptions,
+  syncOptionsRendererModeStyles,
+  writeRendererModeForm,
+} from "@/options/rendererModeControls";
+
+interface Options extends VideoQualitySettings, RendererModeOptions {
   isLogsEnabled: boolean;
   isAutoSwitchEnabled: boolean;
   isAlbumArtEnabled: boolean;
@@ -183,6 +191,7 @@ const getOptionsFromForm = (): Options => {
     isOptimizedProgressBarEnabled: (document.getElementById("isOptimizedProgressBarEnabled") as HTMLInputElement)
       .checked,
     isFastPipArtworkEnabled: (document.getElementById("isFastPipArtworkEnabled") as HTMLInputElement).checked,
+    ...readRendererModeForm(),
     isPictureInPictureEnabled: (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked,
     isPictureInPictureAutoRestoreEnabled: (
       document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement
@@ -243,6 +252,7 @@ function setDockControlsOrderInForm(order: string[]): void {
 
 // Function to save options to Chrome storage
 const saveOptionsToStorage = (options: Options): void => {
+  syncOptionsRendererModeStyles(options);
   chrome.storage.local.set(options, () => {
     if (!chrome.runtime.lastError) flashSaved();
     try {
@@ -383,6 +393,7 @@ const restoreOptions = (): void => {
     isOptimizedScrollHostEnabled: false,
     isOptimizedProgressBarEnabled: false,
     isFastPipArtworkEnabled: false,
+    ...RENDERER_MODE_DEFAULTS,
     isPictureInPictureEnabled: true,
     isPictureInPictureAutoRestoreEnabled: false,
     pipWindowLayout: "horizontal",
@@ -490,6 +501,7 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isOptimizedProgressBarEnabled") as HTMLInputElement).checked =
     items.isOptimizedProgressBarEnabled;
   (document.getElementById("isFastPipArtworkEnabled") as HTMLInputElement).checked = items.isFastPipArtworkEnabled;
+  writeRendererModeForm(items);
   (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked = items.isPictureInPictureEnabled;
   (document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement).checked =
     items.isPictureInPictureAutoRestoreEnabled;
