@@ -4,11 +4,10 @@ import { mainView } from "@modules/ui/mainLyricsView";
 /**
  * GlassyFlow Bridge Module
  *
- * Re-implements custom theme CSS animation delay variables (--blyrics-swipe-delay and --blyrics-anim-delay)
- * by observing class changes on rendered lyric elements.
- *
- * This provides themes (e.g. GlassyFlow, mergetheme, Big Blurry Slow Lyrics for TV) with exact time delays
- * until lyric playback, allowing CSS transitions to calculate precise animation start delays.
+ * Re-implements custom theme CSS animation delay variable (--blyrics-anim-delay)
+ * so themes (e.g. GlassyFlow, mergetheme, Big Blurry Slow Lyrics for TV) receive exact
+ * countdown delays for upcoming lines, while running after core engine ticks to avoid
+ * invalidating layout before scroll measurements.
  */
 
 const PRE_ANIMATING_CLASS = "blyrics--pre-animating";
@@ -17,6 +16,18 @@ const CLOCK_SKEW_BUFFER_S = 0.15;
 const REAPPLY_TIME_DRIFT_S = 0.25;
 
 type TickOptions = Parameters<typeof mainView.tick>[1];
+type TickFn = typeof mainView.tick;
+type RetickFn = NonNullable<typeof mainView.retickFromPlaybackClock>;
+type SetThemeFn = NonNullable<typeof mainView.setTheme>;
+
+export interface GlassyFlowBridgeTarget {
+  readonly container: HTMLElement | null;
+  readonly lines: readonly { time: number; duration: number; lyricElement: HTMLElement }[];
+  readonly syncType: typeof mainView.syncType;
+  tick: TickFn;
+  retickFromPlaybackClock?: RetickFn;
+  setTheme?: SetThemeFn;
+}
 
 interface AppliedLineState {
   stage: 1 | 2;
@@ -24,7 +35,7 @@ interface AppliedLineState {
   lineTime: number;
 }
 
-let isMonkeyPatched = false;
+const patchedViews = new WeakSet<GlassyFlowBridgeTarget>();
 let observedContainer: HTMLElement | null = null;
 let offsetObserver: MutationObserver | null = null;
 let headObserver: MutationObserver | null = null;
@@ -96,29 +107,41 @@ function getTimingOffsetS(container: HTMLElement, isRichsync: boolean): number {
   return isRichsync ? cachedRichsyncOffsetS : cachedTimingOffsetS;
 }
 
-export function initGlassyFlowBridge(): void {
-  if (isMonkeyPatched) return;
-  isMonkeyPatched = true;
+export function initGlassyFlowBridge(targetView: GlassyFlowBridgeTarget = mainView): void {
+  if (patchedViews.has(targetView)) return;
+  patchedViews.add(targetView);
 
-  const originalTick = mainView.tick;
+  const originalTick = targetView.tick;
   let appliedLines = new WeakMap<HTMLElement, AppliedLineState>();
+  const animatingBeforeTick = new Set<HTMLElement>();
   let lastActualTime = Number.NaN;
   let lastRawTimeS = Number.NaN;
 
+  function snapshotAnimatingLines(): void {
+    animatingBeforeTick.clear();
+    if (!targetView.container || targetView.lines.length === 0) return;
+    for (const line of targetView.lines) {
+      const el = line.lyricElement;
+      if (el.classList.contains(ANIMATING_CLASS) || el.classList.contains(PRE_ANIMATING_CLASS)) {
+        animatingBeforeTick.add(el);
+      }
+    }
+  }
+
   function applyDelayVars(currentTimeS: number, options: TickOptions): void {
-    if (!mainView.container || mainView.lines.length === 0) return;
+    if (!targetView.container || targetView.lines.length === 0) return;
 
     const eventCreationTime = options.eventCreationTime ?? -1;
     const isPlaying = Boolean(options.isPlaying);
     const timeOffsetS = isPlaying && eventCreationTime !== -1 ? Math.max(0, (Date.now() - eventCreationTime) / 1000) : 0;
 
     let actualTime = currentTimeS + timeOffsetS;
-    if (mainView.syncType === "richsync") {
+    if (targetView.syncType === "richsync") {
       actualTime -= options.richsyncOffsetTrim ?? 0;
-      actualTime += getTimingOffsetS(mainView.container, true);
+      actualTime += getTimingOffsetS(targetView.container, true);
     } else {
       actualTime -= options.lineOffsetTrim ?? 0;
-      actualTime += getTimingOffsetS(mainView.container, false);
+      actualTime += getTimingOffsetS(targetView.container, false);
     }
     actualTime -= (options.globalLyricOffset ?? 0) + (options.lyricOffset ?? 0);
 
@@ -130,9 +153,10 @@ export function initGlassyFlowBridge(): void {
     const earlyTime = isPlaying ? ANIMATING_EARLY_TIME_S : 0;
     const skewBuffer = isPlaying ? CLOCK_SKEW_BUFFER_S : 0;
 
-    for (const line of mainView.lines) {
+    for (const line of targetView.lines) {
       const el = line.lyricElement;
-      if (el.classList.contains(ANIMATING_CLASS) || el.classList.contains(PRE_ANIMATING_CLASS)) {
+      // Skip lines that were already animating before the core tick ran.
+      if (animatingBeforeTick.has(el)) {
         appliedLines.delete(el);
         continue;
       }
@@ -148,48 +172,64 @@ export function initGlassyFlowBridge(): void {
           Math.abs(actualTime - prev.actualTime) > REAPPLY_TIME_DRIFT_S
         ) {
           appliedLines.set(el, { stage, actualTime, lineTime: line.time });
-          const children = [line, ...line.parts];
-          for (const part of children) {
-            const timeDelta = actualTime - part.time;
-            part.lyricElement.style.setProperty("--blyrics-swipe-delay", `${-timeDelta - part.duration * 0.1}s`);
-            part.lyricElement.style.setProperty("--blyrics-anim-delay", `${-timeDelta}s`);
-          }
+          const timeDelta = actualTime - line.time;
+          el.style.setProperty("--blyrics-anim-delay", `${-timeDelta}s`);
         }
       } else if (appliedLines.has(el)) {
         appliedLines.delete(el);
       }
     }
+    animatingBeforeTick.clear();
   }
 
-  mainView.tick = function (currentTimeS, options) {
-    if (mainView.container && mainView.lines.length > 0) {
+  targetView.tick = function (currentTimeS, options) {
+    const hasLines = Boolean(targetView.container && targetView.lines.length > 0);
+    if (hasLines) {
       if (!(currentTimeS === 0 && !options.isPlaying)) {
         lastRawTimeS = currentTimeS;
       }
-      applyDelayVars(currentTimeS, options);
+      snapshotAnimatingLines();
     } else {
+      animatingBeforeTick.clear();
       lastRawTimeS = Number.NaN;
     }
 
-    return originalTick.call(this, currentTimeS, options);
+    const result = originalTick.call(this, currentTimeS, options);
+    if (hasLines) {
+      applyDelayVars(currentTimeS, options);
+    }
+    return result;
   };
 
-  if (typeof mainView.retickFromPlaybackClock === "function") {
-    const originalRetick = mainView.retickFromPlaybackClock;
-    mainView.retickFromPlaybackClock = function (buildOptions) {
-      return originalRetick.call(this, (eventCreationTime, isPlaying) => {
+  if (typeof targetView.retickFromPlaybackClock === "function") {
+    const originalRetick = targetView.retickFromPlaybackClock;
+    targetView.retickFromPlaybackClock = function (buildOptions) {
+      let capturedOpts: TickOptions | null = null;
+      const hasLines = Boolean(targetView.container && targetView.lines.length > 0 && Number.isFinite(lastRawTimeS));
+      if (hasLines) {
+        snapshotAnimatingLines();
+      } else {
+        animatingBeforeTick.clear();
+      }
+
+      const result = originalRetick.call(this, (eventCreationTime, isPlaying) => {
         const opts = buildOptions(eventCreationTime, isPlaying);
-        if (Number.isFinite(lastRawTimeS)) {
-          applyDelayVars(lastRawTimeS, opts);
-        }
+        capturedOpts = opts;
         return opts;
       });
+
+      if (hasLines && capturedOpts && Number.isFinite(lastRawTimeS)) {
+        applyDelayVars(lastRawTimeS, capturedOpts);
+      } else {
+        animatingBeforeTick.clear();
+      }
+      return result;
     };
   }
 
-  if (typeof mainView.setTheme === "function") {
-    const originalSetTheme = mainView.setTheme;
-    mainView.setTheme = function (css) {
+  if (typeof targetView.setTheme === "function") {
+    const originalSetTheme = targetView.setTheme;
+    targetView.setTheme = function (css) {
       cachedOffsetsValid = false;
       return originalSetTheme.call(this, css);
     };

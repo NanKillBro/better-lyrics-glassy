@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { ANIMATING_CLASS } from "@braccato/core/constants";
 import { LYRICS_WRAPPER_ID } from "@constants";
+import type { GlassyFlowBridgeTarget } from "@modules/ui/glassyFlowBridge";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true });
 const { window } = dom;
@@ -108,16 +109,17 @@ const doc = window.document;
   lineEl.appendChild(partEl);
   container.appendChild(lineEl);
 
-  let styleWriteCount = 0;
+  let lineWriteCount = 0;
+  let partWriteCount = 0;
   const origLineSetProp = lineEl.style.setProperty.bind(lineEl.style);
   lineEl.style.setProperty = ((prop: string, val: string | null, priority?: string) => {
-    if (prop === "--blyrics-swipe-delay" || prop === "--blyrics-anim-delay") styleWriteCount++;
+    if (prop === "--blyrics-swipe-delay" || prop === "--blyrics-anim-delay") lineWriteCount++;
     return origLineSetProp(prop, val, priority);
   }) as typeof lineEl.style.setProperty;
 
   const origPartSetProp = partEl.style.setProperty.bind(partEl.style);
   partEl.style.setProperty = ((prop: string, val: string | null, priority?: string) => {
-    if (prop === "--blyrics-swipe-delay" || prop === "--blyrics-anim-delay") styleWriteCount++;
+    if (prop === "--blyrics-swipe-delay" || prop === "--blyrics-anim-delay") partWriteCount++;
     return origPartSetProp(prop, val, priority);
   }) as typeof partEl.style.setProperty;
 
@@ -148,46 +150,95 @@ const doc = window.document;
   // At t = 6.5s (3.4s before line.time=10s), outside the 2s lookahead -> 0 style writes, 1 cached getComputedStyle
   mainView.tick(6.5, { isPlaying: true } as any);
   assert.equal(gcsCalls, 1, "first tick reads computed style once");
-  assert.equal(styleWriteCount, 0, "no style writes when line is >2s ahead");
+  assert.equal(lineWriteCount, 0, "no style writes when line is >2s ahead");
+  assert.equal(partWriteCount, 0, "no part style writes ever");
 
   // At t = 7.0s (still >2s ahead) -> 0 style writes, 0 new getComputedStyle calls
   mainView.tick(7.0, { isPlaying: true } as any);
   assert.equal(gcsCalls, 1, "second tick uses cached timing offset");
-  assert.equal(styleWriteCount, 0, "still no style writes at >2s ahead");
+  assert.equal(lineWriteCount, 0, "still no style writes at >2s ahead");
 
   // At t = 7.78s (actualTime = 7.88s -> timeToLine = 2.12s, inside skew buffer) -> pre-arms once
   mainView.tick(7.78, { isPlaying: true } as any);
-  assert.equal(styleWriteCount, 4, "pre-arms delays once inside clock-skew buffer");
+  assert.equal(lineWriteCount, 1, "pre-arms --blyrics-anim-delay once on line inside clock-skew buffer");
+  assert.equal(partWriteCount, 0, "does not write delay vars onto word parts");
+  assert.equal(lineEl.style.getPropertyValue("--blyrics-swipe-delay"), "", "does not write dead --blyrics-swipe-delay");
   assert.ok(parseFloat(lineEl.style.getPropertyValue("--blyrics-anim-delay")) > 2.0, "buffer delay > 2s");
 
   // Consecutive buffer tick at 7.80s -> 0 additional writes
   mainView.tick(7.8, { isPlaying: true } as any);
-  assert.equal(styleWriteCount, 4, "does not re-write delays within clock-skew buffer");
+  assert.equal(lineWriteCount, 1, "does not re-write delays within clock-skew buffer");
 
   // At t = 8.0s (actualTime = 8.1s, within 2s of line.time=10s) -> refreshes exact delay once (stage 2)
   mainView.tick(8.0, { isPlaying: true } as any);
-  assert.equal(styleWriteCount, 8, "refreshes delays once when entering exact 2s animating window");
+  assert.equal(lineWriteCount, 2, "refreshes delay once when entering exact 2s animating window");
   assert.ok(Math.abs(parseFloat(lineEl.style.getPropertyValue("--blyrics-anim-delay")) - 1.9) < 0.001, "exact delay set");
 
   // Subsequent ticks at 8.02s, 8.04s -> 0 additional writes even before ANIMATING_CLASS is added
   mainView.tick(8.02, { isPlaying: true } as any);
   mainView.tick(8.04, { isPlaying: true } as any);
-  assert.equal(styleWriteCount, 8, "does not re-write delays on consecutive ticks in lookahead window");
+  assert.equal(lineWriteCount, 2, "does not re-write delays on consecutive ticks in lookahead window");
 
   // Seek jump to 8.5s (>0.25s jump) while not yet animating -> re-applies delays once
   mainView.tick(8.5, { isPlaying: true } as any);
-  assert.equal(styleWriteCount, 12, "re-writes delays after seek jump > 0.25s");
+  assert.equal(lineWriteCount, 3, "re-writes delay after seek jump > 0.25s");
 
   // Once ANIMATING_CLASS is present, even a seek does not write
   lineEl.classList.add(ANIMATING_CLASS);
   mainView.tick(9.5, { isPlaying: true } as any);
-  assert.equal(styleWriteCount, 12, "no writes once ANIMATING_CLASS is present");
+  assert.equal(lineWriteCount, 3, "no writes once ANIMATING_CLASS is present");
 
   // Removing ANIMATING_CLASS (e.g. pause) and resuming re-applies cleanly
   lineEl.classList.remove(ANIMATING_CLASS);
   mainView.tick(8.5, { isPlaying: false } as any);
   mainView.tick(8.5, { isPlaying: true } as any);
-  assert.equal(styleWriteCount, 16, "re-applies delays after ANIMATING_CLASS cleared on pause/resume");
+  assert.equal(lineWriteCount, 4, "re-applies delay after ANIMATING_CLASS cleared on pause/resume");
+  assert.equal(partWriteCount, 0, "word parts receive zero delay writes across all transitions");
+
+  // Ordering invariant: core tick & retickFromPlaybackClock run before style writes
+  const events: string[] = [];
+  const orderLineEl = doc.createElement("div");
+  container.appendChild(orderLineEl);
+  const origOrderSetProp = orderLineEl.style.setProperty.bind(orderLineEl.style);
+  orderLineEl.style.setProperty = ((prop: string, val: string | null, priority?: string) => {
+    events.push(`setProperty:${prop}`);
+    return origOrderSetProp(prop, val, priority);
+  }) as typeof orderLineEl.style.setProperty;
+
+  const mockView: GlassyFlowBridgeTarget = {
+    container,
+    syncType: "richsync" as const,
+    lines: [{ time: 30, duration: 3, lyricElement: orderLineEl }],
+    tick(currentTimeS: number, _options) {
+      events.push(`tick:${currentTimeS}`);
+      if (currentTimeS >= 29) {
+        orderLineEl.classList.add(ANIMATING_CLASS);
+      }
+      return "ok";
+    },
+    retickFromPlaybackClock(buildOptions) {
+      events.push("retick");
+      buildOptions(Date.now() - 40, true);
+      return "ok";
+    },
+  };
+
+  initGlassyFlowBridge(mockView);
+  mockView.tick(28.5, { isPlaying: true } as any);
+  assert.deepEqual(events, ["tick:28.5", "setProperty:--blyrics-anim-delay"], "tick runs before writing delay var");
+
+  events.length = 0;
+  mockView.tick(29.0, { isPlaying: true } as any);
+  assert.deepEqual(events, ["tick:29", "setProperty:--blyrics-anim-delay"], "seek activation sets initial delay after tick");
+
+  events.length = 0;
+  mockView.tick(29.4, { isPlaying: true } as any);
+  assert.deepEqual(events, ["tick:29.4"], "skips writes when line was already animating before tick");
+
+  orderLineEl.classList.remove(ANIMATING_CLASS);
+  events.length = 0;
+  mockView.retickFromPlaybackClock?.((_evt, _playing) => ({ isPlaying: true, globalLyricOffset: 0.5 }) as any);
+  assert.deepEqual(events, ["retick", "setProperty:--blyrics-anim-delay"], "retick runs before writing delay var");
 
   // EventCreationTime clock-skew + retickFromPlaybackClock regression test (line 2 at t=20s)
   const line2El = doc.createElement("div");
