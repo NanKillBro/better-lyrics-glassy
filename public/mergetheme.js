@@ -3406,6 +3406,7 @@ function onNankillRateChange() {
 }
 
 function ensureNankillRateWatcher() {
+  if (nankillRateVideo && nankillRateVideo.isConnected) return;
   const video = document.querySelector('video');
   if (nankillRateVideo === video) return;
   if (nankillRateVideo) {

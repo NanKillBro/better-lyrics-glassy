@@ -779,6 +779,12 @@
         applyStagger(delta);
     }
 
+    function applyScrollReset(delta) {
+        if (lastScrollTop !== null) lastScrollTop += delta;
+        handleNewDelta(delta);
+        lastFlipTime = Date.now();
+    }
+
     function installStyleObserver(el) {
         styleObserver?.disconnect();
 
@@ -802,8 +808,7 @@
                     lastTransform = 'none';
                     suppressTransform = false;
 
-                    handleNewDelta(delta);
-                    lastFlipTime = Date.now();
+                    applyScrollReset(delta);
                 } else {
                     lastTransform = transformVal;
                 }
@@ -822,8 +827,7 @@
                 lastTransform = 'none';
                 suppressTransform = false;
 
-                handleNewDelta(delta);
-                lastFlipTime = Date.now();
+                applyScrollReset(delta);
             } else if (pendingDelta !== 0) {
                 const delta = pendingDelta;
                 pendingDelta = 0;
@@ -834,8 +838,7 @@
                 lastTransform = 'none';
                 suppressTransform = false;
 
-                handleNewDelta(delta);
-                lastFlipTime = Date.now();
+                applyScrollReset(delta);
             }
         });
 
@@ -849,7 +852,7 @@
 
     let scrollParent = null;
     let scrollHandler = null;
-    let lastScrollTop = 0;
+    let lastScrollTop = null;
 
     function installScrollFallback(el) {
         removeScrollFallback();
@@ -858,12 +861,20 @@
         lastScrollTop = scrollParent.scrollTop;
 
         scrollHandler = () => {
+            if (!isScriptEnabled || isNoSyncMode) {
+                lastScrollTop = null;
+                return;
+            }
+            if (pendingDelta !== 0 || Date.now() - lastFlipTime < 150) return;
+
             const cur = scrollParent.scrollTop;
+            if (lastScrollTop === null) {
+                lastScrollTop = cur;
+                return;
+            }
             const delta = cur - lastScrollTop;
             lastScrollTop = cur;
 
-            if (pendingDelta !== 0) return;
-            if (Date.now() - lastFlipTime < 150) return;
             if (container && container.classList.contains('blyrics-user-scrolling')) return;
 
             if (Math.abs(delta) > CFG.minDelta) {
@@ -880,6 +891,7 @@
         }
         scrollParent = null;
         scrollHandler = null;
+        lastScrollTop = null;
     }
 
     function findScrollParent(el) {
@@ -995,6 +1007,7 @@
             if (line.style.translate) line.style.translate = '';
         }
         activeLines.clear();
+        lastScrollTop = null;
         _resetGeometry();
     }
 
@@ -1063,6 +1076,7 @@
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
             isScriptEnabled = true;
+            lastScrollTop = null;
             setScrollOverride(true);
             if (container && !isNoSyncMode) {
                 container.classList.add('blyrics--gf-managed');

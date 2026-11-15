@@ -277,6 +277,125 @@ settings("hd2160");
 await settle();
 assert.deepEqual(qualityCalls, [], "disposed bridges ignore settings and async callbacks");
 
+{
+  const optDom = new JSDOM(
+    `<ytmusic-player-bar></ytmusic-player-bar><div id="movie_player"></div><ytmusic-player><video></video></ytmusic-player><video id="unrelated-video"></video>`
+  );
+  const optDoc = optDom.window.document;
+  const optVideo = optDoc.querySelector("ytmusic-player video")!;
+  const optPlayerBar = optDoc.querySelector("ytmusic-player-bar")!;
+  const optMoviePlayer = optDoc.getElementById("movie_player")!;
+  let optHost = optDoc.querySelector("ytmusic-player")!;
+  let optQualities = ["hd2160", "hd1080", "auto"];
+  let optQualityCalls: string[] = [];
+  let optAdState = 0;
+  let optPlayerGets = 0;
+  let optApi: VideoQualityPlayer = {
+    loadVideoByPlayerVars: original,
+    getVideoData: () => ({ video_id: "opt-video" }),
+    getAvailableQualityLevels: () => optQualities,
+    getAdState: () => optAdState,
+    setPlaybackQualityRange: quality => {
+      optQualityCalls.push(quality);
+    },
+  };
+  Object.assign(optHost, {
+    getPlayer: () => {
+      optPlayerGets++;
+      return Promise.resolve(optApi);
+    },
+  });
+
+  let querySelectorCalls = 0;
+  const origQuerySelector = optDoc.querySelector.bind(optDoc);
+  optDoc.querySelector = ((selector: string) => {
+    querySelectorCalls++;
+    return origQuerySelector(selector);
+  }) as typeof optDoc.querySelector;
+
+  let pollCallback: (() => void) | undefined;
+  let clearedInterval = false;
+  const fakeWin = {
+    setInterval: (cb: () => void) => {
+      pollCallback = cb;
+      return 123 as unknown as number;
+    },
+    clearInterval: (id: number) => {
+      if (id === 123) clearedInterval = true;
+    },
+  } as unknown as Window;
+
+  const stopOpt = startVideoQualityPlayer(optDoc, fakeWin);
+  assert.ok(pollCallback, "registers interval poll callback");
+  const triggerPoll = pollCallback as () => void;
+  optDoc.dispatchEvent(
+    new optDom.window.CustomEvent(VIDEO_QUALITY_SETTINGS_EVENT, {
+      detail: JSON.stringify({ isOptimizedVideoQualityEnabled: true, preferredVideoQuality: "hd2160" }),
+    })
+  );
+  await settle();
+  assert.equal(optQualityCalls.length, 1);
+  assert.equal(optQualityCalls[0], "hd2160");
+
+  const queriesAfterConnect = querySelectorCalls;
+  const getsAfterConnect = optPlayerGets;
+  for (let i = 0; i < 5; i++) {
+    triggerPoll();
+  }
+  await settle();
+  assert.equal(querySelectorCalls, queriesAfterConnect, "optimized poll skips DOM queries once hooked");
+  assert.equal(optPlayerGets, getsAfterConnect, "optimized poll skips getPlayer calls once hooked");
+
+  // Repeat metadata events stay cached with zero extra full-DOM querySelector calls
+  optQualityCalls = [];
+  optVideo.dispatchEvent(new optDom.window.Event("loadedmetadata"));
+  optVideo.dispatchEvent(new optDom.window.Event("loadedmetadata"));
+  assert.equal(optQualityCalls.length, 2);
+  assert.equal(querySelectorCalls, queriesAfterConnect, "optimized loadedmetadata + applyQuality avoid querySelector");
+
+  optDoc.getElementById("unrelated-video")!.dispatchEvent(new optDom.window.Event("loadedmetadata"));
+  assert.equal(optQualityCalls.length, 2, "unrelated video still ignored via cached host.contains");
+
+  // Cached ad detection works across #movie_player, ytmusic-player-bar, and api.getAdState()
+  optMoviePlayer.classList.add("ad-showing");
+  optVideo.dispatchEvent(new optDom.window.Event("loadedmetadata"));
+  assert.equal(optQualityCalls.length, 2, "detects #movie_player.ad-showing without querySelector");
+  optMoviePlayer.classList.remove("ad-showing");
+
+  optPlayerBar.setAttribute("is-advertisement", "");
+  optVideo.dispatchEvent(new optDom.window.Event("loadedmetadata"));
+  assert.equal(optQualityCalls.length, 2, "detects ytmusic-player-bar[is-advertisement] without querySelector");
+  optPlayerBar.removeAttribute("is-advertisement");
+
+  optAdState = 1;
+  optVideo.dispatchEvent(new optDom.window.Event("loadedmetadata"));
+  assert.equal(optQualityCalls.length, 2, "detects api.getAdState() === 1");
+  optAdState = 0;
+
+  assert.equal(querySelectorCalls, queriesAfterConnect, "steady-state ad checks perform zero extra querySelector scans");
+
+  // Replacing a disconnected host recovers on the next poll
+  optHost.remove();
+  const replacementHost = optDom.window.document.createElement("ytmusic-player");
+  const replacementApi: VideoQualityPlayer = {
+    loadVideoByPlayerVars: original,
+    getVideoData: () => ({ video_id: "opt-video-2" }),
+    getAvailableQualityLevels: () => ["hd1080", "auto"],
+    setPlaybackQualityRange: quality => {
+      optQualityCalls.push(quality);
+    },
+  };
+  Object.assign(replacementHost, { getPlayer: () => Promise.resolve(replacementApi) });
+  optDom.window.document.body.appendChild(replacementHost);
+  triggerPoll();
+  await settle();
+  assert.equal(optQualityCalls.at(-1), "hd1080", "poll reconnects when cached ytmusic-player disconnects");
+
+  stopOpt();
+  assert.equal(clearedInterval, true);
+  optDom.window.close();
+}
+
 const reads: ((value: unknown) => void)[] = [];
 const storageListeners = new Set<(changes: Record<string, unknown>, area: string) => void>();
 Object.assign(globalThis, {

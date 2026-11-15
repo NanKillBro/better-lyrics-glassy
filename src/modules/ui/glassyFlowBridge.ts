@@ -36,6 +36,7 @@ interface AppliedLineState {
 }
 
 const patchedViews = new WeakSet<GlassyFlowBridgeTarget>();
+const inlineOffsetSignatures = new WeakMap<Element, string>();
 let observedContainer: HTMLElement | null = null;
 let offsetObserver: MutationObserver | null = null;
 let headObserver: MutationObserver | null = null;
@@ -68,13 +69,60 @@ function hasStylesheetMutation(mutations: MutationRecord[]): boolean {
   return false;
 }
 
+function getInlineOffsetSignature(target: Element): string | null {
+  const style = (target as HTMLElement).style;
+  if (style && typeof style.getPropertyValue === "function") {
+    return `${style.getPropertyValue("--blyrics-richsync-timing-offset")}\0${style.getPropertyValue("--blyrics-timing-offset")}`;
+  }
+  if (typeof target.getAttribute === "function") {
+    const raw = target.getAttribute("style") ?? "";
+    return raw.includes("--blyrics-") ? raw : "";
+  }
+  return null;
+}
+
+function seedInlineOffsetSignatures(container: HTMLElement): void {
+  const containerSig = getInlineOffsetSignature(container);
+  if (containerSig !== null) {
+    inlineOffsetSignatures.set(container, containerSig);
+  }
+  const root = container.ownerDocument?.documentElement;
+  if (root) {
+    const rootSig = getInlineOffsetSignature(root);
+    if (rootSig !== null) {
+      inlineOffsetSignatures.set(root, rootSig);
+    }
+  }
+}
+
+function hasRelevantOffsetMutation(mutations: MutationRecord[]): boolean {
+  for (const mutation of mutations) {
+    if (mutation.attributeName !== "style") {
+      return true;
+    }
+    const target = mutation.target as Element | null;
+    if (!target) return true;
+    const nextSig = getInlineOffsetSignature(target);
+    if (nextSig === null) return true;
+    const prevSig = inlineOffsetSignatures.get(target);
+    if (prevSig === undefined || nextSig !== prevSig) {
+      inlineOffsetSignatures.set(target, nextSig);
+      return true;
+    }
+  }
+  return false;
+}
+
 function ensureOffsetObserver(container: HTMLElement): void {
   if (observedContainer === container && offsetObserver) return;
   observedContainer = container;
   cachedOffsetsValid = false;
+  seedInlineOffsetSignatures(container);
   offsetObserver?.disconnect();
-  offsetObserver = new MutationObserver(() => {
-    cachedOffsetsValid = false;
+  offsetObserver = new MutationObserver(mutations => {
+    if (hasRelevantOffsetMutation(mutations)) {
+      cachedOffsetsValid = false;
+    }
   });
   offsetObserver.observe(container, { attributes: true, attributeFilter: ["style", "class"] });
   const doc = container.ownerDocument;

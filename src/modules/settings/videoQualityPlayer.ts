@@ -72,6 +72,10 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
   let pending = false;
   let lastQualityKey = "";
   let initialRefreshKey = "";
+  let cachedPlayerHost: (HTMLElement & { getPlayer?: () => unknown }) | null = null;
+  let cachedMoviePlayer: Element | null = null;
+  let cachedPlayerBar: Element | null = null;
+  let checkedPlayerBar = false;
 
   const reportedFailures = new Set<string>();
   const reportFailure = (context: string, error: unknown): void => {
@@ -83,11 +87,40 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
     lastQualityKey = "";
     initialRefreshKey = "";
   };
+  const getPlayerHost = (): (HTMLElement & { getPlayer?: () => unknown }) | null => {
+    if (settings?.isOptimizedVideoQualityEnabled) {
+      if (!cachedPlayerHost?.isConnected) {
+        cachedPlayerHost = doc.querySelector("ytmusic-player") as (HTMLElement & { getPlayer?: () => unknown }) | null;
+      }
+      return cachedPlayerHost;
+    }
+    return doc.querySelector("ytmusic-player") as (HTMLElement & { getPlayer?: () => unknown }) | null;
+  };
+  const isAdShowing = (): boolean => {
+    if (api?.getAdState?.() === 1) return true;
+    if (!settings?.isOptimizedVideoQualityEnabled) {
+      return Boolean(doc.querySelector(".ad-showing, ytmusic-player-bar[is-advertisement]"));
+    }
+    if (getPlayerHost()?.classList.contains("ad-showing")) return true;
+    if (!cachedMoviePlayer?.isConnected && typeof doc.getElementById === "function") {
+      cachedMoviePlayer = doc.getElementById("movie_player");
+    }
+    if (cachedMoviePlayer?.classList.contains("ad-showing")) return true;
+    if (cachedPlayerBar && !cachedPlayerBar.isConnected) {
+      cachedPlayerBar = null;
+      checkedPlayerBar = false;
+    }
+    if (!cachedPlayerBar && !checkedPlayerBar) {
+      checkedPlayerBar = true;
+      cachedPlayerBar = doc.querySelector("ytmusic-player-bar");
+    }
+    return cachedPlayerBar?.hasAttribute("is-advertisement") === true;
+  };
 
   const applyQuality = (): void => {
     if (!api || !settings) return;
     try {
-      if (doc.querySelector(".ad-showing, ytmusic-player-bar[is-advertisement]") || api.getAdState?.() === 1) return;
+      if (isAdShowing()) return;
       const data = api.getVideoData?.();
       if (!data?.video_id || data.isLive || api.getPlayerState?.() === -1) return;
       const available = api.getAvailableQualityLevels?.() ?? [];
@@ -116,9 +149,13 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
     }
   };
 
-  const connect = (): void => {
+  const connect = (fromPoll = false): void => {
     if (disposed || pending || !settings) return;
-    const host = doc.querySelector("ytmusic-player") as (HTMLElement & { getPlayer?: () => unknown }) | null;
+    if (fromPoll && settings.isOptimizedVideoQualityEnabled && api && cachedPlayerHost?.isConnected) {
+      return;
+    }
+    checkedPlayerBar = false;
+    const host = getPlayerHost();
     if (typeof host?.getPlayer !== "function") return;
     pending = true;
     try {
@@ -152,9 +189,15 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return;
       const next = normalizeVideoQualitySettings(raw);
       if (next.isHighResolutionVideoEnabled !== settings?.isHighResolutionVideoEnabled) initialRefreshKey = "";
+      if (!next.isOptimizedVideoQualityEnabled) {
+        cachedPlayerHost = null;
+        cachedMoviePlayer = null;
+        cachedPlayerBar = null;
+        checkedPlayerBar = false;
+      }
       settings = next;
       lastQualityKey = "";
-      connect();
+      connect(false);
     } catch (error) {
       reportFailure("Failed to read video quality settings", error);
     }
@@ -166,33 +209,48 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
       if (raw === isBoosted) return;
       isBoosted = raw;
       lastQualityKey = "";
-      connect();
+      connect(false);
     } catch (error) {
       reportFailure("Failed to read video quality boost", error);
     }
   };
   const onLoadedMetadata = (event: Event): void => {
     const target = event.target as Element | null;
-    if (target?.tagName !== "VIDEO" || !target.closest("ytmusic-player")) return;
+    if (target?.tagName !== "VIDEO") return;
+    if (settings?.isOptimizedVideoQualityEnabled) {
+      const host = getPlayerHost();
+      if (!host?.contains(target)) return;
+    } else if (!target.closest("ytmusic-player")) {
+      return;
+    }
     lastQualityKey = "";
     applyQuality();
   };
+  const onNavigateFinish = (): void => {
+    connect(false);
+  };
+  const onPoll = (): void => {
+    connect(true);
+  };
   doc.addEventListener(VIDEO_QUALITY_SETTINGS_EVENT, receive);
   doc.addEventListener(VIDEO_QUALITY_BOOST_EVENT, receiveBoost);
-  doc.addEventListener("yt-navigate-finish", connect);
+  doc.addEventListener("yt-navigate-finish", onNavigateFinish);
   doc.addEventListener("loadedmetadata", onLoadedMetadata, true);
-  const observer = new MutationObserver(connect);
+  const observer = new MutationObserver(() => connect(false));
   observer.observe(doc, { childList: true, subtree: true });
-  const interval = win.setInterval(connect, 1000);
+  const interval = win.setInterval(onPoll, 1000);
   doc.dispatchEvent(new Event(VIDEO_QUALITY_REQUEST_EVENT));
   return () => {
     disposed = true;
     observer.disconnect();
     win.clearInterval(interval);
     unpatch?.();
+    cachedPlayerHost = null;
+    cachedMoviePlayer = null;
+    cachedPlayerBar = null;
     doc.removeEventListener(VIDEO_QUALITY_SETTINGS_EVENT, receive);
     doc.removeEventListener(VIDEO_QUALITY_BOOST_EVENT, receiveBoost);
-    doc.removeEventListener("yt-navigate-finish", connect);
+    doc.removeEventListener("yt-navigate-finish", onNavigateFinish);
     doc.removeEventListener("loadedmetadata", onLoadedMetadata, true);
   };
 }

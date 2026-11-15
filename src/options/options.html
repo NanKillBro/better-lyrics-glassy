@@ -216,7 +216,7 @@
 								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isAdCheckEnabled" aria-labelledby="isAdCheckEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
 							</div>
 							<div class="ui-row">
-								<span class="ui-row__label" id="isOptimizedScrollHostEnabled-label">Optimize scroll host<span class="setting-help" tabindex="0" data-tooltip="Caches #tab-renderer and --blyrics-animate-scroll lookups and skips synchronous forced reflow inside scrollTop updates. Off by default." aria-label="Caches #tab-renderer and --blyrics-animate-scroll lookups and skips synchronous forced reflow inside scrollTop updates. Off by default.">?</span></span>
+								<span class="ui-row__label" id="isOptimizedScrollHostEnabled-label">Optimize scroll host<span class="setting-help" tabindex="0" data-tooltip="Caches #tab-renderer, scroll metrics, and --blyrics-animate-scroll lookups, and avoids synchronous forced reflow during scrollTop updates. Off by default." aria-label="Caches #tab-renderer, scroll metrics, and --blyrics-animate-scroll lookups, and avoids synchronous forced reflow during scrollTop updates. Off by default.">?</span></span>
 								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isOptimizedScrollHostEnabled" aria-labelledby="isOptimizedScrollHostEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
 							</div>
 							<div class="ui-row">
@@ -230,6 +230,10 @@
 							<div class="ui-row">
 								<span class="ui-row__label" id="isCompositeLyricsEnabled-label">Composite lyrics<span class="setting-help" tabindex="0" data-tooltip="Uses @braccato/core 1.21.0 compositor-promoted translate and opacity word animations instead of the default 1.20.0 legacy renderer. Eliminates non-composited main-thread word paints at the cost of sharper gradient edges and more DOM nodes. Off by default." aria-label="Uses @braccato/core 1.21.0 compositor-promoted translate and opacity word animations instead of the default 1.20.0 legacy renderer. Eliminates non-composited main-thread word paints at the cost of sharper gradient edges and more DOM nodes. Off by default.">?</span></span>
 								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isCompositeLyricsEnabled" aria-labelledby="isCompositeLyricsEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
+							</div>
+							<div class="ui-row">
+								<span class="ui-row__label" id="isOptimizedVideoQualityEnabled-label">Optimize video quality watcher<span class="setting-help" tabindex="0" data-tooltip="Caches player and ad container references and skips redundant 1s DOM polling once hooked while preserving navigation and loadedmetadata checks. Off by default." aria-label="Caches player and ad container references and skips redundant 1s DOM polling once hooked while preserving navigation and loadedmetadata checks. Off by default.">?</span></span>
+								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isOptimizedVideoQualityEnabled" aria-labelledby="isOptimizedVideoQualityEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
 							</div>
 						</div>
 					</div>

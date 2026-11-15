@@ -30,6 +30,7 @@ import {
 import { getResumeScrollElement } from "@modules/ui/resumeScrollButton";
 import { isLyricsWantedOffTab } from "@modules/ui/secondaryViews";
 import { invalidateViewVisibilityCache } from "@modules/ui/visibilityCache";
+import { invalidateScrollHostMetrics } from "@modules/ui/lyricsHost";
 import { logCore, logError } from "@core/logger";
 import {
   addThumbnail,
@@ -279,10 +280,12 @@ export function lyricReloader(): void {
     for (let i = 0; i < tabs.length; i++) {
       tabs[i].addEventListener("click", () => {
         invalidateViewVisibilityCache();
+        invalidateScrollHostMetrics();
         const tabRenderer = document.querySelector(TAB_RENDERER_SELECTOR) as HTMLElement;
         scrollPositions[currentTab] = tabRenderer.scrollTop;
         tabRenderer.scrollTop = scrollPositions[i];
         setTimeout(() => {
+          invalidateScrollHostMetrics();
           tabRenderer.scrollTop = scrollPositions[i];
           // Don't start ticking until we set the height
           AppState.areLyricsTicking = AppState.areLyricsLoaded && i === 1;

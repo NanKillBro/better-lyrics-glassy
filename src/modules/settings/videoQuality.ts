@@ -18,11 +18,13 @@ export const VIDEO_QUALITIES = {
 export type VideoQuality = keyof typeof VIDEO_QUALITIES;
 export interface VideoQualitySettings {
   isHighResolutionVideoEnabled: boolean;
+  isOptimizedVideoQualityEnabled: boolean;
   preferredVideoQuality: VideoQuality;
 }
 
 export const DEFAULT_VIDEO_QUALITY_SETTINGS: VideoQualitySettings = {
   isHighResolutionVideoEnabled: true,
+  isOptimizedVideoQualityEnabled: false,
   preferredVideoQuality: "auto",
 };
 
@@ -31,6 +33,7 @@ export function normalizeVideoQualitySettings(
 ): VideoQualitySettings {
   return {
     isHighResolutionVideoEnabled: raw.isHighResolutionVideoEnabled !== false,
+    isOptimizedVideoQualityEnabled: raw.isOptimizedVideoQualityEnabled === true,
     preferredVideoQuality:
       typeof raw.preferredVideoQuality === "string" && Object.hasOwn(VIDEO_QUALITIES, raw.preferredVideoQuality)
         ? (raw.preferredVideoQuality as VideoQuality)
@@ -41,7 +44,7 @@ export function normalizeVideoQualitySettings(
 const BOOSTED_VIDEO_QUALITY: VideoQuality = "hd1080";
 
 export function selectVideoQuality(
-  settings: VideoQualitySettings,
+  settings: Pick<VideoQualitySettings, "isHighResolutionVideoEnabled" | "preferredVideoQuality">,
   available: string[],
   isBoosted = false
 ): VideoQuality {

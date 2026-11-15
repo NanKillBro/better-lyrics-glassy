@@ -1,7 +1,19 @@
 import { AppState } from "@core/appState";
-import { ytmHost } from "@modules/ui/lyricsHost";
+import { invalidateScrollHostMetrics, ytmHost } from "@modules/ui/lyricsHost";
 import type { LyricsRenderer, TickOptions } from "@braccato/core";
 import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
+
+function invalidateAfter<Args extends unknown[], Result>(
+  fn: (...args: Args) => Result
+): (...args: Args) => Result {
+  return function (this: unknown, ...args: Args): Result {
+    try {
+      return fn.apply(this, args);
+    } finally {
+      invalidateScrollHostMetrics();
+    }
+  };
+}
 
 // -- The side panel's view --------------------------
 
@@ -13,6 +25,12 @@ import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
  * lives for as long as the tab does, and seven modules can reach it.
  */
 export const mainView: Omit<LyricsRenderer, "destroy"> = createLyricsRenderer({ document, window, host: ytmHost });
+mainView.setLyrics = invalidateAfter(mainView.setLyrics);
+mainView.setLanguage = invalidateAfter(mainView.setLanguage);
+mainView.setTheme = invalidateAfter(mainView.setTheme);
+mainView.relayout = invalidateAfter(mainView.relayout);
+mainView.clear = invalidateAfter(mainView.clear);
+mainView.clearOnScreenLyrics = invalidateAfter(mainView.clearOnScreenLyrics);
 
 // -- Tick options --------------------------
 

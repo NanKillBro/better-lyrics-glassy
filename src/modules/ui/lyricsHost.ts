@@ -5,6 +5,7 @@ import { seekPlayer } from "@modules/lyrics/lyrics";
 import { hideAdOverlay, isAdPlaying, isLoaderActive, showAdOverlay } from "@modules/ui/dom";
 import { getResumeScrollElement } from "@modules/ui/resumeScrollButton";
 import { getCachedViewVisibility } from "@modules/ui/visibilityCache";
+import { observeResize, type ObserverHandle } from "@modules/ui/layout/layoutWidth";
 import type { LyricsRendererHost } from "@braccato/core";
 import { resetDebugRender, resizeCanvas } from "./animationEngineDebug";
 import { type LogSink, logCore } from "@core/logger";
@@ -16,6 +17,203 @@ let cachedTabRenderer: HTMLElement | null = null;
 let observedLyricsElement: HTMLElement | null = null;
 let animateScrollObserver: MutationObserver | null = null;
 let cachedAnimateScroll: string | null = null;
+
+let activeScrollElement: HTMLElement | null = null;
+let observedScrollElement: HTMLElement | null = null;
+let observedScrollWrapper: HTMLElement | null = null;
+let observedScrollContainer: HTMLElement | null = null;
+let scrollHostResizeHandle: ObserverHandle | null = null;
+let scrollHostAttrObserver: MutationObserver | null = null;
+let scrollHostWrapperObserver: MutationObserver | null = null;
+let cachedScrollTop: number | null = null;
+let cachedScrollHeight: number | null = null;
+let cachedClientHeight: number | null = null;
+let cachedScrollBehavior: string | null = null;
+let hasPendingProgrammaticScroll = false;
+let programmaticScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+const PROGRAMMATIC_SCROLL_GRACE_MS = 100;
+
+function disarmProgrammaticScroll(): void {
+  hasPendingProgrammaticScroll = false;
+  if (programmaticScrollTimer !== null) {
+    clearTimeout(programmaticScrollTimer);
+    programmaticScrollTimer = null;
+  }
+}
+
+function armProgrammaticScroll(): void {
+  disarmProgrammaticScroll();
+  hasPendingProgrammaticScroll = true;
+  programmaticScrollTimer = setTimeout(() => {
+    programmaticScrollTimer = null;
+    hasPendingProgrammaticScroll = false;
+  }, PROGRAMMATIC_SCROLL_GRACE_MS);
+}
+
+function invalidateScrollHostTop(): void {
+  cachedScrollTop = null;
+  disarmProgrammaticScroll();
+}
+
+export function invalidateScrollHostMetrics(): void {
+  invalidateScrollHostTop();
+  cachedScrollHeight = null;
+  cachedClientHeight = null;
+  cachedScrollBehavior = null;
+}
+
+function onScrollHostScroll(): void {
+  if (hasPendingProgrammaticScroll) {
+    disarmProgrammaticScroll();
+    return;
+  }
+  cachedScrollTop = null;
+}
+
+function onUserScrollIntent(): void {
+  invalidateScrollHostTop();
+}
+
+function getCachedScrollBehavior(el: HTMLElement): string {
+  if (cachedScrollBehavior === null) {
+    cachedScrollBehavior = getComputedStyle(el).scrollBehavior;
+  }
+  return cachedScrollBehavior;
+}
+
+function rebuildScrollHostResizeObserver(): void {
+  scrollHostResizeHandle?.destroy();
+  scrollHostResizeHandle = null;
+  if (!observedScrollElement) return;
+  const targets: Element[] = [observedScrollElement];
+  if (observedScrollWrapper) targets.push(observedScrollWrapper);
+  if (observedScrollContainer) targets.push(observedScrollContainer);
+  scrollHostResizeHandle = observeResize(targets, invalidateScrollHostMetrics);
+}
+
+function syncWrapperResizeObservation(wrapper: HTMLElement | null): void {
+  const nextContainer = (wrapper?.firstElementChild as HTMLElement | null) ?? null;
+  let targetsChanged = false;
+  if (wrapper !== observedScrollWrapper) {
+    scrollHostWrapperObserver?.disconnect();
+    scrollHostWrapperObserver = null;
+    observedScrollWrapper = wrapper;
+    targetsChanged = true;
+    if (wrapper && typeof MutationObserver !== "undefined") {
+      scrollHostWrapperObserver = new MutationObserver(() => {
+        invalidateScrollHostMetrics();
+        syncWrapperResizeObservation(observedScrollWrapper);
+      });
+      scrollHostWrapperObserver.observe(wrapper, { childList: true });
+    }
+  }
+  if (nextContainer !== observedScrollContainer) {
+    observedScrollContainer = nextContainer;
+    targetsChanged = true;
+  }
+  if (targetsChanged || !scrollHostResizeHandle) {
+    rebuildScrollHostResizeObserver();
+  }
+}
+
+function teardownScrollHostObservers(): void {
+  if (observedScrollElement) {
+    observedScrollElement.removeEventListener("scroll", onScrollHostScroll);
+    observedScrollElement.removeEventListener("wheel", onUserScrollIntent);
+    observedScrollElement.removeEventListener("touchstart", onUserScrollIntent);
+    observedScrollElement.removeEventListener("pointerdown", onUserScrollIntent);
+  }
+  scrollHostResizeHandle?.destroy();
+  scrollHostResizeHandle = null;
+  scrollHostAttrObserver?.disconnect();
+  scrollHostAttrObserver = null;
+  scrollHostWrapperObserver?.disconnect();
+  scrollHostWrapperObserver = null;
+  observedScrollElement = null;
+  observedScrollWrapper = null;
+  observedScrollContainer = null;
+  invalidateScrollHostMetrics();
+}
+
+function ensureScrollHostObservers(el: HTMLElement): void {
+  if (observedScrollElement === el) {
+    const wrapper = document.getElementById(LYRICS_WRAPPER_ID);
+    if (wrapper !== observedScrollWrapper || (wrapper?.firstElementChild as HTMLElement | null) !== observedScrollContainer) {
+      syncWrapperResizeObservation(wrapper);
+    }
+    return;
+  }
+
+  teardownScrollHostObservers();
+  observedScrollElement = el;
+
+  el.addEventListener("scroll", onScrollHostScroll, { passive: true });
+  el.addEventListener("wheel", onUserScrollIntent, { passive: true });
+  el.addEventListener("touchstart", onUserScrollIntent, { passive: true });
+  el.addEventListener("pointerdown", onUserScrollIntent, { passive: true });
+
+  if (typeof MutationObserver !== "undefined") {
+    scrollHostAttrObserver = new MutationObserver(() => {
+      invalidateScrollHostMetrics();
+    });
+    scrollHostAttrObserver.observe(el, {
+      attributes: true,
+      attributeFilter: ["style", "class", "hidden", "selected"],
+    });
+    if (el.ownerDocument?.documentElement) {
+      scrollHostAttrObserver.observe(el.ownerDocument.documentElement, {
+        attributes: true,
+        attributeFilter: ["style", "class"],
+      });
+    }
+  }
+
+  syncWrapperResizeObservation(document.getElementById(LYRICS_WRAPPER_ID));
+}
+
+function applyGlassyFlowFlip(scrollDeltaPx: number, optimized: boolean): void {
+  if (scrollDeltaPx === 0) return;
+  const lyricsElement = document.getElementById(LYRICS_WRAPPER_ID)?.firstElementChild as HTMLElement | null;
+  if (!lyricsElement) return;
+
+  const animateScroll = optimized
+    ? getCachedAnimateScroll(lyricsElement)
+    : getComputedStyle(lyricsElement).getPropertyValue("--blyrics-animate-scroll").trim();
+  if (animateScroll !== "0") return;
+
+  lyricsElement.style.transition = "none";
+  lyricsElement.style.transform = `translate(0px, ${scrollDeltaPx}px)`;
+  if (!optimized) {
+    lyricsElement.getBoundingClientRect(); // force reflow
+  }
+}
+
+function patchReadonlyMetric(
+  el: HTMLElement,
+  prop: "scrollHeight" | "clientHeight",
+  getCached: () => number | null,
+  setCached: (val: number) => void
+): void {
+  const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, prop);
+  if (!descriptor?.get) return;
+  const originalGet = descriptor.get;
+  Object.defineProperty(el, prop, {
+    get() {
+      if (this !== activeScrollElement || !AppState.isOptimizedScrollHostEnabled) {
+        return originalGet.call(this);
+      }
+      ensureScrollHostObservers(el);
+      const cached = getCached();
+      if (cached !== null) return cached;
+      const measured = originalGet.call(this);
+      setCached(measured);
+      return measured;
+    },
+    configurable: true,
+    enumerable: descriptor.enumerable ?? true,
+  });
+}
 
 function getCachedAnimateScroll(lyricsElement: HTMLElement): string {
   if (observedLyricsElement !== lyricsElement || !animateScrollObserver) {
@@ -44,10 +242,12 @@ function getCachedAnimateScroll(lyricsElement: HTMLElement): string {
 
 export function resetScrollHostCache(): void {
   cachedTabRenderer = null;
+  activeScrollElement = null;
   observedLyricsElement = null;
   cachedAnimateScroll = null;
   animateScrollObserver?.disconnect();
   animateScrollObserver = null;
+  teardownScrollHostObservers();
 }
 
 function computeViewVisibility(): boolean {
@@ -115,6 +315,11 @@ export const ytmHost: LyricsRendererHost = {
     }
     if (!el) return null;
 
+    activeScrollElement = el;
+    if (AppState.isOptimizedScrollHostEnabled) {
+      ensureScrollHostObservers(el);
+    }
+
     // Only apply the patch once per element instance
     if ((el as any).__blyrics_scroll_patched) {
       return el;
@@ -124,33 +329,67 @@ export const ytmHost: LyricsRendererHost = {
     if (originalDescriptor && originalDescriptor.set && originalDescriptor.get) {
       Object.defineProperty(el, "scrollTop", {
         get() {
-          return originalDescriptor.get!.call(this);
+          if (this !== activeScrollElement || !AppState.isOptimizedScrollHostEnabled) {
+            return originalDescriptor.get!.call(this);
+          }
+          ensureScrollHostObservers(this as HTMLElement);
+          if (cachedScrollTop !== null) {
+            return cachedScrollTop;
+          }
+          cachedScrollTop = originalDescriptor.get!.call(this);
+          return cachedScrollTop;
         },
         set(value: number) {
-          const currentScrollTop = originalDescriptor.get!.call(this);
+          if (this !== activeScrollElement || !AppState.isOptimizedScrollHostEnabled) {
+            const currentScrollTop = originalDescriptor.get!.call(this);
+            const scrollDeltaPx = value - currentScrollTop;
+            applyGlassyFlowFlip(scrollDeltaPx, false);
+            return originalDescriptor.set!.call(this, value);
+          }
+          ensureScrollHostObservers(this as HTMLElement);
+          const numericValue = Number(value);
+          if (
+            Number.isFinite(numericValue) &&
+            cachedScrollTop !== null &&
+            (numericValue === cachedScrollTop || (numericValue <= 0 && cachedScrollTop === 0))
+          ) {
+            return;
+          }
+          const currentScrollTop =
+            cachedScrollTop !== null ? cachedScrollTop : originalDescriptor.get!.call(this);
           const scrollDeltaPx = value - currentScrollTop;
-          if (scrollDeltaPx !== 0) {
-            // GlassyFlow FLIP scroll hack interception
-            const lyricsElement = document.getElementById(LYRICS_WRAPPER_ID)?.firstElementChild as HTMLElement;
-            if (lyricsElement) {
-              const optimized = AppState.isOptimizedScrollHostEnabled;
-              const animateScroll = optimized
-                ? getCachedAnimateScroll(lyricsElement)
-                : getComputedStyle(lyricsElement).getPropertyValue("--blyrics-animate-scroll").trim();
-              if (animateScroll === "0") {
-                lyricsElement.style.transition = "none";
-                lyricsElement.style.transform = `translate(0px, ${scrollDeltaPx}px)`;
-                if (!optimized) {
-                  lyricsElement.getBoundingClientRect(); // force reflow
-                }
-              }
+          const result = originalDescriptor.set!.call(this, value);
+          if (getCachedScrollBehavior(this as HTMLElement) === "smooth") {
+            invalidateScrollHostTop();
+          } else {
+            const actualScrollTop = originalDescriptor.get!.call(this);
+            cachedScrollTop = actualScrollTop;
+            if (actualScrollTop !== currentScrollTop) {
+              armProgrammaticScroll();
             }
           }
-          return originalDescriptor.set!.call(this, value);
+          applyGlassyFlowFlip(scrollDeltaPx, true);
+          return result;
         },
         configurable: true,
-        enumerable: true
+        enumerable: true,
       });
+      patchReadonlyMetric(
+        el,
+        "scrollHeight",
+        () => cachedScrollHeight,
+        value => {
+          cachedScrollHeight = value;
+        }
+      );
+      patchReadonlyMetric(
+        el,
+        "clientHeight",
+        () => cachedClientHeight,
+        value => {
+          cachedClientHeight = value;
+        }
+      );
       (el as any).__blyrics_scroll_patched = true;
     }
 
@@ -160,5 +399,11 @@ export const ytmHost: LyricsRendererHost = {
   get log(): LogSink {
     return logCore;
   },
-  debug: { beginFrame: resetDebugRender, resize: resizeCanvas },
+  debug: {
+    beginFrame: resetDebugRender,
+    resize() {
+      resizeCanvas();
+      invalidateScrollHostMetrics();
+    },
+  },
 };
