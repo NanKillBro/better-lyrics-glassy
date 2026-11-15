@@ -71,6 +71,19 @@ export default function initializePlayerBridge() {
         cachedContentRect = player.getVideoContentRect();
       }
 
+      const videoDetails = playerResponse?.videoDetails;
+      const playerThumbnails = videoDetails?.videoId === video_id ? videoDetails?.thumbnail?.thumbnails : null;
+      const bestThumb = Array.isArray(playerThumbnails) ? playerThumbnails[playerThumbnails.length - 1] : null;
+      const thumbnail =
+        typeof bestThumb?.url === "string" && bestThumb.url
+          ? {
+              url: bestThumb.url,
+              isSquare:
+                (Number(bestThumb.width) > 0 && Number(bestThumb.height) > 0 && bestThumb.width === bestThumb.height) ||
+                /w(\d+)-h\1\b/.test(bestThumb.url),
+            }
+          : undefined;
+
       const { isPlaying, isBuffering, isSeeking, isUiSeeking } = player.getPlayerStateObject();
       document.dispatchEvent(
         new CustomEvent("blyrics-send-player-time", {
@@ -86,6 +99,7 @@ export default function initializePlayerBridge() {
             playing: isPlaying && !isBuffering && !isSeeking && !isUiSeeking,
             playbackRate: observedVideoElement?.playbackRate ?? 1,
             contentRect: cachedContentRect ?? { width: 0, height: 0 },
+            ...(thumbnail ? { thumbnail } : {}),
           },
         })
       );

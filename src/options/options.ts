@@ -101,6 +101,7 @@ interface Options extends VideoQualitySettings {
   isAdCheckEnabled: boolean;
   isOptimizedScrollHostEnabled: boolean;
   isOptimizedProgressBarEnabled: boolean;
+  isFastPipArtworkEnabled: boolean;
   isPictureInPictureEnabled: boolean;
   isPictureInPictureAutoRestoreEnabled: boolean;
   pipWindowLayout: string;
@@ -181,6 +182,7 @@ const getOptionsFromForm = (): Options => {
     isOptimizedScrollHostEnabled: (document.getElementById("isOptimizedScrollHostEnabled") as HTMLInputElement).checked,
     isOptimizedProgressBarEnabled: (document.getElementById("isOptimizedProgressBarEnabled") as HTMLInputElement)
       .checked,
+    isFastPipArtworkEnabled: (document.getElementById("isFastPipArtworkEnabled") as HTMLInputElement).checked,
     isPictureInPictureEnabled: (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked,
     isPictureInPictureAutoRestoreEnabled: (
       document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement
@@ -380,6 +382,7 @@ const restoreOptions = (): void => {
     isAdCheckEnabled: false,
     isOptimizedScrollHostEnabled: false,
     isOptimizedProgressBarEnabled: false,
+    isFastPipArtworkEnabled: false,
     isPictureInPictureEnabled: true,
     isPictureInPictureAutoRestoreEnabled: false,
     pipWindowLayout: "horizontal",
@@ -488,6 +491,7 @@ const setOptionsInForm = (items: Options): void => {
     items.isOptimizedScrollHostEnabled;
   (document.getElementById("isOptimizedProgressBarEnabled") as HTMLInputElement).checked =
     items.isOptimizedProgressBarEnabled;
+  (document.getElementById("isFastPipArtworkEnabled") as HTMLInputElement).checked = items.isFastPipArtworkEnabled;
   (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked = items.isPictureInPictureEnabled;
   (document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement).checked =
     items.isPictureInPictureAutoRestoreEnabled;

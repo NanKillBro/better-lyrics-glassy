@@ -24,6 +24,10 @@ export interface PlayerDetails {
     width: number;
     height: number;
   };
+  thumbnail?: {
+    url: string;
+    isSquare: boolean;
+  };
 }
 
 interface AppStateType {
@@ -78,6 +82,7 @@ interface AppStateType {
   isAdCheckEnabled: boolean;
   isOptimizedScrollHostEnabled: boolean;
   isOptimizedProgressBarEnabled: boolean;
+  isFastPipArtworkEnabled: boolean;
 }
 
 export const AppState: AppStateType = {
@@ -132,6 +137,7 @@ export const AppState: AppStateType = {
   isAdCheckEnabled: false,
   isOptimizedScrollHostEnabled: false,
   isOptimizedProgressBarEnabled: false,
+  isFastPipArtworkEnabled: false,
 };
 
 export function reloadLyrics(): void {

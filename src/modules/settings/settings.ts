@@ -188,6 +188,11 @@ function applyOptimizedProgressBarSetting(enabled: boolean): void {
   syncProgressBarOptimizationState(enabled);
 }
 
+function applyFastPipArtworkSetting(enabled: boolean): void {
+  if (AppState.isFastPipArtworkEnabled === enabled) return;
+  AppState.isFastPipArtworkEnabled = enabled;
+}
+
 export function loadPerformanceSettings(): void {
   getStorage(
     {
@@ -195,12 +200,14 @@ export function loadPerformanceSettings(): void {
       isAdCheckEnabled: false,
       isOptimizedScrollHostEnabled: false,
       isOptimizedProgressBarEnabled: false,
+      isFastPipArtworkEnabled: false,
     },
     items => {
       applyVisibilityCacheSetting(items.isVisibilityCacheEnabled === true);
       applyAdCheckSetting(items.isAdCheckEnabled === true);
       applyOptimizedScrollHostSetting(items.isOptimizedScrollHostEnabled === true);
       applyOptimizedProgressBarSetting(items.isOptimizedProgressBarEnabled === true);
+      applyFastPipArtworkSetting(items.isFastPipArtworkEnabled === true);
     }
   );
 }
@@ -222,6 +229,9 @@ export function initPerformanceSettingsListener(): () => void {
     }
     if ("isOptimizedProgressBarEnabled" in changes) {
       applyOptimizedProgressBarSetting(changes.isOptimizedProgressBarEnabled.newValue === true);
+    }
+    if ("isFastPipArtworkEnabled" in changes) {
+      applyFastPipArtworkSetting(changes.isFastPipArtworkEnabled.newValue === true);
     }
     if ("isStylizedAnimationsEnabled" in changes) {
       void applyStylizedAnimationsSetting(changes.isStylizedAnimationsEnabled.newValue !== false);

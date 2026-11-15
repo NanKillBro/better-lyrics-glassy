@@ -32,6 +32,7 @@ export interface PictureInPictureViewDependencies {
     maxCheckCount?: number,
     signal?: AbortSignal
   ) => Promise<PictureInPictureSongMetadata | null>;
+  readonly isFastArtworkEnabled?: () => boolean;
   readonly resetScrollResume: () => void;
   /**
    * Where the window's diagnostics go. The isolated world routes them through the extension's

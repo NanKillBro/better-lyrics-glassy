@@ -42,8 +42,14 @@ import {
 } from "@modules/ui/pictureInPicture/modeSwitch";
 import type {
   PictureInPicturePlaybackSnapshot,
+  PictureInPictureSongMetadata,
   PictureInPictureViewDependencies,
 } from "@modules/ui/pictureInPicture/types";
+import {
+  type ArtworkLoadCallbacks,
+  FAST_ARTWORK_STALE_GRACE_MS,
+  FastArtworkController,
+} from "@modules/ui/pictureInPicture/fastArtwork";
 import type { VideoMirrorState } from "@modules/ui/pictureInPicture/videoMirrorState";
 import { stageTextScale } from "@modules/ui/pictureInPicture/stageTextScale";
 import { planVideoSwap } from "@modules/ui/pictureInPicture/videoSwapPlan";
@@ -124,7 +130,7 @@ const MARQUEE_REARM_DELAY = 700;
 // The cover already on screen outlives a track change so that the common case,
 // where the next cover is prefetched and decodes at once, never blinks. Past
 // this the metadata poll is genuinely slow and stale art is the worse lie.
-const ARTWORK_STALE_GRACE = 600;
+export const ARTWORK_STALE_GRACE = 600;
 
 const MODE_SWITCH_LIMIT_MS = 3000;
 const MODE_SWITCH_RESIZE_LIMIT_MS = 2000;
@@ -315,6 +321,8 @@ export class PictureInPictureLyricsView {
   private stageTrack: MediaStreamTrack | null = null;
   private readonly lifecycleController = new AbortController();
   private artworkController: AbortController | null = null;
+  private activeArtworkAttempt: AbortController | null = null;
+  private readonly fastArtwork = new FastArtworkController();
   private currentVideoId: string | null = null;
   private lastVisibleMetadataCheck = 0;
   private lastPlayingState: boolean | null = null;
@@ -779,6 +787,8 @@ export class PictureInPictureLyricsView {
       this.modeObserver.refresh();
       if (this.holdTimer !== null) this.expireHold();
       this.checkModeSwitchSettled();
+    } else if (detail.thumbnail && this.pendingArtworkVideoId === detail.videoId && this.dependencies.isFastArtworkEnabled?.()) {
+      this.fastArtwork.hintThumbnail(detail.thumbnail);
     }
 
     const now = Date.now();
@@ -818,6 +828,9 @@ export class PictureInPictureLyricsView {
     this.lifecycleController.abort();
     this.modeObserver.disconnect();
     this.artworkController?.abort();
+    this.activeArtworkAttempt?.abort();
+    this.activeArtworkAttempt = null;
+    this.fastArtwork.reset();
     this.clearArtworkStaleTimer();
     this.endModeSwitch();
     this.cancelPendingResize();
@@ -964,7 +977,7 @@ export class PictureInPictureLyricsView {
     this.lastVisibleMetadataCheck = Date.now();
     if (!isModeSwitch) this.setHeaderText(detail.song, detail.artist, true);
     this.clearAnimatedArtwork();
-    this.loadArtwork(detail.videoId);
+    this.loadArtwork(detail.videoId, detail.thumbnail);
   }
 
   // Only a song change is an event. The visible metadata poll and the canonical
@@ -1119,22 +1132,57 @@ export class PictureInPictureLyricsView {
     this.setHeaderText(metadata.title || this.headerRows[0].text, metadata.byline || this.headerRows[1].text);
   }
 
-  private loadArtwork(videoId: string): void {
+  private applyResolvedMetadata(metadata: PictureInPictureSongMetadata | null): void {
+    if (metadata) this.counterpartPair = counterpartPair(metadata.id, metadata.counterpartVideoId);
+    this.setHeaderText(
+      metadata?.displayTitle || this.headerRows[0].text,
+      metadata?.displayByline || metadata?.artist || this.headerRows[1].text
+    );
+  }
+
+  private loadArtwork(videoId: string, initialThumbnail?: PlayerDetails["thumbnail"]): void {
     this.artworkController?.abort();
     const controller = new AbortController();
     this.artworkController = controller;
     this.fallbackArtworkUrl = getFallbackArtworkUrl(videoId);
     this.pendingArtworkVideoId = videoId;
     this.clearArtworkStaleTimer();
-    this.scheduleArtworkWipe(ARTWORK_STALE_GRACE);
 
+    if (this.dependencies.isFastArtworkEnabled?.()) {
+      this.scheduleArtworkWipe(FAST_ARTWORK_STALE_GRACE_MS);
+      this.fastArtwork.load({
+        pipWindow: this.pipWindow,
+        sourceDocument: this.sourceDocument,
+        videoId,
+        signal: controller.signal,
+        initialThumbnail,
+        committedCoverUrl: this.committedCover?.url ?? null,
+        fallbackArtworkUrl: this.fallbackArtworkUrl,
+        getVisibleVideoId: () => getVisiblePlayerMetadata(this.sourceDocument).videoId,
+        getArtworkMetadata: this.dependencies.getArtworkMetadata,
+        onMetadataResolved: metadata => {
+          if (controller.signal.aborted || this.currentVideoId !== videoId) return;
+          this.applyResolvedMetadata(metadata);
+        },
+        startArtworkLoad: (url, callbacks) => {
+          if (controller.signal.aborted || this.currentVideoId !== videoId) return;
+          this.setArtwork(url, videoId, controller.signal, callbacks);
+        },
+        wipeArtworkImmediately: () => {
+          if (controller.signal.aborted || this.currentVideoId !== videoId) return;
+          this.pendingArtworkVideoId = null;
+          this.clearArtworkStaleTimer();
+          this.scheduleArtworkWipe(0);
+          this.checkModeSwitchSettled();
+        },
+      });
+      return;
+    }
+
+    this.scheduleArtworkWipe(ARTWORK_STALE_GRACE);
     void this.dependencies.getArtworkMetadata(videoId, 250, controller.signal).then(metadata => {
       if (controller.signal.aborted || this.currentVideoId !== videoId) return;
-      if (metadata) this.counterpartPair = counterpartPair(metadata.id, metadata.counterpartVideoId);
-      this.setHeaderText(
-        metadata?.displayTitle || this.headerRows[0].text,
-        metadata?.displayByline || metadata?.artist || this.headerRows[1].text
-      );
+      this.applyResolvedMetadata(metadata);
       // The fallback is a 16:9 video frame, so it only lands when the queue yielded no art at all.
       this.setArtwork(
         metadata?.thumbnail?.url ? getArtworkUrl(metadata.thumbnail.url) : this.fallbackArtworkUrl,
@@ -1147,34 +1195,59 @@ export class PictureInPictureLyricsView {
   // Loads into the hidden face and only transitions once that face has decoded:
   // fading in an undecoded image fades in nothing, which is how the placeholder
   // gets back on screen.
-  private setArtwork(url: string, videoId: string, songSignal: AbortSignal): void {
+  private setArtwork(url: string, videoId: string, songSignal: AbortSignal, callbacks?: ArtworkLoadCallbacks): void {
     if (songSignal.aborted) return;
     const nextIndex = 1 - this.artworkIndex;
     const image = this.artworkImages[nextIndex];
 
     // One controller per attempt, chained to the song's: the fallback reuses this
     // img, and reassigning src does not detach the previous load listener.
+    this.activeArtworkAttempt?.abort();
     const attempt = new AbortController();
+    this.activeArtworkAttempt = attempt;
     const { signal } = attempt;
     songSignal.addEventListener("abort", () => attempt.abort(), { once: true, signal });
 
-    const letterboxedUrl = getLetterboxedArtworkUrl(videoId);
-    const fallBack = (): void => {
-      if (url === letterboxedUrl) {
-        this.pendingArtworkVideoId = null;
-        this.checkModeSwitchSettled();
-        return;
-      }
+    const finishAttempt = (): void => {
       attempt.abort();
-      this.setArtwork(url === this.fallbackArtworkUrl ? letterboxedUrl : this.fallbackArtworkUrl, videoId, songSignal);
+      if (this.activeArtworkAttempt === attempt) this.activeArtworkAttempt = null;
     };
 
+    const letterboxedUrl = getLetterboxedArtworkUrl(videoId);
+    const fallBack = (): void => {
+      finishAttempt();
+      if (url === letterboxedUrl) {
+        if (callbacks) {
+          callbacks.onAllFailed();
+          if (callbacks.shouldWipeOnAllFailed()) {
+            this.pendingArtworkVideoId = null;
+            this.clearArtworkStaleTimer();
+            this.scheduleArtworkWipe(0);
+            this.checkModeSwitchSettled();
+          }
+        } else {
+          this.pendingArtworkVideoId = null;
+          this.checkModeSwitchSettled();
+        }
+        return;
+      }
+      this.setArtwork(
+        url === this.fallbackArtworkUrl ? letterboxedUrl : this.fallbackArtworkUrl,
+        videoId,
+        songSignal,
+        callbacks
+      );
+    };
+
+    let settled = false;
     const commit = (): void => {
-      if (signal.aborted || this.currentVideoId !== videoId) return;
+      if (settled || signal.aborted || this.currentVideoId !== videoId) return;
+      settled = true;
       if (url === this.fallbackArtworkUrl && image.naturalWidth <= MISSING_THUMBNAIL_WIDTH) {
         fallBack();
         return;
       }
+      finishAttempt();
       this.clearArtworkStaleTimer();
       // There is nothing to transition from when the placeholder is what is on screen, so the first
       // cover in a window, and any cover that lands after a slow lookup fell back, just appears.
@@ -1184,6 +1257,7 @@ export class PictureInPictureLyricsView {
       this.paintBackdrop(url, isFirstArtwork);
       this.committedCover = { url, letterboxed: url === letterboxedUrl };
       this.pendingArtworkVideoId = null;
+      callbacks?.onCommit(url);
       if (this.videoState === "on") {
         const hiddenIndex = 1 - this.artworkIndex;
         if (this.faceTracks[this.artworkIndex] !== null) this.syncFaceCover(this.artworkIndex);
@@ -1194,13 +1268,20 @@ export class PictureInPictureLyricsView {
       this.checkModeSwitchSettled();
     };
 
-    image.addEventListener("error", fallBack, { once: true, signal });
+    image.addEventListener(
+      "error",
+      () => {
+        if (settled || signal.aborted) return;
+        settled = true;
+        fallBack();
+      },
+      { once: true, signal }
+    );
+    image.addEventListener("load", commit, { once: true, signal });
     image.toggleAttribute("data-letterboxed", url === letterboxedUrl);
     image.src = url;
 
-    if (!image.complete) {
-      image.addEventListener("load", commit, { once: true, signal });
-    } else if (image.naturalWidth > 0) {
+    if (image.complete && image.naturalWidth > 0) {
       commit();
     }
   }

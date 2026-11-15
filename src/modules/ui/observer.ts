@@ -19,6 +19,7 @@ import { onAutoSwitchEnabled, onFullScreenDisabled, wakeDockIdle } from "@module
 import { adjustLyricOffset, OFFSET_STEP, OFFSET_STEP_LARGE } from "@modules/ui/lyricsDock/offset";
 import { currentTickOptions, mainView } from "@modules/ui/mainLyricsView";
 import { preloadArtwork } from "@modules/ui/pictureInPicture/lyricsView";
+import { preloadFastPipNextArtwork } from "@modules/ui/pictureInPicture/fastArtwork";
 import { revealQueueAutoplaySection } from "@modules/ui/queueAutoplay";
 import {
   closePlayerPageIfOpenedForFullscreen,
@@ -454,7 +455,18 @@ export function initializeLyrics(): void {
             preloadHighResThumbnail(next.smallThumbnail);
             // The floating window asks for a square crop, which is a different
             // cache entry from the one above, so it needs warming separately.
-            if (AppState.isPictureInPictureOpen && next.thumbnail?.url) preloadArtwork(next.thumbnail.url);
+            if (AppState.isPictureInPictureOpen) {
+              if (AppState.isFastPipArtworkEnabled && AppState.lastVideoId) {
+                void preloadFastPipNextArtwork({
+                  currentVideoId: AppState.lastVideoId,
+                  prefetchedNext: next,
+                  getArtworkMetadata,
+                  isPipOpen: () => AppState.isPictureInPictureOpen,
+                });
+              } else if (next.thumbnail?.url) {
+                preloadArtwork(next.thumbnail.url);
+              }
+            }
             await preFetchLyrics(
               {
                 song: next.title,

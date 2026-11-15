@@ -306,7 +306,8 @@ export function setupRequestSniffer(): () => void {
             }
 
             let primaryId = primaryRenderer?.videoId;
-            let primaryTitle = primaryRenderer?.title.runs[0].text;
+            if (!primaryId) return null;
+            let primaryTitle = primaryRenderer?.title?.runs?.[0]?.text ?? "";
 
             function extractByLineInfo(longByLineText: LongBylineText): [string, string] {
               const artists: string[] = [];
@@ -344,10 +345,10 @@ export function setupRequestSniffer(): () => void {
 
             let [primaryArtist, primaryAlbum] = extractByLineInfo(primaryRenderer?.longBylineText);
 
-            let primaryThumbnails = primaryRenderer.thumbnail.thumbnails;
-            let primaryThumbnail = primaryThumbnails[primaryThumbnails.length - 1];
-            let primarySmallThumbnail = primaryThumbnails[0];
-            let primaryIsVideo = primaryThumbnail?.height !== primaryThumbnail?.width;
+            let primaryThumbnails = primaryRenderer.thumbnail?.thumbnails ?? [];
+            let primaryThumbnail = primaryThumbnails[primaryThumbnails.length - 1] ?? { url: "", width: 0, height: 0 };
+            let primarySmallThumbnail = primaryThumbnails[0] ?? primaryThumbnail;
+            let primaryIsVideo = primaryThumbnail.height !== primaryThumbnail.width;
 
             let primary = {
               id: primaryId,
@@ -355,21 +356,24 @@ export function setupRequestSniffer(): () => void {
               artist: primaryArtist,
               album: primaryAlbum,
               isVideo: primaryIsVideo,
-              durationMs: parseTime(primaryRenderer.lengthText.runs[0].text),
+              durationMs: parseTime(primaryRenderer.lengthText?.runs?.[0]?.text ?? "0:00"),
               thumbnail: primaryThumbnail,
               smallThumbnail: primarySmallThumbnail,
             };
 
-            if (counterPartRenderer) {
-              let counterpartId = counterPartRenderer?.playlistPanelVideoRenderer.videoId;
-              let counterpartTitle = counterPartRenderer.playlistPanelVideoRenderer.title.runs[0].text;
-              let counterpartThumbnails = counterPartRenderer.playlistPanelVideoRenderer.thumbnail.thumbnails;
-              let counterpartThumbnail = counterpartThumbnails[counterpartThumbnails.length - 1];
-              let counterpartSmallThumbnail = counterpartThumbnails[0];
+            const counterpartRenderer = counterPartRenderer?.playlistPanelVideoRenderer;
+            if (counterpartRenderer?.videoId) {
+              let counterpartId = counterpartRenderer.videoId;
+              let counterpartTitle = counterpartRenderer.title?.runs?.[0]?.text ?? "";
+              let counterpartThumbnails = counterpartRenderer.thumbnail?.thumbnails ?? [];
+              let counterpartThumbnail = counterpartThumbnails[counterpartThumbnails.length - 1] ?? {
+                url: "",
+                width: 0,
+                height: 0,
+              };
+              let counterpartSmallThumbnail = counterpartThumbnails[0] ?? counterpartThumbnail;
               let counterpartIsVideo = counterpartThumbnail.height !== counterpartThumbnail.width;
-              let [counterpartArtist, counterpartAlbum] = extractByLineInfo(
-                counterPartRenderer?.playlistPanelVideoRenderer.longBylineText
-              );
+              let [counterpartArtist, counterpartAlbum] = extractByLineInfo(counterpartRenderer.longBylineText);
 
               return {
                 primary,
@@ -379,7 +383,7 @@ export function setupRequestSniffer(): () => void {
                   artist: counterpartArtist,
                   album: counterpartAlbum,
                   isVideo: counterpartIsVideo,
-                  durationMs: parseTime(counterPartRenderer.playlistPanelVideoRenderer.lengthText.runs[0].text),
+                  durationMs: parseTime(counterpartRenderer.lengthText?.runs?.[0]?.text ?? "0:00"),
                   segmentMap: content.playlistPanelVideoWrapperRenderer!.counterpart[0].segmentMap,
                   thumbnail: counterpartThumbnail,
                   smallThumbnail: counterpartSmallThumbnail,

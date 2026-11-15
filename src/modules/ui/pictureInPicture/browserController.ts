@@ -8,7 +8,7 @@ import { AppState } from "@core/appState";
 import { versionedStylesheetUrl } from "@core/extensionStylesheet";
 import { t } from "@core/i18n";
 import { getStorage } from "@core/storage";
-import { getArtworkMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
+import { getArtworkMetadata, getSongMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
 import { resumeAllAutoscroll } from "@braccato/core";
 import { getPictureInPictureCapability } from "@modules/ui/pictureInPicture/capability";
 import { onSignal, sendInit, sendMetadata } from "@modules/ui/pictureInPicture/bridge";
@@ -17,6 +17,7 @@ import { AD_UP_NEXT_SLOT } from "@modules/ui/pictureInPicture/intermissionText";
 import { CONTRIBUTOR_CREDIT_LABEL_KEYS } from "@modules/lyrics/contributorCredit";
 import { publishPictureInPictureLyrics } from "@modules/ui/pictureInPicture/lyricsPublisher";
 import { DEFAULT_ARTWORK_TRANSITION, DEFAULT_TEXT_TRANSITION } from "@modules/ui/pictureInPicture/lyricsView";
+import { preloadFastPipNextArtwork } from "@modules/ui/pictureInPicture/fastArtwork";
 import { createPictureInPictureHost } from "@modules/ui/pictureInPicture/pipHost";
 import { DEFAULT_WINDOW_LAYOUT } from "@modules/ui/pictureInPicture/windowSize";
 import type { PictureInPictureToggle, PictureInPictureViewDependencies } from "@modules/ui/pictureInPicture/types";
@@ -76,6 +77,7 @@ const PIP_SETTING_DEFAULTS = {
 const isolatedViewDependencies: PictureInPictureViewDependencies = {
   translate: t,
   getArtworkMetadata,
+  isFastArtworkEnabled: () => AppState.isFastPipArtworkEnabled,
   resetScrollResume: resumeAllAutoscroll,
   get log(): LogSink {
     return logCore;
@@ -92,6 +94,14 @@ function markPictureInPictureOpened(): void {
   // A window opened mid-song has to be given the lyrics that are already on screen; nothing else
   // will publish them until the next injection.
   publishPictureInPictureLyrics();
+  if (AppState.isFastPipArtworkEnabled && AppState.lastVideoId) {
+    void preloadFastPipNextArtwork({
+      currentVideoId: AppState.lastVideoId,
+      getSongMetadata,
+      getArtworkMetadata,
+      isPipOpen: () => AppState.isPictureInPictureOpen,
+    });
+  }
 }
 
 function markPictureInPictureClosed(): void {
