@@ -29,6 +29,7 @@ import {
   SHADERS_AMO_URL,
   SHADERS_CWS_URL,
   SHADERS_DETECTION_SELECTOR,
+  SWEEP_CONTEXT_CLASS,
   type SyncType,
   TAB_RENDERER_SELECTOR,
   TRANSLATED_LYRICS_CLASS,
@@ -315,7 +316,7 @@ export function createLyricsWrapper(keepContents = false): HTMLElement {
     const range = selection.getRangeAt(0);
     const fragment = range.cloneContents();
 
-    fragment.querySelectorAll(`.${WORD_HIGHLIGHT_CLASS}`).forEach(el => el.remove());
+    fragment.querySelectorAll(`.${WORD_HIGHLIGHT_CLASS}, .${SWEEP_CONTEXT_CLASS}`).forEach(el => el.remove());
 
     const lineElements = fragment.querySelectorAll(`.${LINE_CLASS}`);
 
