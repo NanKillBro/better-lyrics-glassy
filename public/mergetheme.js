@@ -3385,6 +3385,7 @@ let nankillPrevBelowRanks = [];
 const nankillSharpenTimers = new Map();
 const nankillSharpenDelayMap = new WeakMap();
 const nankillPausedLines = new WeakSet();
+const nankillPausedRemainingS = new WeakMap();
 let nankillRateVideo = null;
 
 function getNankillPlaybackRate() {
@@ -3471,6 +3472,7 @@ function syncNankillSharpenForLine(container, line, forceReschedule) {
 
   if (document.documentElement.hasAttribute('blyrics-unblur-upcoming')) {
     nankillPausedLines.delete(line);
+    nankillPausedRemainingS.delete(line);
     nankillSharpenDelayMap.delete(line);
     cancelNankillSharpenTimer(line);
     if (line.classList.contains(NANKILL_SHARPEN_CLASS)) {
@@ -3484,6 +3486,7 @@ function syncNankillSharpenForLine(container, line, forceReschedule) {
 
   if (!isAnimating) {
     nankillPausedLines.delete(line);
+    nankillPausedRemainingS.delete(line);
     nankillSharpenDelayMap.delete(line);
     cancelNankillSharpenTimer(line);
     if (line.classList.contains(NANKILL_SHARPEN_CLASS)) {
@@ -3494,12 +3497,27 @@ function syncNankillSharpenForLine(container, line, forceReschedule) {
 
   if (isPaused) {
     nankillPausedLines.add(line);
+    const pending = nankillSharpenTimers.get(line);
+    if (pending) {
+      const elapsedWallS = (performance.now() - pending.installedAt) / 1000;
+      nankillPausedRemainingS.set(line, pending.delayS - elapsedWallS * pending.rate);
+    }
     cancelNankillSharpenTimer(line);
     return;
   }
 
   const wasPaused = nankillPausedLines.has(line);
   nankillPausedLines.delete(line);
+  const pausedRemainingS = nankillPausedRemainingS.get(line);
+  nankillPausedRemainingS.delete(line);
+
+  /* A pause freezes media time, so a line that was already sharpened stays
+     sharpened on resume. Re-deriving its schedule from --blyrics-anim-delay
+     would read the stale 2s pre-arm value (glassyFlowBridge never refreshes
+     the property for an already-animating line) and dim the line for ~1.7s. */
+  if (wasPaused && line.classList.contains(NANKILL_SHARPEN_CLASS)) {
+    return;
+  }
 
   const delayStr = line.style.getPropertyValue('--blyrics-anim-delay');
   const delayChanged = nankillSharpenDelayMap.get(line) !== delayStr;
@@ -3514,7 +3532,9 @@ function syncNankillSharpenForLine(container, line, forceReschedule) {
 
   const rate = getNankillPlaybackRate();
   let remainingDelayS;
-  if (forceReschedule && existingEntry && !delayChanged && !wasPaused) {
+  if (wasPaused && !delayChanged && pausedRemainingS !== undefined) {
+    remainingDelayS = pausedRemainingS;
+  } else if (forceReschedule && existingEntry && !delayChanged && !wasPaused) {
     const elapsedWallS = (performance.now() - existingEntry.installedAt) / 1000;
     remainingDelayS = existingEntry.delayS - elapsedWallS * existingEntry.rate;
   } else {
@@ -3738,6 +3758,7 @@ function attachBehindObserver(container) {
               cancelNankillSharpenTimer(node);
               nankillSharpenDelayMap.delete(node);
               nankillPausedLines.delete(node);
+              nankillPausedRemainingS.delete(node);
             }
           }
           for (const node of r.addedNodes) {
