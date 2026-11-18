@@ -72,7 +72,7 @@
         stiffness: 110,
         damping: 15,
         mass: 1,
-        scrollDelay: 200,
+        scrollDelay: 240,
         deltaAdaptiveEnabled: true,
         avgLineHeightFallback: 48,
         arriveEpsilon: 0.1,
