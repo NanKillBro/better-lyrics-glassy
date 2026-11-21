@@ -201,7 +201,7 @@ function makeFakeElement(
 
   assert.deepEqual(line.parts[0].wobbleElements, [houseSpan, houseHighlight]);
   assert.deepEqual(line.parts[1].wobbleElements, [wifeSpan, wifeHighlight, wifeGlowHighlight]);
-  assert.deepEqual(line.parts[2].wobbleElements, [longGroup], "long word group stays untouched");
+  assert.deepEqual(line.parts[2].wobbleElements, [longSpan, longHighlight], "long word group retargets like any other");
   assert.deepEqual(line.parts[3].wobbleElements, [bidiGroup], "bidi-sensitive group stays untouched");
 
   // Simulate async timed romanization appending new parts to the same line

@@ -10,7 +10,7 @@ import {
   resetPlaybackClock as resetLegacyPlaybackClock,
   resumeAllAutoscroll as resumeLegacyAutoscroll,
 } from "@braccato/core-legacy";
-import { BIDI_SENSITIVE_CLASS, LONG_WORD_GROUP_CLASS, WORD_CLASS, WORD_GROUP_CLASS } from "@braccato/core/constants";
+import { BIDI_SENSITIVE_CLASS, WORD_CLASS, WORD_GROUP_CLASS } from "@braccato/core/constants";
 import { testJoiningScript } from "@braccato/core/text";
 import {
   injectRomanization as injectModernRomanization,
@@ -190,9 +190,6 @@ export function installWordWobblePatch(win: Window | WindowWithElement | null | 
 
 function shouldKeepGroupWobble(group: HTMLElement | null): boolean {
   if (!group || !group.classList?.contains?.(WORD_GROUP_CLASS)) {
-    return true;
-  }
-  if (group.classList.contains(LONG_WORD_GROUP_CLASS)) {
     return true;
   }
   if (typeof group.closest === "function" && group.closest(`.${BIDI_SENSITIVE_CLASS}`) !== null) {
