@@ -244,7 +244,7 @@ function syncOtherThemeSettings(activeIsComposite: boolean, css: string): void {
 }
 
 /**
- * Registers a custom `blyrics-*` theme setting on both modern (`1.21.0`) and legacy (`1.20.0`)
+ * Registers a custom `blyrics-*` theme setting on both modern (`1.21.6`) and legacy (`1.20.0`)
  * theme registries so mode switches observe the same build configuration.
  */
 export function registerThemeSetting(
@@ -281,7 +281,7 @@ export function resumeAllAutoscroll(): void {
 
 /**
  * Creates a delegating lyrics renderer selecting legacy `@braccato/core-legacy` (`1.20.0`, default)
- * or composite `@braccato/core` (`1.21.0`) from `options.document`.
+ * or composite `@braccato/core` (`1.21.6`) from `options.document`.
  */
 export function createLyricsRenderer(options: LyricsRendererOptions): LyricsRenderer {
   installWordWobblePatch(options.window);

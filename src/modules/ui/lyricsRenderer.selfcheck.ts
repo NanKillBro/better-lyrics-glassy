@@ -362,7 +362,7 @@ function makeFakeElement(
   injectTranslation(legacyEnv.doc, legacyTarget.lyricEl, "hello", "en");
   assert.ok(legacyTarget.lyricEl.querySelector(`.${ROMANIZED_LYRICS_CLASS}`), "legacy timed romanization mounted");
   assert.ok(legacyTarget.lyricEl.querySelector(`.${TRANSLATED_LYRICS_CLASS}`), "legacy translation mounted");
-  assert.equal(legacyTarget.lyricEl.querySelector(`.${SWEEP_CELL_CLASS}`), null, "legacy mode must not emit 1.21.0 sweep DOM");
+  assert.equal(legacyTarget.lyricEl.querySelector(`.${SWEEP_CELL_CLASS}`), null, "legacy mode must not emit 1.21.6 sweep DOM");
   assert.equal(legacyTarget.line.parts.length, 1);
   assert.equal(legacyTarget.line.parts[0].sweep, undefined);
 
@@ -372,7 +372,7 @@ function makeFakeElement(
   injectTranslation(compositeEnv.doc, compositeTarget.lyricEl, "hello", "en");
   assert.ok(compositeTarget.lyricEl.querySelector(`.${ROMANIZED_LYRICS_CLASS}`), "composite timed romanization mounted");
   assert.ok(compositeTarget.lyricEl.querySelector(`.${TRANSLATED_LYRICS_CLASS}`), "composite translation mounted");
-  assert.ok(compositeTarget.lyricEl.querySelector(`.${SWEEP_CELL_CLASS}`), "composite mode emits 1.21.0 sweep DOM");
+  assert.ok(compositeTarget.lyricEl.querySelector(`.${SWEEP_CELL_CLASS}`), "composite mode emits 1.21.6 sweep DOM");
   assert.equal(compositeTarget.line.parts.length, 1);
   assert.ok(Array.isArray(compositeTarget.line.parts[0].sweep), "composite mode populates PartData.sweep");
 }

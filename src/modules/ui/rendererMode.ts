@@ -27,7 +27,7 @@ const PIP_MARQUEE_PROPERTIES: readonly PropertyDefinition[] = [
 const LEGACY_ANCHOR_SELECTORS = ['link[id="blyrics-style-css/blyrics"]', 'link[href*="css/blyrics/lyrics.css"]'] as const;
 
 /**
- * Returns whether composite (`@braccato/core@1.21.0`) rendering is active on `doc`.
+ * Returns whether composite (`@braccato/core@1.21.6`) rendering is active on `doc`.
  */
 export function readRendererMode(doc: Document | null | undefined): boolean {
   return doc?.documentElement?.hasAttribute?.(COMPOSITE_LYRICS_ATTR) === true;
