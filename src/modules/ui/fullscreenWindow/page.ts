@@ -54,9 +54,11 @@ interface Elements {
   readonly artImage: HTMLImageElement;
   readonly artNext: HTMLImageElement;
   readonly artVideo: HTMLVideoElement;
+  readonly artVideoNext: HTMLVideoElement;
   readonly mvVideo: HTMLVideoElement;
   readonly title: HTMLElement;
   readonly artist: HTMLElement;
+  readonly fsColumn: HTMLElement;
   readonly loader: HTMLElement;
   readonly mount: HTMLElement;
   readonly scroll: HTMLElement;
@@ -84,6 +86,10 @@ let artSafetyTimer: number | null = null;
 let bgUpdateTimer: number | null = null;
 let artUrl: string | null = null;
 let animatedUrl: string | null = null;
+let artVideoFront = 0;
+let animatedArtGeneration = 0;
+let animatedArtRemoveTimer: number | null = null;
+let animatedArtSafetyTimer: number | null = null;
 let appliedArtistKey = "";
 let scrollScriptInjected = false;
 let flipInstalled = false;
@@ -93,6 +99,8 @@ let videoMirrorDesired = false;
 let hasDecodedVideoFrame = false;
 let videoAspectRatio = 16 / 9;
 let videoReceiver: VideoFrameReceiver | null = null;
+let cursorIdleTimer: number | null = null;
+let songInfoAnimation: Animation | null = null;
 const sharpenMarker = new SharpenMarker();
 
 function reportDebug(): void {
@@ -130,9 +138,11 @@ function queryElements(): Elements {
     artImage: get("#blfw-art-image"),
     artNext: get("#blfw-art-image-next"),
     artVideo: get("#blfw-art-video"),
+    artVideoNext: get("#blfw-art-video-next"),
     mvVideo: get("#blfw-mv-video"),
     title: get("#blyrics-title"),
     artist: get("#blyrics-artist"),
+    fsColumn: get("#blyrics-fs-column"),
     loader: get("#blyrics-loader"),
     mount: get("#blyrics-wrapper"),
     scroll: get("#tab-renderer"),
@@ -329,6 +339,23 @@ function applyArtworkCrossfade(nextUrl: string): void {
   }
 }
 
+function animateSongInfo(): void {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  songInfoAnimation?.cancel();
+  songInfoAnimation = elements.fsColumn.animate(
+    [
+      { transform: "translateY(0)", opacity: 0 },
+      { transform: "translateY(-64px)", opacity: 1 },
+    ],
+    {
+      duration: 500,
+      easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+      delay: 100,
+      fill: "both",
+    },
+  );
+}
+
 function applyMainAlbumColors(track: FullscreenTrackInfo): boolean {
   const root = document.documentElement.style;
   if (track.albumColor) root.setProperty("--ytmusic-album-color", track.albumColor);
@@ -337,8 +364,103 @@ function applyMainAlbumColors(track: FullscreenTrackInfo): boolean {
   return Boolean(track.albumColor || track.albumColorDark);
 }
 
+function artVideoAt(index: number): HTMLVideoElement {
+  return index === 0 ? elements.artVideo : elements.artVideoNext;
+}
+
+function clearArtVideo(video: HTMLVideoElement): void {
+  video.oncanplay = null;
+  video.onerror = null;
+  video.classList.remove("is-visible");
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+}
+
+function stopAnimatedArtwork(): void {
+  animatedUrl = null;
+  animatedArtGeneration += 1;
+  if (animatedArtRemoveTimer !== null) {
+    window.clearTimeout(animatedArtRemoveTimer);
+    animatedArtRemoveTimer = null;
+  }
+  if (animatedArtSafetyTimer !== null) {
+    window.clearTimeout(animatedArtSafetyTimer);
+    animatedArtSafetyTimer = null;
+  }
+  elements.shell.removeAttribute("data-animated-art");
+  const front = artVideoAt(artVideoFront);
+  clearArtVideo(artVideoAt(1 - artVideoFront));
+  front.classList.remove("is-visible");
+  animatedArtRemoveTimer = window.setTimeout(() => {
+    animatedArtRemoveTimer = null;
+    clearArtVideo(front);
+  }, 650);
+}
+
+function startAnimatedArtwork(url: string): void {
+  animatedUrl = url;
+  const generation = ++animatedArtGeneration;
+  if (animatedArtRemoveTimer !== null) {
+    window.clearTimeout(animatedArtRemoveTimer);
+    animatedArtRemoveTimer = null;
+  }
+  if (animatedArtSafetyTimer !== null) {
+    window.clearTimeout(animatedArtSafetyTimer);
+    animatedArtSafetyTimer = null;
+  }
+
+  const frontIndex = artVideoFront;
+  const incomingIndex = 1 - frontIndex;
+  const front = artVideoAt(frontIndex);
+  const incoming = artVideoAt(incomingIndex);
+
+  incoming.style.transition = "none";
+  clearArtVideo(incoming);
+  void incoming.offsetWidth;
+  incoming.style.transition = "";
+  incoming.muted = true;
+  incoming.loop = true;
+  incoming.playsInline = true;
+  incoming.crossOrigin = "anonymous";
+  incoming.src = url;
+  incoming.load();
+  void incoming.play().catch(() => undefined);
+
+  incoming.onerror = () => {
+    if (generation !== animatedArtGeneration) return;
+    stopAnimatedArtwork();
+  };
+  incoming.oncanplay = () => {
+    if (generation !== animatedArtGeneration) return;
+    incoming.oncanplay = null;
+    incoming.onerror = null;
+    if (animatedArtSafetyTimer !== null) {
+      window.clearTimeout(animatedArtSafetyTimer);
+      animatedArtSafetyTimer = null;
+    }
+    front.id = "blfw-art-video-next";
+    incoming.id = "blfw-art-video";
+    artVideoFront = incomingIndex;
+    incoming.classList.add("is-visible");
+    front.classList.remove("is-visible");
+    elements.shell.setAttribute("data-animated-art", "true");
+    void incoming.play().catch(() => undefined);
+    animatedArtRemoveTimer = window.setTimeout(() => {
+      animatedArtRemoveTimer = null;
+      if (generation !== animatedArtGeneration) return;
+      clearArtVideo(front);
+    }, 650);
+  };
+  animatedArtSafetyTimer = window.setTimeout(() => {
+    animatedArtSafetyTimer = null;
+    if (generation === animatedArtGeneration) stopAnimatedArtwork();
+  }, 6000);
+}
+
 function applyTrack(next: FullscreenTrackInfo | null): void {
   if (!next) return;
+  const previousVideoId = lastVideoId;
   if (next.videoId !== lastVideoId) {
     lastVideoId = next.videoId;
     elements.artImage.classList.add("blfw-art--loading");
@@ -367,12 +489,8 @@ function applyTrack(next: FullscreenTrackInfo | null): void {
     elements.artist.replaceChildren();
   }
 
-  if (!next.animatedArtworkUrl && (animatedUrl !== null || elements.shell.hasAttribute("data-animated-art"))) {
-    animatedUrl = null;
-    elements.shell.removeAttribute("data-animated-art");
-    elements.artVideo.pause();
-    elements.artVideo.removeAttribute("src");
-    elements.artVideo.load();
+  if (!next.animatedArtworkUrl) {
+    if (animatedUrl !== null) stopAnimatedArtwork();
   }
 
   const hasMainColors = applyMainAlbumColors(next);
@@ -387,22 +505,11 @@ function applyTrack(next: FullscreenTrackInfo | null): void {
   }
 
   if (next.animatedArtworkUrl) {
-    if (next.animatedArtworkUrl !== animatedUrl) {
-      animatedUrl = next.animatedArtworkUrl;
-      elements.shell.removeAttribute("data-animated-art");
-      elements.artVideo.crossOrigin = "anonymous";
-      elements.artVideo.muted = true;
-      elements.artVideo.loop = true;
-      elements.artVideo.playsInline = true;
-      elements.artVideo.src = next.animatedArtworkUrl;
-      elements.artVideo.load();
-    }
-    if (elements.artVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      elements.shell.setAttribute("data-animated-art", "true");
-    }
-    if (elements.artVideo.paused) {
-      void elements.artVideo.play().catch(() => undefined);
-    }
+    if (next.animatedArtworkUrl !== animatedUrl) startAnimatedArtwork(next.animatedArtworkUrl);
+  }
+
+  if (previousVideoId !== null && next.videoId !== null && next.videoId !== previousVideoId) {
+    animateSongInfo();
   }
 }
 
@@ -781,6 +888,17 @@ function applyArtworkColors(url: string): void {
   image.src = url;
 }
 
+const CURSOR_IDLE_MS = 1500;
+
+function resetCursorIdle(): void {
+  document.documentElement.removeAttribute("data-cursor-idle");
+  if (cursorIdleTimer !== null) window.clearTimeout(cursorIdleTimer);
+  cursorIdleTimer = window.setTimeout(() => {
+    cursorIdleTimer = null;
+    document.documentElement.setAttribute("data-cursor-idle", "true");
+  }, CURSOR_IDLE_MS);
+}
+
 function start(): void {
   elements = queryElements();
   applyBaseVariables();
@@ -803,6 +921,10 @@ function start(): void {
     if (incomingPort) videoReceiver?.attachPort(incomingPort);
   });
   installGlassyFlowFlip();
+  resetCursorIdle();
+  window.addEventListener("pointermove", resetCursorIdle, { passive: true });
+  window.addEventListener("pointerdown", resetCursorIdle, { passive: true });
+  window.addEventListener("wheel", resetCursorIdle, { passive: true });
   document.getElementById("blfw-close")?.addEventListener("click", () => window.close());
   elements.artImage.addEventListener("load", () => elements.artImage.classList.remove("blfw-art--loading"));
   elements.artImage.addEventListener("error", () => elements.artImage.classList.remove("blfw-art--loading"));
@@ -842,6 +964,21 @@ function start(): void {
       window.clearTimeout(bgUpdateTimer);
       bgUpdateTimer = null;
     }
+    if (cursorIdleTimer !== null) {
+      window.clearTimeout(cursorIdleTimer);
+      cursorIdleTimer = null;
+    }
+    if (animatedArtRemoveTimer !== null) {
+      window.clearTimeout(animatedArtRemoveTimer);
+      animatedArtRemoveTimer = null;
+    }
+    if (animatedArtSafetyTimer !== null) {
+      window.clearTimeout(animatedArtSafetyTimer);
+      animatedArtSafetyTimer = null;
+    }
+    document.documentElement.removeAttribute("data-cursor-idle");
+    clearArtVideo(elements.artVideo);
+    clearArtVideo(elements.artVideoNext);
     videoReceiver?.destroy();
     videoReceiver = null;
     sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "bye" });
