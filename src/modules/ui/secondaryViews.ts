@@ -14,5 +14,5 @@ export function publishSecondaryViews(): void {
 
 /** Whether a view other than the side panel needs lyrics loaded while the lyrics tab is not selected. */
 export function isLyricsWantedOffTab(): boolean {
-  return AppState.isPictureInPictureOpen || isKaraokeWanted();
+  return AppState.isPictureInPictureOpen || AppState.isFullscreenWindowOpen || isKaraokeWanted();
 }

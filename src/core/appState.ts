@@ -75,6 +75,8 @@ interface AppStateType {
   dockControlsOrder: string[];
   currentUnisonData: UnisonData | null;
   isPictureInPictureOpen: boolean;
+  /** The separate fullscreen now-playing window is open and owns lyric rendering. */
+  isFullscreenWindowOpen: boolean;
   endTimeMode: "total" | "remaining";
   playbackRate: number;
   isKaraokeEnabled: boolean;
@@ -131,6 +133,7 @@ export const AppState: AppStateType = {
   dockControlsOrder: [...DOCK_CONTROL_ORDER_DEFAULT],
   currentUnisonData: null,
   isPictureInPictureOpen: false,
+  isFullscreenWindowOpen: false,
   endTimeMode: "total",
   playbackRate: 1,
   ...KARAOKE_DEFAULTS,

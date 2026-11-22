@@ -80,4 +80,4 @@ export function lyricsElementAdded(): void {
   mainView.scheduleLyricPositionUpdate(() => AppState.areLyricsTicking, retickMainView);
 }
 
-initGlassyFlowBridge();
+initGlassyFlowBridge(mainView);

@@ -7,6 +7,7 @@ import { initProviders } from "@modules/lyrics/providers/shared";
 import { disposeKaraoke, syncKaraoke } from "@modules/karaoke/karaokeView";
 import { loadKaraokeSettings } from "@modules/karaoke/settings";
 import { setupRequestSniffer } from "@modules/lyrics/requestSniffer/requestSniffer";
+import { setupFullscreenWindowBridge } from "@modules/ui/fullscreenWindow/contentBridge";
 import {
   handleSettings,
   hideCursorOnIdle,
@@ -70,6 +71,7 @@ async function modify(isDisposed: () => boolean): Promise<void> {
   subscribeToLocaleChanges(publishPictureInPictureResources);
   publishPictureInPictureResources();
   setupAdObserver();
+  setupFullscreenWindowBridge();
   enableLyricsTab();
   observeLyricsPageType();
   setupHomepageFullscreenHandler();

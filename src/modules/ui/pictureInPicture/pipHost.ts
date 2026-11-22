@@ -11,7 +11,7 @@ import { applyLyricDecorations } from "@modules/lyrics/lyricDecorations";
 import type { Lyric, LyricsRenderer } from "@braccato/core";
 import { createLyricsRenderer, lyricBuildSettingsKey } from "@modules/ui/lyricsRenderer";
 import { ensureLetterWaveSetting } from "@modules/settings/letterWave";
-import { VIDEO_QUALITY_BOOST_EVENT } from "@modules/settings/videoQuality";
+import { setVideoQualityBoost } from "@modules/settings/videoQuality";
 import { shouldShowWindowStage } from "@modules/karaoke/gate";
 import { createKaraokeStage, type KaraokeStage } from "@modules/karaoke/stage";
 import { getPlayerVideo, isAdPlaying, isVideoModeShown } from "@modules/ui/playerControls/playerBarControls";
@@ -129,7 +129,6 @@ export function createPictureInPictureHost(
   let buildCount = 0;
   let syncFrame: number | null = null;
   let styleObserver: MutationObserver | null = null;
-  let isQualityBoosted = false;
   let syncedLyricsFlag: PictureInPictureLyricsSynced | null = null;
   let playerVideoId: string | null = null;
   let windowFrame = readStoredWindowFrame();
@@ -226,9 +225,7 @@ export function createPictureInPictureHost(
   }
 
   function setQualityBoost(next: boolean): void {
-    if (next === isQualityBoosted) return;
-    isQualityBoosted = next;
-    document.dispatchEvent(new CustomEvent(VIDEO_QUALITY_BOOST_EVENT, { detail: JSON.stringify(next) }));
+    setVideoQualityBoost("pip", next);
   }
 
   function stopStyleMirror(): void {

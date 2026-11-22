@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en-US" blyrics-no-fs-controls>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="color-scheme" content="dark" />
+		<title>Fullscreen Now Playing</title>
+		<link rel="stylesheet" href="/fonts/fonts.css" />
+		<link rel="stylesheet" href="/css/ytmusic/index.css" />
+		<link rel="stylesheet" href="/css/blyrics/index.css" />
+		<link rel="stylesheet" href="/css/fullscreen-window.css" />
+	</head>
+	<body>
+		<div id="blfw-drag"></div>
+		<button id="blfw-close" type="button" title="Close window" aria-label="Close window">
+			<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+				<path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z" fill="currentColor"></path>
+			</svg>
+		</button>
+		<!--
+			This is a deliberate skeleton of YouTube Music's fullscreen player page. The app's Glassy look
+			is a theme over exactly these ids, classes and attributes, so reproducing the skeleton lets the
+			real theme stylesheet apply instead of being re-implemented here. Anything the theme sizes or
+			paints (player, columns, artwork frame, lyrics wrapper) is the theme's decision, not ours.
+		-->
+		<main id="blfw-shell">
+			<ytmusic-app-layout id="layout" player-fullscreened player-page-open player-visible cursor-hidden player-ui-state="FULLSCREEN">
+				<ytmusic-player-page id="player-page" slot="player-page" player-fullscreened>
+					<div class="content ytmusic-player-page">
+						<div id="main-panel" class="ytmusic-player-page">
+							<ytmusic-player id="player" player-ui-state="FULLSCREEN" class="style-scope ytmusic-player-page">
+								<div id="song-image">
+									<img id="blfw-art-image" alt="" draggable="false" />
+									<img id="blfw-art-image-next" alt="" draggable="false" />
+									<video id="blfw-art-video" autoplay muted loop playsinline crossorigin="anonymous"></video>
+								</div>
+								<div id="song-media-window">
+									<video id="blfw-mv-video" class="html5-main-video" autoplay muted playsinline></video>
+								</div>
+							</ytmusic-player>
+							<div id="blyrics-fs-column">
+								<div id="blyrics-fs-info-row" class="blyrics-fs-info-row">
+									<div id="blyrics-song-info">
+										<p id="blyrics-title"></p>
+										<p id="blyrics-artist"></p>
+									</div>
+								</div>
+								<div id="blfw-progress">
+									<span id="blfw-elapsed">0:00</span>
+									<div id="blfw-progress-track"><div id="blfw-progress-fill"></div></div>
+									<span id="blfw-remaining">--:--</span>
+								</div>
+							</div>
+						</div>
+						<div id="side-panel">
+							<ytmusic-tab-renderer id="tab-renderer" page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS">
+								<div id="blyrics-loader" state="hidden" hidden></div>
+								<div id="blyrics-wrapper" data-extension-root></div>
+							</ytmusic-tab-renderer>
+						</div>
+					</div>
+				</ytmusic-player-page>
+			</ytmusic-app-layout>
+			<p id="blfw-status" hidden></p>
+			<pre id="blfw-debug" aria-hidden="true"></pre>
+		</main>
+		<script type="module" defer src="../src/modules/ui/fullscreenWindow/page.ts"></script>
+	</body>
+</html>
