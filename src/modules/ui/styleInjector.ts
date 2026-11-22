@@ -20,6 +20,7 @@ import {
 
 let hasSubscribedToStyles = false;
 let letterWavePref: LetterWavePref = "off";
+let appliedThemeCss = "";
 
 function isGlassyMergeThemeActive(activePearTheme?: string): boolean {
   return (
@@ -49,6 +50,7 @@ function syncCustomThemeStyleElement(themeCss: string): void {
  */
 export function applyCustomStyles(css: string): void {
   const themeCss = withLetterWaveSetting(css, letterWavePref);
+  appliedThemeCss = themeCss;
   syncCustomThemeStyleElement(themeCss);
   const needsLyricReload = mainView.setTheme(themeCss);
   applyKaraokeTheme(themeCss);
@@ -58,6 +60,15 @@ export function applyCustomStyles(css: string): void {
     reloadLyrics();
   }
 }
+
+export function refreshAppliedTheme(): void {
+  if (!appliedThemeCss) return;
+  if (mainView.setTheme(appliedThemeCss)) {
+    reloadLyrics();
+  }
+}
+
+window.addEventListener("blyrics-glassyflow-ready", refreshAppliedTheme);
 
 interface CSSStorageData {
   cssStorageType?: "sync" | "local" | "chunked";
