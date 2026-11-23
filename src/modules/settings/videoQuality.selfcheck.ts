@@ -30,7 +30,10 @@ assert.equal(
 );
 assert.equal(selectVideoQuality(defaults, ["hd2160", "hd1080"]), "auto");
 assert.equal(
-  selectVideoQuality({ ...defaults, preferredVideoQuality: "hd2160" }, ["hd1440", "hd1080", "auto"]),
+  selectVideoQuality(
+    { ...defaults, isHighResolutionVideoEnabled: true, preferredVideoQuality: "hd2160" },
+    ["hd1440", "hd1080", "auto"]
+  ),
   "hd1440"
 );
 assert.equal(
@@ -135,9 +138,11 @@ const stop = startVideoQualityPlayer(doc, dom.window as unknown as Window);
 const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 0));
 };
-const settings = (preferredVideoQuality: string) =>
+const settings = (preferredVideoQuality: string, isHighResolutionVideoEnabled = true) =>
   doc.dispatchEvent(
-    new dom.window.CustomEvent(VIDEO_QUALITY_SETTINGS_EVENT, { detail: JSON.stringify({ preferredVideoQuality }) })
+    new dom.window.CustomEvent(VIDEO_QUALITY_SETTINGS_EVENT, {
+      detail: JSON.stringify({ preferredVideoQuality, isHighResolutionVideoEnabled }),
+    })
   );
 settings("hd2160");
 await settle();
@@ -330,7 +335,11 @@ assert.deepEqual(qualityCalls, [], "disposed bridges ignore settings and async c
   const triggerPoll = pollCallback as () => void;
   optDoc.dispatchEvent(
     new optDom.window.CustomEvent(VIDEO_QUALITY_SETTINGS_EVENT, {
-      detail: JSON.stringify({ isOptimizedVideoQualityEnabled: true, preferredVideoQuality: "hd2160" }),
+      detail: JSON.stringify({
+        isHighResolutionVideoEnabled: true,
+        isOptimizedVideoQualityEnabled: true,
+        preferredVideoQuality: "hd2160",
+      }),
     })
   );
   await settle();

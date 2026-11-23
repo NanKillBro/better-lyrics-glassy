@@ -17,6 +17,9 @@ export interface VideoQualityPlayer {
   setPlaybackQualityRange?: (min: string, max: string) => void;
   getPlayerState?: () => number;
   getAdState?: () => number;
+  getCurrentTime?: () => number;
+  playVideo?: () => void;
+  seekTo?: (seconds: number, allowSeekAhead?: boolean) => void;
   getPlayerResponse?: () => { streamingData?: { adaptiveFormats?: { height?: number }[] } };
   updateVideoData?: (vars: PlayerVars, refresh: boolean) => void;
 }
@@ -76,6 +79,11 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
   let cachedMoviePlayer: Element | null = null;
   let cachedPlayerBar: Element | null = null;
   let checkedPlayerBar = false;
+  let cachedVideo: HTMLVideoElement | null = null;
+  let loadStartedAt = 0;
+  let recoveryAttempts = 0;
+  let lastRecoveryTime: number | null = null;
+  let frozenRecoveryPolls = 0;
 
   const reportedFailures = new Set<string>();
   const reportFailure = (context: string, error: unknown): void => {
@@ -86,6 +94,10 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
   const resetPlayback = (): void => {
     lastQualityKey = "";
     initialRefreshKey = "";
+    loadStartedAt = Date.now();
+    recoveryAttempts = 0;
+    lastRecoveryTime = null;
+    frozenRecoveryPolls = 0;
   };
   const getPlayerHost = (): (HTMLElement & { getPlayer?: () => unknown }) | null => {
     if (settings?.isOptimizedVideoQualityEnabled) {
@@ -122,7 +134,8 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
     try {
       if (isAdShowing()) return;
       const data = api.getVideoData?.();
-      if (!data?.video_id || data.isLive || api.getPlayerState?.() === -1) return;
+      const state = api.getPlayerState?.();
+      if (!data?.video_id || data.isLive || state === -1) return;
       const available = api.getAvailableQualityLevels?.() ?? [];
       if (!available.some(quality => quality !== "auto")) {
         lastQualityKey = "";
@@ -146,6 +159,36 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
       lastQualityKey = key;
     } catch (error) {
       reportFailure("Failed to apply playback quality", error);
+    }
+  };
+
+  const recoverStalledStart = (): void => {
+    if (disposed || !api || !settings?.isHighResolutionVideoEnabled || !settings.isVideoQualityStallRecoveryEnabled)
+      return;
+    if (recoveryAttempts > 0 || !loadStartedAt) return;
+    const elapsed = Date.now() - loadStartedAt;
+    if (elapsed < 2000 || elapsed > 10000) return;
+    try {
+      if (isAdShowing()) return;
+      const state = api.getPlayerState?.();
+      const time = api.getCurrentTime?.() ?? cachedVideo?.currentTime;
+      if (typeof time !== "number" || time > 2) {
+        lastRecoveryTime = typeof time === "number" ? time : null;
+        frozenRecoveryPolls = 0;
+        return;
+      }
+      if (lastRecoveryTime !== null && Math.abs(time - lastRecoveryTime) < 0.05) frozenRecoveryPolls++;
+      else frozenRecoveryPolls = 0;
+      lastRecoveryTime = time;
+      if (frozenRecoveryPolls < 2) return;
+      if (state !== 1 && state !== -1 && state !== 3 && state !== 5) return;
+      recoveryAttempts++;
+      if (typeof api.seekTo === "function") api.seekTo(0, true);
+      else if (cachedVideo) cachedVideo.currentTime = 0;
+      if (typeof api.playVideo === "function") api.playVideo();
+      else cachedVideo?.play().catch(error => reportFailure("Failed to resume stalled video", error));
+    } catch (error) {
+      reportFailure("Failed to recover stalled video", error);
     }
   };
 
@@ -223,6 +266,7 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
     } else if (!target.closest("ytmusic-player")) {
       return;
     }
+    cachedVideo = target as HTMLVideoElement;
     lastQualityKey = "";
     applyQuality();
   };
@@ -230,7 +274,13 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
     connect(false);
   };
   const onPoll = (): void => {
+    if (!pending && settings?.isOptimizedVideoQualityEnabled && api && cachedPlayerHost?.isConnected) {
+      applyQuality();
+      recoverStalledStart();
+      return;
+    }
     connect(true);
+    recoverStalledStart();
   };
   doc.addEventListener(VIDEO_QUALITY_SETTINGS_EVENT, receive);
   doc.addEventListener(VIDEO_QUALITY_BOOST_EVENT, receiveBoost);
@@ -248,6 +298,7 @@ export function startVideoQualityPlayer(doc: Document = document, win: Window = 
     cachedPlayerHost = null;
     cachedMoviePlayer = null;
     cachedPlayerBar = null;
+    cachedVideo = null;
     doc.removeEventListener(VIDEO_QUALITY_SETTINGS_EVENT, receive);
     doc.removeEventListener(VIDEO_QUALITY_BOOST_EVENT, receiveBoost);
     doc.removeEventListener("yt-navigate-finish", onNavigateFinish);

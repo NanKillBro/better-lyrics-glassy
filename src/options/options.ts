@@ -174,6 +174,9 @@ const getOptionsFromForm = (): Options => {
       isOptimizedVideoQualityEnabled: (
         document.getElementById("isOptimizedVideoQualityEnabled") as HTMLInputElement
       ).checked,
+      isVideoQualityStallRecoveryEnabled: (
+        document.getElementById("isVideoQualityStallRecoveryEnabled") as HTMLInputElement
+      ).checked,
       preferredVideoQuality: (document.getElementById("preferredVideoQuality") as HTMLInputElement).value,
     }),
     isLogsEnabled: (document.getElementById("logs") as HTMLInputElement).checked,
@@ -377,8 +380,9 @@ const restoreOptions = (): void => {
   subscribeToCacheStats();
 
   const defaultOptions: Options = {
-    isHighResolutionVideoEnabled: true,
+    isHighResolutionVideoEnabled: false,
     isOptimizedVideoQualityEnabled: false,
+    isVideoQualityStallRecoveryEnabled: true,
     preferredVideoQuality: "auto",
     isLogsEnabled: true,
     isAutoSwitchEnabled: false,
@@ -483,6 +487,8 @@ const setOptionsInForm = (items: Options): void => {
     videoSettings.isHighResolutionVideoEnabled;
   (document.getElementById("isOptimizedVideoQualityEnabled") as HTMLInputElement).checked =
     videoSettings.isOptimizedVideoQualityEnabled;
+  (document.getElementById("isVideoQualityStallRecoveryEnabled") as HTMLInputElement).checked =
+    videoSettings.isVideoQualityStallRecoveryEnabled;
   setDropdownFieldValue("preferredVideoQuality", videoSettings.preferredVideoQuality);
   syncVideoQualityControls(document);
   (document.getElementById("logs") as HTMLInputElement).checked = items.isLogsEnabled;

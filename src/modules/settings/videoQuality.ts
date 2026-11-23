@@ -19,12 +19,14 @@ export type VideoQuality = keyof typeof VIDEO_QUALITIES;
 export interface VideoQualitySettings {
   isHighResolutionVideoEnabled: boolean;
   isOptimizedVideoQualityEnabled: boolean;
+  isVideoQualityStallRecoveryEnabled: boolean;
   preferredVideoQuality: VideoQuality;
 }
 
 export const DEFAULT_VIDEO_QUALITY_SETTINGS: VideoQualitySettings = {
-  isHighResolutionVideoEnabled: true,
+  isHighResolutionVideoEnabled: false,
   isOptimizedVideoQualityEnabled: false,
+  isVideoQualityStallRecoveryEnabled: true,
   preferredVideoQuality: "auto",
 };
 
@@ -32,8 +34,9 @@ export function normalizeVideoQualitySettings(
   raw: Partial<Record<keyof VideoQualitySettings, unknown>>
 ): VideoQualitySettings {
   return {
-    isHighResolutionVideoEnabled: raw.isHighResolutionVideoEnabled !== false,
+    isHighResolutionVideoEnabled: raw.isHighResolutionVideoEnabled === true,
     isOptimizedVideoQualityEnabled: raw.isOptimizedVideoQualityEnabled === true,
+    isVideoQualityStallRecoveryEnabled: raw.isVideoQualityStallRecoveryEnabled !== false,
     preferredVideoQuality:
       typeof raw.preferredVideoQuality === "string" && Object.hasOwn(VIDEO_QUALITIES, raw.preferredVideoQuality)
         ? (raw.preferredVideoQuality as VideoQuality)

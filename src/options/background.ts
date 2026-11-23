@@ -98,6 +98,30 @@ async function resyncAppliedThemeCss(): Promise<void> {
   }
 }
 
+// -- High Resolution Video Default --------------------------
+
+const HIGH_RESOLUTION_DEFAULT_KEY = "highResolutionDefaultMigrationVersion";
+const HIGH_RESOLUTION_DEFAULT_VERSION = 1;
+
+/** Applies the >1080p-off default once to profiles that saved the old default on. */
+async function migrateHighResolutionVideoDefault(): Promise<void> {
+  try {
+    const stored = await getLocalStorage<{
+      [HIGH_RESOLUTION_DEFAULT_KEY]?: number;
+      isHighResolutionVideoEnabled?: boolean;
+    }>([HIGH_RESOLUTION_DEFAULT_KEY, "isHighResolutionVideoEnabled"]);
+    if ((stored[HIGH_RESOLUTION_DEFAULT_KEY] ?? 0) >= HIGH_RESOLUTION_DEFAULT_VERSION) return;
+
+    if (stored.isHighResolutionVideoEnabled === true) {
+      await chrome.storage.local.set({ isHighResolutionVideoEnabled: false });
+      logBackground("Disabled high resolution video (new default)");
+    }
+    await chrome.storage.local.set({ [HIGH_RESOLUTION_DEFAULT_KEY]: HIGH_RESOLUTION_DEFAULT_VERSION });
+  } catch (err) {
+    warnBackground("High resolution video migration failed:", err);
+  }
+}
+
 async function checkAndApplyThemeUpdates(): Promise<void> {
   try {
     const installed = await getInstalledStoreThemes();
@@ -133,6 +157,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   setupThemeUpdateAlarm();
   await migrateSymlinkedThemes();
   await resyncAppliedThemeCss();
+  await migrateHighResolutionVideoDefault();
   checkAndApplyThemeUpdates();
 });
 
@@ -140,6 +165,7 @@ chrome.runtime.onStartup.addListener(async () => {
   setupThemeUpdateAlarm();
   await migrateSymlinkedThemes();
   await resyncAppliedThemeCss();
+  await migrateHighResolutionVideoDefault();
   checkAndApplyThemeUpdates();
 });
 
