@@ -24,7 +24,7 @@
 	--menu-bar-height: 32px;
 	--ytmusic-nav-bar-height: 64px;
 	--ytmusic-player-page-vertical-padding: 64px;
-	--ytmusic-player-page-horizontal-padding: 96px;
+	--ytmusic-player-page-horizontal-padding: 64px;
 	--blfw-text: rgba(255, 255, 255, 0.94);
 	--blfw-dim: rgba(255, 255, 255, 0.62);
 	--blfw-faint: rgba(255, 255, 255, 0.34);
@@ -95,8 +95,9 @@ ytmusic-app-layout#layout {
 /*
  * The flex row below is YouTube Music's own layout, not the theme's: in the app `.content` is a flex
  * row because YouTube's stylesheet says so. A skeleton without it stacks the lyric column under the
- * artwork, which pushed the first lyric line from y=97 to y=~484. The widths are the app's measured
- * fullscreen geometry at 1920 (main 491.5px, 96px gutter, lyrics 59.4%).
+ * artwork, which pushed the first lyric line from y=97 to y=~484. The window trims the app's 96px
+ * outer padding to 64px and gives the lyric column 65% of the resulting 1792px content box: at 1920
+ * the artwork keeps ~563px and the lyrics get ~1165px, wider than the app's 1140.5px column.
  */
 #player-page > .content {
 	display: flex;
@@ -117,6 +118,7 @@ ytmusic-app-layout#layout {
 	align-items: center;
 	justify-content: center;
 	min-width: 0;
+	padding-top: 3.2rem;
 	margin-bottom: var(--ytmusic-player-page-vertical-padding);
 	transition: transform 0.3s ease-in-out;
 }
@@ -387,7 +389,7 @@ ytmusic-player-page[player-fullscreened][blyrics-video-mode] #player.ytmusic-pla
 #blfw-shell #side-panel {
 	display: block;
 	flex: none;
-	width: 59.4%;
+	width: 65%;
 	height: calc(100vh - var(--menu-bar-height)) !important;
 	margin-top: calc(var(--ytmusic-player-page-vertical-padding) * -1) !important;
 	margin-left: var(--ytmusic-player-page-horizontal-padding);
@@ -442,7 +444,7 @@ ytmusic-player-page[player-fullscreened][blyrics-video-mode] #player.ytmusic-pla
 #blyrics-wrapper > .blyrics-container {
 	overflow: visible !important;
 	margin: 0;
-	padding-inline: 0;
+	padding-inline: 2rem;
 	padding-top: var(--blyrics-padding-top, 2rem);
 }
 
@@ -621,7 +623,7 @@ html[data-blfw-timeline="true"] #blfw-progress {
 html:not([data-cursor-idle="true"])[data-pointer-inside="true"] #blfw-window-controls,
 html:not([data-cursor-idle="true"]) #blfw-drag:hover ~ #blfw-window-controls,
 html:not([data-cursor-idle="true"]) #blfw-window-controls:hover,
-#blfw-window-controls:has(> .blfw-window-btn:focus-visible) {
+#blfw-window-controls:has(.blfw-window-btn:focus-visible) {
 	opacity: 1;
 }
 
@@ -637,6 +639,28 @@ html:not([data-cursor-idle="true"]) #blfw-window-controls:hover .blfw-window-btn
 	background: rgba(255, 255, 255, 0.18);
 	color: #fff;
 	outline: none;
+}
+
+.blfw-zoom {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	height: 34px;
+	padding: 0 6px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.06);
+	-webkit-app-region: no-drag;
+}
+
+.blfw-zoom-btn {
+	width: 26px;
+	height: 26px;
+	background: transparent;
+}
+
+.blfw-zoom-btn:hover,
+.blfw-zoom-btn:focus-visible {
+	background: rgba(255, 255, 255, 0.16);
 }
 
 .blfw-fs-exit {

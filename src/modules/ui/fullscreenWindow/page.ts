@@ -55,6 +55,7 @@ declare global {
     __blsLastState?: unknown;
     blfwHost?: {
       toggleFullscreen?: () => void;
+      setZoom?: (factor: number) => void;
     };
   }
 }
@@ -1035,6 +1036,67 @@ function toggleWindowFullscreen(): void {
   }
 }
 
+const ZOOM_STORAGE_KEY = "blfw-zoom";
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
+
+function readStoredZoom(): number {
+  try {
+    const raw = window.localStorage.getItem(ZOOM_STORAGE_KEY);
+    const parsed = raw === null ? Number.NaN : Number.parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function clampZoom(value: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+}
+
+function setupZoomControls(): void {
+  const reset = document.getElementById("blfw-zoom-reset") as HTMLButtonElement | null;
+  const zoomOut = document.getElementById("blfw-zoom-out") as HTMLButtonElement | null;
+  const zoomIn = document.getElementById("blfw-zoom-in") as HTMLButtonElement | null;
+  if (!reset || !zoomOut || !zoomIn) return;
+
+  let factor = clampZoom(readStoredZoom());
+
+  const apply = (next: number, persist = true): void => {
+    factor = clampZoom(next);
+    if (typeof window.blfwHost?.setZoom === "function") {
+      window.blfwHost.setZoom(factor);
+    } else {
+      document.documentElement.style.setProperty("zoom", String(factor));
+    }
+    const label = `Reset zoom to 100% (currently ${Math.round(factor * 100)}%)`;
+    reset.title = label;
+    reset.setAttribute("aria-label", label);
+    if (!persist) return;
+    try {
+      window.localStorage.setItem(ZOOM_STORAGE_KEY, String(factor));
+    } catch {
+      /* Storage is unavailable in an opaque origin; the factor still applies for this session. */
+    }
+  };
+
+  zoomOut.addEventListener("click", event => {
+    apply(factor - ZOOM_STEP);
+    if (event.detail > 0) zoomOut.blur();
+  });
+  zoomIn.addEventListener("click", event => {
+    apply(factor + ZOOM_STEP);
+    if (event.detail > 0) zoomIn.blur();
+  });
+  reset.addEventListener("click", event => {
+    apply(1);
+    if (event.detail > 0) reset.blur();
+  });
+
+  apply(factor, false);
+}
+
 function start(): void {
   elements = queryElements();
   applyBaseVariables();
@@ -1137,6 +1199,7 @@ function start(): void {
     if (event.detail > 0) windowFullscreenBtn?.blur();
   });
   document.getElementById("blfw-close")?.addEventListener("click", () => window.close());
+  setupZoomControls();
   elements.artImage.addEventListener("load", () => elements.artImage.classList.remove("blfw-art--loading"));
   elements.artImage.addEventListener("error", () => elements.artImage.classList.remove("blfw-art--loading"));
 
