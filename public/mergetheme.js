@@ -312,16 +312,6 @@ ytmusic-guide-entry-renderer[active] tp-yt-paper-item {
   background-color: transparent !important;
 }
 
-tp-yt-app-drawer#guide #guide-spacer {
-  height: 25px !important; /* Thay đổi chiều cao theo nhu cầu */
-  display: block !important;
-}
-
-ytmusic-guide-section-renderer[is-collapsed][is-primary] {
-  padding-top: 25px !important;
-  box-sizing: border-box !important;
-}
-
 /* THANH TÌM KIẾM (SEARCH BOX) MỚI */
 ytmusic-search-box .search-box {
   border-radius: 12px !important;
