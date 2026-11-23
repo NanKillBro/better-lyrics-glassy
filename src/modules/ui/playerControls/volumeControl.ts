@@ -13,11 +13,17 @@ import { clampVolume, VOLUME_KEY_STEP, VOLUME_WHEEL_STEP, volumeTier } from "@mo
 
 interface VolumeControlOptions {
   doc: Document;
-  sourceDoc: Document;
+  sourceDoc?: Document;
+  readLevel?: () => number | null;
+  writeLevel?: (level: number) => void;
+  toggleMuteAction?: () => void;
+  observeLevel?: (onChange: () => void) => () => void;
+  labels?: { volume?: string; mute?: string };
 }
 
 export interface VolumeControlHandle {
   element: HTMLElement;
+  setLevel: (level: number) => void;
   destroy: () => void;
 }
 
@@ -31,8 +37,22 @@ const KEY_STEPS: Record<string, number> = {
   ArrowDown: -VOLUME_KEY_STEP,
 };
 
-export function createVolumeControl({ doc, sourceDoc }: VolumeControlOptions): VolumeControlHandle {
+export function createVolumeControl(options: VolumeControlOptions): VolumeControlHandle {
+  const { doc, sourceDoc, labels } = options;
   const win = doc.defaultView ?? window;
+  const readLevel = options.readLevel ?? (() => (sourceDoc ? getVolume(sourceDoc) : null));
+  const writeLevel =
+    options.writeLevel ??
+    ((level: number) => {
+      if (sourceDoc) setVolume(sourceDoc, level);
+    });
+  const toggleMuteAction =
+    options.toggleMuteAction ??
+    (() => {
+      if (sourceDoc) toggleMute(sourceDoc);
+    });
+  const observeLevel =
+    options.observeLevel ?? ((onChange: () => void) => (sourceDoc ? observeVolume(sourceDoc, onChange) : () => {}));
 
   const element = doc.createElement("div");
   element.className = "blyrics-volume";
@@ -64,7 +84,7 @@ export function createVolumeControl({ doc, sourceDoc }: VolumeControlOptions): V
   track.appendChild(bar);
   element.append(track, button);
 
-  let level = getVolume(sourceDoc) ?? 100;
+  let level = readLevel() ?? 100;
   let dragging = false;
   let open = false;
   let closeTimer = 0;
@@ -73,8 +93,13 @@ export function createVolumeControl({ doc, sourceDoc }: VolumeControlOptions): V
   let wheelDelta = 0;
 
   const syncLabels = (): void => {
-    applyControlLabel(bar, sourceDoc, "volume");
-    applyControlLabel(button, sourceDoc, "mute");
+    if (sourceDoc) {
+      applyControlLabel(bar, sourceDoc, "volume");
+      applyControlLabel(button, sourceDoc, "mute");
+      return;
+    }
+    if (labels?.volume) bar.setAttribute("aria-label", labels.volume);
+    if (labels?.mute) button.setAttribute("aria-label", labels.mute);
   };
 
   const render = (): void => {
@@ -90,7 +115,7 @@ export function createVolumeControl({ doc, sourceDoc }: VolumeControlOptions): V
   const commit = (next: number): void => {
     level = clampVolume(next);
     render();
-    setVolume(sourceDoc, level);
+    writeLevel(level);
   };
 
   const setOpen = (next: boolean): void => {
@@ -152,7 +177,7 @@ export function createVolumeControl({ doc, sourceDoc }: VolumeControlOptions): V
       setOpen(true);
       return;
     }
-    toggleMute(sourceDoc);
+    toggleMuteAction();
   });
 
   // -- Slider --------------------------
@@ -205,9 +230,9 @@ export function createVolumeControl({ doc, sourceDoc }: VolumeControlOptions): V
 
   // -- Sync with YouTube Music --------------------------
 
-  const stopObserving = observeVolume(sourceDoc, () => {
+  const stopObserving = observeLevel(() => {
     if (dragging) return;
-    const next = getVolume(sourceDoc);
+    const next = readLevel();
     if (next === null) return;
     if (next !== level) {
       level = next;
@@ -221,6 +246,13 @@ export function createVolumeControl({ doc, sourceDoc }: VolumeControlOptions): V
 
   return {
     element,
+    setLevel(next: number): void {
+      if (dragging) return;
+      const clamped = clampVolume(next);
+      if (clamped === level) return;
+      level = clamped;
+      render();
+    },
     destroy(): void {
       stopObserving();
       cancelClose();

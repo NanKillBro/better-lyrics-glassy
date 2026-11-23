@@ -10,6 +10,9 @@ export interface FullscreenPlaybackSnapshot {
   readonly wallTime: number;
 }
 
+export type FullscreenTransportAction = "previous" | "play-pause" | "next";
+export type FullscreenRatingState = "LIKE" | "DISLIKE" | "INDIFFERENT" | null;
+
 export interface FullscreenTrackInfo {
   readonly videoId: string | null;
   readonly title: string;
@@ -48,6 +51,8 @@ export type FullscreenOutbound =
       readonly loader?: FullscreenLoaderState;
       readonly blsState?: unknown;
       readonly video?: FullscreenVideoState;
+      readonly volume?: number | null;
+      readonly rating?: FullscreenRatingState;
     }
   | {
       readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL;
@@ -84,6 +89,16 @@ export type FullscreenOutbound =
   | { readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL; readonly type: "mode"; readonly payload: boolean }
   | {
       readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL;
+      readonly type: "volume";
+      readonly payload: number | null;
+    }
+  | {
+      readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL;
+      readonly type: "rating";
+      readonly payload: FullscreenRatingState;
+    }
+  | {
+      readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL;
       readonly type: "unavailable";
       readonly reason: string;
     };
@@ -96,4 +111,16 @@ export type FullscreenInbound =
       readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL;
       readonly type: "seek";
       readonly time: number;
-    };
+    }
+  | {
+      readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL;
+      readonly type: "transport";
+      readonly action: FullscreenTransportAction;
+    }
+  | {
+      readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL;
+      readonly type: "volume";
+      readonly level: number;
+    }
+  | { readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL; readonly type: "mute" }
+  | { readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL; readonly type: "like" };

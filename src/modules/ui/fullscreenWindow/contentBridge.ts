@@ -1,5 +1,5 @@
 import { CUSTOM_THEME_STYLE_ID } from "@braccato/core/constants";
-import { PLAYER_TIME_EVENT, SEEK_EVENT } from "@constants";
+import { PLAYER_CONTROL_EVENT, PLAYER_TIME_EVENT, SEEK_EVENT } from "@constants";
 import { AppState } from "@core/appState";
 import { logCore } from "@core/logger";
 import { ensureLetterWaveSetting } from "@modules/settings/letterWave";
@@ -11,6 +11,7 @@ import {
   type FullscreenLyricsPayload,
   type FullscreenOutbound,
   type FullscreenPlaybackSnapshot,
+  type FullscreenRatingState,
   type FullscreenTrackInfo,
   type FullscreenVideoState,
 } from "@modules/ui/fullscreenWindow/messages";
@@ -22,7 +23,16 @@ import {
   readMainSongInfo,
 } from "@modules/ui/fullscreenWindow/trackInfo";
 import { onLyrics } from "@modules/ui/pictureInPicture/bridge";
-import { getPlayerVideo, isAdPlaying, isVideoModeShown } from "@modules/ui/playerControls/playerBarControls";
+import {
+  getPlayerVideo,
+  getRatingState,
+  getVolume,
+  isAdPlaying,
+  isVideoModeShown,
+  setVolume,
+  toggleLike,
+  toggleMute,
+} from "@modules/ui/playerControls/playerBarControls";
 import { COMPOSITE_LYRICS_ATTR, readRendererMode } from "@modules/ui/rendererMode";
 import { currentViewLyrics } from "@modules/lyrics/viewLyrics";
 
@@ -56,6 +66,8 @@ let heartbeatTimer: number | null = null;
 let lastLyrics: FullscreenLyricsPayload | null = null;
 let lastSnapshot: FullscreenPlaybackSnapshot | null = null;
 let lastSnapshotSentAt = 0;
+let lastVolume: number | null | undefined;
+let lastRating: FullscreenRatingState | undefined;
 let hasRawTime = false;
 let rawTimeS = 0;
 let rawDurationS = 0;
@@ -205,7 +217,7 @@ function isRelevantThemeMutation(mutations: MutationRecord[]): boolean {
 
 function ensureThemeObserver(): void {
   if (!isAttached || themeObserver || !document.head) return;
-  themeObserver = new MutationObserver((mutations) => {
+  themeObserver = new MutationObserver(mutations => {
     if (!isAttached || !isRelevantThemeMutation(mutations)) return;
     publishTheme(readTheme());
     publishMergeTheme(readMergeTheme());
@@ -215,7 +227,7 @@ function ensureThemeObserver(): void {
 
 function ensureModeObserver(): void {
   if (!isAttached || modeObserver || !document.documentElement) return;
-  modeObserver = new MutationObserver((mutations) => {
+  modeObserver = new MutationObserver(mutations => {
     if (!isAttached) return;
     let modeChanged = false;
     let styleChanged = false;
@@ -365,7 +377,22 @@ function ensureVideoStateObserver(): void {
   }
 }
 
+function publishPlayerState(): void {
+  if (!isAttached) return;
+  const volume = getVolume(document);
+  if (volume !== lastVolume) {
+    lastVolume = volume;
+    send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "volume", payload: volume });
+  }
+  const rating = getRatingState(document);
+  if (rating !== lastRating) {
+    lastRating = rating;
+    send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "rating", payload: rating });
+  }
+}
+
 function publishSnapshot(next: FullscreenPlaybackSnapshot): void {
+  publishPlayerState();
   const previous = lastSnapshot;
   lastSnapshot = next;
 
@@ -466,8 +493,7 @@ function syncVideoMirrorState(): void {
     video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
     video.videoWidth > 0 &&
     video.videoHeight > 0;
-  const aspectRatio =
-    playable && video && video.videoHeight > 0 ? video.videoWidth / video.videoHeight : 16 / 9;
+  const aspectRatio = playable && video && video.videoHeight > 0 ? video.videoWidth / video.videoHeight : 16 / 9;
 
   const nextState: FullscreenVideoState = { active: playable, aspectRatio };
   const nextKey = `${nextState.active ? "1" : "0"}:${aspectRatio.toFixed(4)}`;
@@ -634,6 +660,10 @@ function sendReady(): void {
   lastLoaderKey = `${loader.state}\0${loader.text}\0${loader.hidden ? "1" : "0"}`;
   const track = readTrackInfo();
   lastTrackKey = buildTrackKey(track);
+  const volume = getVolume(document);
+  const rating = getRatingState(document);
+  lastVolume = volume;
+  lastRating = rating;
   send({
     channel: FULLSCREEN_WINDOW_CHANNEL,
     type: "ready",
@@ -646,6 +676,8 @@ function sendReady(): void {
     loader,
     blsState: hasBlsState ? lastBlsState : undefined,
     video: lastVideoState,
+    volume,
+    rating,
   });
 }
 
@@ -708,7 +740,7 @@ export function setupFullscreenWindowBridge(): () => void {
   const onRuntimeMessage = (
     message: FullscreenInbound,
     _sender: chrome.runtime.MessageSender,
-    sendResponse: (response?: unknown) => void,
+    sendResponse: (response?: unknown) => void
   ): undefined => {
     if (!message || message.channel !== FULLSCREEN_WINDOW_CHANNEL) return undefined;
     if (message.type === "hello") {
@@ -743,12 +775,33 @@ export function setupFullscreenWindowBridge(): () => void {
     if (message.type === "seek" && Number.isFinite(message.time)) {
       document.dispatchEvent(new CustomEvent(SEEK_EVENT, { detail: message.time }));
       sendResponse({ ok: true });
+      return undefined;
+    }
+    if (message.type === "transport") {
+      document.dispatchEvent(new CustomEvent(PLAYER_CONTROL_EVENT, { detail: message.action }));
+      sendResponse({ ok: true });
+      return undefined;
+    }
+    if (message.type === "volume" && Number.isFinite(message.level)) {
+      setVolume(document, message.level);
+      sendResponse({ ok: true });
+      return undefined;
+    }
+    if (message.type === "mute") {
+      toggleMute(document);
+      sendResponse({ ok: true });
+      return undefined;
+    }
+    if (message.type === "like") {
+      toggleLike(document);
+      sendResponse({ ok: true });
+      return undefined;
     }
     return undefined;
   };
   chrome.runtime.onMessage.addListener(onRuntimeMessage);
 
-  const unsubscribeLyrics = onLyrics((payload) => publishLyrics(payload));
+  const unsubscribeLyrics = onLyrics(payload => publishLyrics(payload));
 
   const onPlayerTime = (event: Event): void => {
     const detail = (event as CustomEvent<Parameters<typeof buildSnapshot>[0] & { videoId?: string }>).detail;

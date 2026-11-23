@@ -8,9 +8,11 @@ import { createVideoFrameReceiver, type VideoFrameReceiver } from "@modules/ui/f
 import { initGlassyFlowBridge } from "@modules/ui/glassyFlowBridge";
 import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
 import {
-  LEGACY_RENDERER_CSS_PATH,
-  syncRendererModeStylesheets,
-} from "@modules/ui/rendererMode";
+  createFullscreenPlayerControls,
+  type FullscreenPlayerControlsHandle,
+} from "@modules/ui/fullscreenWindow/playerControls";
+import { createProgressBar, type ProgressBarHandle } from "@modules/ui/playerControls/progressBar";
+import { LEGACY_RENDERER_CSS_PATH, syncRendererModeStylesheets } from "@modules/ui/rendererMode";
 import {
   FULLSCREEN_WINDOW_CHANNEL,
   type FullscreenInbound,
@@ -32,6 +34,12 @@ const BLS_VISIBILITY_EVENT = "bls:fullscreen-visibility";
 const VIDEO_PORT_MSG_TYPE = "blfw-video-port";
 const WINDOW_VISIBILITY_MSG_TYPE = "blfw-window-visibility";
 const WINDOW_FULLSCREEN_STATE_MSG_TYPE = "blfw-window-fullscreen-state";
+const WINDOW_OPTIONS_MSG_TYPE = "blfw-window-options";
+const TEXT_ENTRY_TARGETS = "input, textarea, select, [contenteditable]";
+const SEEK_BLOCKING_TARGETS = "input, textarea, select, [contenteditable], [role='slider'], .blyrics-volume";
+function closestFromTarget(target: EventTarget | null, selector: string): boolean {
+  return target instanceof Element && Boolean(target.closest(selector));
+}
 const MERGE_THEME_STYLE_ID = "blfw-merge-theme";
 const SCROLL_SCRIPTS: Record<string, string> = {
   "glassyflow-turbo": "/glassyflow-turbo.js",
@@ -70,9 +78,6 @@ interface Elements {
   readonly mount: HTMLElement;
   readonly scroll: HTMLElement;
   readonly progress: HTMLElement;
-  readonly elapsed: HTMLElement;
-  readonly remaining: HTMLElement;
-  readonly progressFill: HTMLElement;
   readonly status: HTMLElement;
 }
 
@@ -114,9 +119,9 @@ let pingTimer: number | null = null;
 let songInfoAnimation: Animation | null = null;
 let isWindowVisible = document.visibilityState === "visible";
 let rafId: number | null = null;
-let progressVisible = false;
-let lastProgressElapsedSec = -1;
-let lastProgressRemainingSec = -1;
+let progressBar: ProgressBarHandle | null = null;
+let timelineEnabled = searchParams.get("timeline") === "1";
+let playerControls: FullscreenPlayerControlsHandle | null = null;
 const sharpenMarker = new SharpenMarker();
 
 function reportDebug(): void {
@@ -135,9 +140,9 @@ function reportDebug(): void {
     `composite=${String(appliedComposite)} sync=${payload?.syncType ?? "-"}`,
     `mergeStyle=${document.getElementById(MERGE_THEME_STYLE_ID)?.textContent?.length ?? 0}`,
     `scrollTop=${Math.round(elements.scroll.scrollTop)} scrollH=${Math.round(elements.scroll.scrollHeight)}`,
-    `active=${elements.mount.querySelectorAll(".blyrics--active").length} activeY=${
-      Math.round(elements.mount.querySelector<HTMLElement>(".blyrics--active")?.getBoundingClientRect().top ?? -1)
-    }`,
+    `active=${elements.mount.querySelectorAll(".blyrics--active").length} activeY=${Math.round(
+      elements.mount.querySelector<HTMLElement>(".blyrics--active")?.getBoundingClientRect().top ?? -1
+    )}`,
   ].join("\n");
 }
 
@@ -164,9 +169,6 @@ function queryElements(): Elements {
     mount: get("#blyrics-wrapper"),
     scroll: get("#tab-renderer"),
     progress: get("#blfw-progress"),
-    elapsed: get("#blfw-elapsed"),
-    remaining: get("#blfw-remaining"),
-    progressFill: get("#blfw-progress-fill"),
     status: get("#blfw-status"),
   };
 }
@@ -198,12 +200,6 @@ function showStatus(text: string): void {
 function hideStatus(): void {
   if (!elements) return;
   elements.status.hidden = true;
-}
-
-function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "--:--";
-  const total = Math.floor(seconds);
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
 function publishBlsState(detail: unknown): void {
@@ -240,7 +236,7 @@ function setBackgroundImageDelayed(url: string, delayMs: number): void {
     bgUpdateTimer = null;
   }
   const apply = (): void => {
-    const escaped = url.replace(/"/g, '%22');
+    const escaped = url.replace(/"/g, "%22");
     elements.layout.style.setProperty("--blyrics-background-img", `url("${escaped}")`);
   };
   if (delayMs <= 0) {
@@ -384,7 +380,7 @@ function animateSongInfo(): void {
       duration: 500,
       easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
       fill: "both",
-    },
+    }
   );
 }
 
@@ -531,7 +527,7 @@ function applyTrack(next: FullscreenTrackInfo | null): void {
   }
   const applyArtworkSideEffects = (url: string): void => {
     elements.shell.setAttribute("data-blfw-artwork", url);
-    elements.shell.style.setProperty("--blfw-art", `url("${url.replace(/"/g, '%22')}")`);
+    elements.shell.style.setProperty("--blfw-art", `url("${url.replace(/"/g, "%22")}")`);
     elements.shell.setAttribute("data-has-art", "true");
     if (!hasMainColors) applyArtworkColors(url);
     window.dispatchEvent(new CustomEvent(BLS_MEDIA_EVENT, { detail: { artworkUrl: url } }));
@@ -554,9 +550,27 @@ function applyTrack(next: FullscreenTrackInfo | null): void {
   }
 }
 
-function refreshProgressVisibility(): void {
-  if (!elements?.progress) return;
-  progressVisible = window.getComputedStyle(elements.progress).display !== "none";
+function applyTimelineEnabled(enabled: boolean): void {
+  timelineEnabled = enabled;
+  if (enabled) {
+    document.documentElement.setAttribute("data-blfw-timeline", "true");
+  } else {
+    document.documentElement.removeAttribute("data-blfw-timeline");
+  }
+  if (!elements) return;
+  if (!enabled) {
+    progressBar?.destroy();
+    progressBar = null;
+    elements.progress.replaceChildren();
+    return;
+  }
+  if (progressBar) return;
+  progressBar = createProgressBar({
+    doc: document,
+    getSnapshot: () => snapshot,
+    onSeek: seconds => sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "seek", time: seconds }),
+  });
+  elements.progress.replaceChildren(progressBar.element);
 }
 
 function ensureMergeTheme(): void {
@@ -570,7 +584,6 @@ function ensureMergeTheme(): void {
     document.head.appendChild(style);
   }
   if (style.textContent !== mergeThemeCss) style.textContent = mergeThemeCss;
-  refreshProgressVisibility();
 }
 
 function enforceGlassyFlowScrollVars(container: HTMLElement | null): void {
@@ -633,9 +646,7 @@ function installGlassyFlowFlip(): void {
       const inlineAnimate = container.style.getPropertyValue("--blyrics-animate-scroll").trim();
       const animateScroll =
         inlineAnimate ||
-        (usesGlassyFlow
-          ? "0"
-          : getComputedStyle(container).getPropertyValue("--blyrics-animate-scroll").trim());
+        (usesGlassyFlow ? "0" : getComputedStyle(container).getPropertyValue("--blyrics-animate-scroll").trim());
       if (animateScroll !== "0") return;
       const delta = read.call(this) - previous;
       if (delta === 0) return;
@@ -690,8 +701,7 @@ function syncNoLyricsAttribute(): void {
   if (!elements) return;
   const loaderShowing = isLoaderVisible();
   const isNoLyrics =
-    !loaderShowing &&
-    Boolean(payload?.lyrics && payload.lyrics.length > 0 && payload.noLyrics === true);
+    !loaderShowing && Boolean(payload?.lyrics && payload.lyrics.length > 0 && payload.noLyrics === true);
   elements.page.toggleAttribute("blyrics-no-lyrics", isNoLyrics);
 }
 
@@ -752,26 +762,8 @@ function buildLyrics(): void {
 }
 
 function currentTimeFrom(live: FullscreenPlaybackSnapshot): number {
-  const elapsed = live.isPlaying
-    ? (Math.max(0, Date.now() - live.wallTime) * live.playbackRate) / 1000
-    : 0;
+  const elapsed = live.isPlaying ? (Math.max(0, Date.now() - live.wallTime) * live.playbackRate) / 1000 : 0;
   return Math.min(live.currentTimeS + elapsed, live.durationS || Number.POSITIVE_INFINITY);
-}
-
-function updateProgress(time: number, duration: number): void {
-  if (!progressVisible) return;
-  const ratio = duration > 0 ? Math.min(1, Math.max(0, time / duration)) : 0;
-  elements.progressFill.style.transform = `scaleX(${ratio})`;
-  const elapsedSec = Number.isFinite(time) && time >= 0 ? Math.floor(time) : -1;
-  if (elapsedSec !== lastProgressElapsedSec) {
-    lastProgressElapsedSec = elapsedSec;
-    elements.elapsed.textContent = formatTime(time);
-  }
-  const remainingSec = duration > 0 ? Math.floor(Math.max(0, duration - time)) : -1;
-  if (remainingSec !== lastProgressRemainingSec) {
-    lastProgressRemainingSec = remainingSec;
-    elements.remaining.textContent = duration > 0 ? `-${formatTime(Math.max(0, duration - time))}` : "--:--";
-  }
 }
 
 let lastTickAt = 0;
@@ -782,7 +774,6 @@ function runSingleTick(now = performance.now()): void {
   if (!isWindowVisible || !target || !live || !payload?.lyrics) return;
   lastTickAt = now;
   const time = currentTimeFrom(live);
-  updateProgress(time, live.durationS);
   const suppressZero = time <= 0.05 && Date.now() < (payload.suppressZeroTimeUntil ?? 0);
   if (!suppressZero) {
     target.tick(time, {
@@ -836,11 +827,7 @@ async function applyMode(composite: boolean, forceRebuild = false): Promise<void
   if (!modeChanged && !forceRebuild) return;
   if (modeChanged) {
     appliedComposite = composite;
-    await syncRendererModeStylesheets(
-      document,
-      composite,
-      chrome.runtime.getURL(LEGACY_RENDERER_CSS_PATH),
-    );
+    await syncRendererModeStylesheets(document, composite, chrome.runtime.getURL(LEGACY_RENDERER_CSS_PATH));
     if (renderer) {
       renderer.destroy();
       renderer = null;
@@ -851,9 +838,7 @@ async function applyMode(composite: boolean, forceRebuild = false): Promise<void
 }
 
 function enqueueWork(task: () => Promise<void> | void): void {
-  modeQueue = modeQueue
-    .then(task)
-    .catch((error) => console.error("[blfw] queue", error));
+  modeQueue = modeQueue.then(task).catch(error => console.error("[blfw] queue", error));
 }
 
 function handleMessage(message: FullscreenOutbound): void {
@@ -867,7 +852,12 @@ function handleMessage(message: FullscreenOutbound): void {
       applyVideoState(message.video);
       applyLoader(message.loader);
       applyTrack(message.track);
-      if (message.snapshot) snapshot = message.snapshot;
+      if (message.snapshot) {
+        snapshot = message.snapshot;
+        playerControls?.setPlaying(message.snapshot.isPlaying);
+      }
+      playerControls?.setVolume(message.volume ?? null);
+      playerControls?.setRating(message.rating ?? null);
       if (message.lyrics) payload = message.lyrics;
       enqueueWork(() => applyMode(message.composite, Boolean(message.lyrics)));
       hideStatus();
@@ -879,12 +869,7 @@ function handleMessage(message: FullscreenOutbound): void {
       enqueueWork(() => {
         const previous = payload;
         payload = message.payload;
-        if (
-          previous &&
-          renderer &&
-          renderer.lines.length > 0 &&
-          hasSameRenderedLyrics(previous, payload)
-        ) {
+        if (previous && renderer && renderer.lines.length > 0 && hasSameRenderedLyrics(previous, payload)) {
           renderer.setLanguage(payload.language);
           applyLyricDecorations(renderer, payload.decorations);
           renderer.relayout();
@@ -899,6 +884,7 @@ function handleMessage(message: FullscreenOutbound): void {
       break;
     case "snapshot":
       snapshot = message.payload;
+      playerControls?.setPlaying(message.payload.isPlaying);
       runSingleTick();
       syncTickLoop();
       break;
@@ -910,6 +896,12 @@ function handleMessage(message: FullscreenOutbound): void {
       break;
     case "video-state":
       applyVideoState(message.payload);
+      break;
+    case "volume":
+      playerControls?.setVolume(message.payload);
+      break;
+    case "rating":
+      playerControls?.setRating(message.payload);
       break;
     case "theme":
       themeCss = message.payload;
@@ -968,7 +960,7 @@ function applyArtworkColors(url: string): void {
       root.setProperty("--ytmusic-album-color", `${r}, ${g}, ${b}`);
       root.setProperty(
         "--ytmusic-album-color-dark",
-        `${Math.round(r * 0.58)}, ${Math.round(g * 0.58)}, ${Math.round(b * 0.58)}`,
+        `${Math.round(r * 0.58)}, ${Math.round(g * 0.58)}, ${Math.round(b * 0.58)}`
       );
     } catch {
       // A tainted canvas just leaves the theme on its fallback colour.
@@ -1047,9 +1039,26 @@ function start(): void {
   elements = queryElements();
   applyBaseVariables();
   ensureScrollScript();
+  const controlsHost = document.getElementById("blfw-player-controls");
+  if (controlsHost) {
+    playerControls = createFullscreenPlayerControls({
+      container: controlsHost,
+      send: sendToContent,
+      labels: {
+        previous: "Previous",
+        play: "Play",
+        pause: "Pause",
+        next: "Next",
+        like: "Like",
+        volume: "Volume",
+        mute: "Mute",
+      },
+    });
+  }
+  applyTimelineEnabled(timelineEnabled);
   videoReceiver = createVideoFrameReceiver(
     elements.mvVideo,
-    (aspect) => {
+    aspect => {
       if (Number.isFinite(aspect) && aspect > 0) videoAspectRatio = aspect;
       hasDecodedVideoFrame = true;
       syncVideoModeUi();
@@ -1057,7 +1066,7 @@ function start(): void {
     () => {
       hasDecodedVideoFrame = false;
       syncVideoModeUi();
-    },
+    }
   );
   const applyWindowVisibility = (visible: boolean): void => {
     if (isWindowVisible === visible) return;
@@ -1070,22 +1079,36 @@ function start(): void {
     syncTickLoop();
   };
 
-  window.addEventListener("message", (event: MessageEvent<{ type?: string; visible?: boolean; fullscreen?: boolean }>) => {
-    if (event.source !== window || !event.data?.type) return;
-    if (event.data.type === VIDEO_PORT_MSG_TYPE) {
-      const incomingPort = event.ports?.[0];
-      if (incomingPort) videoReceiver?.attachPort(incomingPort);
-      return;
+  window.addEventListener(
+    "message",
+    (
+      event: MessageEvent<{
+        type?: string;
+        visible?: boolean;
+        fullscreen?: boolean;
+        showTimeline?: boolean;
+      }>
+    ) => {
+      if (event.source !== window || !event.data?.type) return;
+      if (event.data.type === VIDEO_PORT_MSG_TYPE) {
+        const incomingPort = event.ports?.[0];
+        if (incomingPort) videoReceiver?.attachPort(incomingPort);
+        return;
+      }
+      if (event.data.type === WINDOW_VISIBILITY_MSG_TYPE && typeof event.data.visible === "boolean") {
+        applyWindowVisibility(event.data.visible);
+        return;
+      }
+      if (event.data.type === WINDOW_FULLSCREEN_STATE_MSG_TYPE && typeof event.data.fullscreen === "boolean") {
+        hasWindowFullscreenBridge = true;
+        syncFullscreenButtonState(event.data.fullscreen);
+        return;
+      }
+      if (event.data.type === WINDOW_OPTIONS_MSG_TYPE && typeof event.data.showTimeline === "boolean") {
+        applyTimelineEnabled(event.data.showTimeline);
+      }
     }
-    if (event.data.type === WINDOW_VISIBILITY_MSG_TYPE && typeof event.data.visible === "boolean") {
-      applyWindowVisibility(event.data.visible);
-      return;
-    }
-    if (event.data.type === WINDOW_FULLSCREEN_STATE_MSG_TYPE && typeof event.data.fullscreen === "boolean") {
-      hasWindowFullscreenBridge = true;
-      syncFullscreenButtonState(event.data.fullscreen);
-    }
-  });
+  );
   document.addEventListener("visibilitychange", () => {
     applyWindowVisibility(document.visibilityState === "visible");
   });
@@ -1109,7 +1132,7 @@ function start(): void {
   window.addEventListener("wheel", onPointerActive, { passive: true });
 
   windowFullscreenBtn = document.getElementById("blfw-fullscreen") as HTMLButtonElement | null;
-  windowFullscreenBtn?.addEventListener("click", (event) => {
+  windowFullscreenBtn?.addEventListener("click", event => {
     toggleWindowFullscreen();
     if (event.detail > 0) windowFullscreenBtn?.blur();
   });
@@ -1130,7 +1153,10 @@ function start(): void {
   });
 
   sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "hello" });
-  pingTimer = window.setInterval(() => sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "ping" }), PING_INTERVAL_MS);
+  pingTimer = window.setInterval(
+    () => sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "ping" }),
+    PING_INTERVAL_MS
+  );
 
   window.setTimeout(() => {
     if (!payload && !snapshot) showStatus("Waiting for the player window...");
@@ -1138,6 +1164,10 @@ function start(): void {
 
   window.addEventListener("pagehide", () => {
     clearArtworkTimers();
+    playerControls?.destroy();
+    playerControls = null;
+    progressBar?.destroy();
+    progressBar = null;
     if (rafId !== null) {
       window.cancelAnimationFrame(rafId);
       rafId = null;
@@ -1173,7 +1203,33 @@ function start(): void {
   });
 
   window.addEventListener("keydown", event => {
-    if (event.key === "Escape" && document.fullscreenElement) void document.exitFullscreen();
+    if (event.key === "Escape" && document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+
+    if (event.code === "Space") {
+      if (event.repeat || closestFromTarget(event.target, TEXT_ENTRY_TARGETS)) return;
+      event.preventDefault();
+      sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "transport", action: "play-pause" });
+      return;
+    }
+
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      if (closestFromTarget(event.target, SEEK_BLOCKING_TARGETS)) return;
+      const live = snapshot;
+      if (!live || !Number.isFinite(live.durationS) || live.durationS <= 0) return;
+      event.preventDefault();
+      const step = event.shiftKey ? 30 : 5;
+      const target = Math.min(
+        live.durationS,
+        Math.max(0, currentTimeFrom(live) + (event.key === "ArrowLeft" ? -step : step))
+      );
+      sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "seek", time: target });
+    }
   });
 
   syncTickLoop();
