@@ -9,7 +9,12 @@ import {
   type SharpenLineDescriptor,
   SharpenTimelineState,
 } from "@modules/ui/fullscreenWindow/sharpenMarker";
-import { buildTrackKey, readMainAlbumColors, readMainSongInfo } from "@modules/ui/fullscreenWindow/trackInfo";
+import {
+  buildTrackKey,
+  isUsableArtworkUrl,
+  readMainAlbumColors,
+  readMainSongInfo,
+} from "@modules/ui/fullscreenWindow/trackInfo";
 
 function makeLine(
   isActive: boolean,
@@ -340,4 +345,11 @@ function makeLine(
   };
   assert.notEqual(buildTrackKey(baseTrack), buildTrackKey({ ...baseTrack, albumColorDark: "10, 20, 30" }));
   assert.notEqual(buildTrackKey(baseTrack), buildTrackKey({ ...baseTrack, album: "Album X" }));
+}
+
+{
+  assert.equal(isUsableArtworkUrl("https://example.com/art.jpg"), true);
+  assert.equal(isUsableArtworkUrl("data:image/gif;base64,R0lGODlhAQABAAAAACw="), false);
+  assert.equal(isUsableArtworkUrl(""), false);
+  assert.equal(isUsableArtworkUrl(null), false);
 }

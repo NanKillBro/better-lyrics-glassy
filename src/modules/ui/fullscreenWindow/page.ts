@@ -3,6 +3,7 @@ import type { Lyric } from "@braccato/core";
 import { applyLyricDecorations } from "@modules/lyrics/lyricDecorations";
 import { hasSameRenderedLyrics } from "@modules/ui/fullscreenWindow/lyricsEquality";
 import { SharpenMarker } from "@modules/ui/fullscreenWindow/sharpenMarker";
+import { isUsableArtworkUrl } from "@modules/ui/fullscreenWindow/trackInfo";
 import { createVideoFrameReceiver, type VideoFrameReceiver } from "@modules/ui/fullscreenWindow/videoTransport";
 import { initGlassyFlowBridge } from "@modules/ui/glassyFlowBridge";
 import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
@@ -58,6 +59,7 @@ interface Elements {
   readonly mvVideo: HTMLVideoElement;
   readonly title: HTMLElement;
   readonly artist: HTMLElement;
+  readonly songInfo: HTMLElement;
   readonly fsColumn: HTMLElement;
   readonly loader: HTMLElement;
   readonly mount: HTMLElement;
@@ -142,6 +144,7 @@ function queryElements(): Elements {
     mvVideo: get("#blfw-mv-video"),
     title: get("#blyrics-title"),
     artist: get("#blyrics-artist"),
+    songInfo: get("#blyrics-song-info"),
     fsColumn: get("#blyrics-fs-column"),
     loader: get("#blyrics-loader"),
     mount: get("#blyrics-wrapper"),
@@ -246,7 +249,11 @@ function clearArtworkTimers(): void {
   }
 }
 
-function applyArtworkCrossfade(nextUrl: string): void {
+function applyArtworkCrossfade(nextUrl: string, onApplied?: () => void): void {
+  if (!isUsableArtworkUrl(nextUrl)) {
+    return;
+  }
+
   const gen = ++artGeneration;
   clearArtworkTimers();
 
@@ -285,6 +292,7 @@ function applyArtworkCrossfade(nextUrl: string): void {
       void window.getComputedStyle(incoming).opacity;
       incoming.style.opacity = "";
       incoming.classList.add("is-visible");
+      onApplied?.();
       artCleanupTimer = window.setTimeout(() => {
         if (gen !== artGeneration) return;
         artCleanupTimer = null;
@@ -298,6 +306,7 @@ function applyArtworkCrossfade(nextUrl: string): void {
       incoming.style.opacity = "";
       incoming.classList.add("is-visible");
       layers[1 - incomingIndex].classList.remove("is-visible", "blfw-art--outgoing", "blfw-art--incoming");
+      onApplied?.();
     }
   };
 
@@ -316,6 +325,7 @@ function applyArtworkCrossfade(nextUrl: string): void {
       hasCommittedArt = true;
       artFront = incomingIndex;
       setBackgroundImageDelayed(nextUrl, BG_UPDATE_CROSSFADE_DELAY_MS);
+      onApplied?.();
     }, ARTWORK_FORCE_VISIBLE_MS);
   }
 
@@ -342,15 +352,14 @@ function applyArtworkCrossfade(nextUrl: string): void {
 function animateSongInfo(): void {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   songInfoAnimation?.cancel();
-  songInfoAnimation = elements.fsColumn.animate(
+  songInfoAnimation = elements.songInfo.animate(
     [
-      { transform: "translateY(0)", opacity: 0 },
-      { transform: "translateY(-64px)", opacity: 1 },
+      { transform: "translateY(64px)", opacity: 0 },
+      { transform: "translateY(0)", opacity: 1 },
     ],
     {
       duration: 500,
       easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
-      delay: 100,
       fill: "both",
     },
   );
@@ -388,12 +397,12 @@ function stopAnimatedArtwork(): void {
     window.clearTimeout(animatedArtSafetyTimer);
     animatedArtSafetyTimer = null;
   }
-  elements.shell.removeAttribute("data-animated-art");
   const front = artVideoAt(artVideoFront);
   clearArtVideo(artVideoAt(1 - artVideoFront));
   front.classList.remove("is-visible");
   animatedArtRemoveTimer = window.setTimeout(() => {
     animatedArtRemoveTimer = null;
+    elements.shell.removeAttribute("data-animated-art");
     clearArtVideo(front);
   }, 650);
 }
@@ -461,12 +470,13 @@ function startAnimatedArtwork(url: string): void {
 function applyTrack(next: FullscreenTrackInfo | null): void {
   if (!next) return;
   const previousVideoId = lastVideoId;
+  const titleChanged = Boolean(next.title) && next.title !== elements.title.textContent;
   if (next.videoId !== lastVideoId) {
     lastVideoId = next.videoId;
     elements.artImage.classList.add("blfw-art--loading");
   }
   // Empty strings arrive while a new track is still resolving; keep the previous text instead.
-  if (next.title && elements.title.textContent !== next.title) {
+  if (titleChanged) {
     elements.title.textContent = next.title;
   }
   if (next.artist || next.album) {
@@ -489,26 +499,32 @@ function applyTrack(next: FullscreenTrackInfo | null): void {
     elements.artist.replaceChildren();
   }
 
-  if (!next.animatedArtworkUrl) {
-    if (animatedUrl !== null) stopAnimatedArtwork();
-  }
+  const nextArtworkUrl = isUsableArtworkUrl(next.artworkUrl) ? next.artworkUrl : null;
+  const artworkChanged = Boolean(nextArtworkUrl) && nextArtworkUrl !== artUrl;
+  const stopAnimatedAfterArtwork = !next.animatedArtworkUrl && animatedUrl !== null;
 
   const hasMainColors = applyMainAlbumColors(next);
-  if (next.artworkUrl && next.artworkUrl !== artUrl) {
-    artUrl = next.artworkUrl;
-    elements.shell.setAttribute("data-blfw-artwork", next.artworkUrl);
-    elements.shell.style.setProperty("--blfw-art", `url("${next.artworkUrl.replace(/"/g, '%22')}")`);
+  const applyArtworkSideEffects = (url: string): void => {
+    elements.shell.setAttribute("data-blfw-artwork", url);
+    elements.shell.style.setProperty("--blfw-art", `url("${url.replace(/"/g, '%22')}")`);
     elements.shell.setAttribute("data-has-art", "true");
-    applyArtworkCrossfade(next.artworkUrl);
-    if (!hasMainColors) applyArtworkColors(next.artworkUrl);
-    window.dispatchEvent(new CustomEvent(BLS_MEDIA_EVENT, { detail: { artworkUrl: next.artworkUrl } }));
+    if (!hasMainColors) applyArtworkColors(url);
+    window.dispatchEvent(new CustomEvent(BLS_MEDIA_EVENT, { detail: { artworkUrl: url } }));
+    if (stopAnimatedAfterArtwork) stopAnimatedArtwork();
+  };
+
+  if (artworkChanged && nextArtworkUrl) {
+    artUrl = nextArtworkUrl;
+    applyArtworkCrossfade(nextArtworkUrl, () => applyArtworkSideEffects(nextArtworkUrl));
+  } else if (stopAnimatedAfterArtwork) {
+    stopAnimatedArtwork();
   }
 
   if (next.animatedArtworkUrl) {
     if (next.animatedArtworkUrl !== animatedUrl) startAnimatedArtwork(next.animatedArtworkUrl);
   }
 
-  if (previousVideoId !== null && next.videoId !== null && next.videoId !== previousVideoId) {
+  if (previousVideoId !== null && titleChanged) {
     animateSongInfo();
   }
 }

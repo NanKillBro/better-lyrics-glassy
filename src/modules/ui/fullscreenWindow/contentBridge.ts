@@ -15,7 +15,12 @@ import {
   type FullscreenVideoState,
 } from "@modules/ui/fullscreenWindow/messages";
 import { createVideoFrameSender } from "@modules/ui/fullscreenWindow/videoTransport";
-import { buildTrackKey, readMainAlbumColors, readMainSongInfo } from "@modules/ui/fullscreenWindow/trackInfo";
+import {
+  buildTrackKey,
+  isUsableArtworkUrl,
+  readMainAlbumColors,
+  readMainSongInfo,
+} from "@modules/ui/fullscreenWindow/trackInfo";
 import { onLyrics } from "@modules/ui/pictureInPicture/bridge";
 import { getPlayerVideo, isAdPlaying, isVideoModeShown } from "@modules/ui/playerControls/playerBarControls";
 import { COMPOSITE_LYRICS_ATTR, readRendererMode } from "@modules/ui/rendererMode";
@@ -85,7 +90,7 @@ function readArtworkUrl(): string | null {
   for (const selector of ["#song-image img", "#thumbnail img"]) {
     const image = document.querySelector<HTMLImageElement>(selector);
     const url = image?.currentSrc || image?.src || "";
-    if (url) return url;
+    if (isUsableArtworkUrl(url)) return url;
   }
   return null;
 }
@@ -94,7 +99,7 @@ function readAnimatedArtworkUrl(): string | null {
   const video = document.querySelector<HTMLVideoElement>("#bls-video");
   if (!video) return null;
   const url = video.currentSrc || video.getAttribute("src") || video.querySelector("source")?.getAttribute("src") || "";
-  return url || null;
+  return isUsableArtworkUrl(url) ? url : null;
 }
 
 function readTrackInfo(): FullscreenTrackInfo {

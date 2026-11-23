@@ -1,6 +1,10 @@
 import type { FullscreenTrackInfo } from "@modules/ui/fullscreenWindow/messages";
 import { getBylineLinks } from "@modules/ui/playerControls/playerBarControls";
 
+export function isUsableArtworkUrl(url: string | null | undefined): url is string {
+  return typeof url === "string" && url.length > 0 && !url.startsWith("data:");
+}
+
 export interface SongInfoText {
   readonly title: string;
   readonly artist: string;
