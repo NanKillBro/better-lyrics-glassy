@@ -34,7 +34,6 @@ const WINDOW_VISIBILITY_MSG_TYPE = "blfw-window-visibility";
 const WINDOW_FULLSCREEN_STATE_MSG_TYPE = "blfw-window-fullscreen-state";
 const MERGE_THEME_STYLE_ID = "blfw-merge-theme";
 const SCROLL_SCRIPTS: Record<string, string> = {
-  glassyflow: "/glassyflow.js",
   "glassyflow-turbo": "/glassyflow-turbo.js",
   "glassyflow-super": "/glassyflow-super.js",
 };
