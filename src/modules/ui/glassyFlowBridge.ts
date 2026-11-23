@@ -36,7 +36,7 @@ interface AppliedLineState {
 
 const patchedViews = new WeakSet<GlassyFlowBridgeTarget>();
 const inlineOffsetSignatures = new WeakMap<Element, string>();
-let defaultTarget: GlassyFlowBridgeTarget | null = null;
+let defaultTargetRef: WeakRef<GlassyFlowBridgeTarget> | null = null;
 let observedContainer: HTMLElement | null = null;
 let offsetObserver: MutationObserver | null = null;
 let headObserver: MutationObserver | null = null;
@@ -156,10 +156,10 @@ function getTimingOffsetS(container: HTMLElement, isRichsync: boolean): number {
 }
 
 export function initGlassyFlowBridge(targetView?: GlassyFlowBridgeTarget): void {
-  const resolved = targetView ?? defaultTarget;
+  const resolved = targetView ?? defaultTargetRef?.deref() ?? null;
   if (!resolved) return;
   const target: GlassyFlowBridgeTarget = resolved;
-  if (!defaultTarget) defaultTarget = target;
+  if (!defaultTargetRef?.deref()) defaultTargetRef = new WeakRef(target);
   if (patchedViews.has(target)) return;
   patchedViews.add(target);
 

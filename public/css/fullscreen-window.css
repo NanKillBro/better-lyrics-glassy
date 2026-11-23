@@ -388,6 +388,8 @@ html[data-debug="true"] #blfw-debug {
 }
 
 #blfw-shell:hover ~ #blfw-close,
+#blfw-drag:hover ~ #blfw-close,
+#blfw-close:hover,
 #blfw-close:focus-visible {
 	opacity: 1;
 }
@@ -412,9 +414,12 @@ html[data-debug="true"] #blfw-debug {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	#blfw-art-image {
+	#blfw-art-image,
+	#blfw-art-image-next,
+	#blfw-art-video,
+	#blfw-art-video-next {
 		animation: none;
-		opacity: 1;
+		transition: none;
 	}
 }
 

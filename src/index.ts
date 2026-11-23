@@ -60,7 +60,10 @@ import { startVideoQualitySettingsBridge } from "@modules/settings/videoQualityB
  * This method orchestrates the setup of logging, DOM injection, observers, settings,
  * storage, and lyric providers.
  */
-async function modify(isDisposed: () => boolean): Promise<void> {
+async function modify(
+  isDisposed: () => boolean,
+  onCleanup: (cleanup: () => void) => void
+): Promise<void> {
   applyLoggingSetting();
   await injectHeadTags();
   if (isDisposed()) return;
@@ -71,7 +74,7 @@ async function modify(isDisposed: () => boolean): Promise<void> {
   subscribeToLocaleChanges(publishPictureInPictureResources);
   publishPictureInPictureResources();
   setupAdObserver();
-  setupFullscreenWindowBridge();
+  onCleanup(setupFullscreenWindowBridge());
   enableLyricsTab();
   observeLyricsPageType();
   setupHomepageFullscreenHandler();
@@ -122,10 +125,18 @@ function init(): () => void {
   const cleanupPerformanceSettings = initPerformanceSettingsListener();
   let disposed = false;
   let modifyStarted = false;
+  const modifyCleanups: Array<() => void> = [];
+  const registerModifyCleanup = (cleanup: () => void): void => {
+    if (disposed) {
+      cleanup();
+      return;
+    }
+    modifyCleanups.push(cleanup);
+  };
   const runModify = (): void => {
     if (modifyStarted || disposed) return;
     modifyStarted = true;
-    void modify(() => disposed);
+    void modify(() => disposed, registerModifyCleanup);
   };
 
   initializePictureInPictureAutoRestore();
@@ -140,6 +151,9 @@ function init(): () => void {
   const cleanupPlayerBarReveal = setupFullscreenPlayerBarReveal();
   return () => {
     disposed = true;
+    for (const cleanup of modifyCleanups.splice(0)) {
+      cleanup();
+    }
     cleanupVideoQualitySettings();
     cleanupPerformanceSettings();
     disposeAdObserver();

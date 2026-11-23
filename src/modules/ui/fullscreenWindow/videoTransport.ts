@@ -27,6 +27,7 @@ export interface VideoFrameSender {
   attachPort(port: MessagePort): void;
   setActive(active: boolean, source: HTMLVideoElement | null): void;
   captureOne(): void;
+  pause(): void;
   stop(): void;
   destroy(): void;
 }
@@ -102,7 +103,8 @@ export function createVideoFrameSender(): VideoFrameSender {
   let sendSeq = 0;
   let inFlightSeq: number | null = null;
   let inFlightAt = 0;
-  let converting = false;
+  let convertSeq = 0;
+  let activeConvertSeq: number | null = null;
   let pendingFrame: VideoFrame | null = null;
   let pendingSnapshot = false;
   let lastTs = -1;
@@ -128,9 +130,10 @@ export function createVideoFrameSender(): VideoFrameSender {
 
   const resetInFlight = (): void => {
     sendSeq += 1;
+    convertSeq += 1;
     inFlightSeq = null;
     inFlightAt = 0;
-    converting = false;
+    activeConvertSeq = null;
     pendingSnapshot = false;
     closeFrameQuietly(pendingFrame);
     pendingFrame = null;
@@ -176,7 +179,7 @@ export function createVideoFrameSender(): VideoFrameSender {
   };
 
   const isBusy = (): boolean => {
-    if (converting) return true;
+    if (activeConvertSeq !== null) return true;
     if (inFlightSeq === null) return false;
     if (performance.now() - inFlightAt > INFLIGHT_TIMEOUT_MS) {
       inFlightSeq = null;
@@ -210,15 +213,24 @@ export function createVideoFrameSender(): VideoFrameSender {
       aspectRatio = source.videoWidth / source.videoHeight;
     }
 
-    converting = true;
+    const myConvertSeq = ++convertSeq;
+    activeConvertSeq = myConvertSeq;
     let bitmap: ImageBitmap | null = null;
+    let failed = false;
     try {
       bitmap = await createImageBitmap(source);
     } catch {
-      return;
+      failed = true;
     } finally {
-      converting = false;
+      if (activeConvertSeq === myConvertSeq) activeConvertSeq = null;
       if (source instanceof VideoFrame) closeFrameQuietly(source);
+    }
+
+    if (failed || !bitmap) {
+      if (expectedCaptureEpoch === captureEpoch && active && port === expectedPort) {
+        queueMicrotask(drainPending);
+      }
+      return;
     }
 
     if (expectedCaptureEpoch !== captureEpoch || !active || port !== expectedPort) {
@@ -354,7 +366,7 @@ export function createVideoFrameSender(): VideoFrameSender {
     if (!active || !port || !captureStream) return;
     const newest = pickVideoTrack(captureStream.getTracks());
     for (const track of captureStream.getTracks()) {
-      if (track.kind === "video" && track !== newest) {
+      if (track !== newest) {
         try {
           track.stop();
         } catch {
@@ -453,19 +465,26 @@ export function createVideoFrameSender(): VideoFrameSender {
         video = nextVideo;
         return;
       }
+      const wasActive = active;
       const videoChanged = video !== nextVideo;
       active = true;
       video = nextVideo;
       if (videoChanged) stopCapture();
       if (port) {
         ensureCapture();
-        requestElementSnapshot();
+        if (!wasActive || videoChanged || !activeTrack) {
+          requestElementSnapshot();
+        }
       }
     },
     captureOne(): void {
       if (!active || !port || !video) return;
       ensureCapture();
       requestElementSnapshot();
+    },
+    pause(): void {
+      active = false;
+      stopCapture();
     },
     stop(): void {
       deactivate(false);

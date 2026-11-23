@@ -173,8 +173,14 @@ export class SharpenTimelineState {
   }
 }
 
+interface CachedLineTiming {
+  readonly durationS: number;
+  readonly startTimeS: number;
+}
+
 export class SharpenMarker {
   private readonly state = new SharpenTimelineState();
+  private readonly lineTimingCache = new WeakMap<HTMLElement, CachedLineTiming>();
   private lastContainer: HTMLElement | null = null;
   private lastAppliedKey = "";
 
@@ -183,8 +189,22 @@ export class SharpenMarker {
     this.lastAppliedKey = "";
   }
 
+  private readLineTiming(line: HTMLElement): CachedLineTiming {
+    const cached = this.lineTimingCache.get(line);
+    if (cached) return cached;
+    const timing: CachedLineTiming = {
+      durationS: Number(line.dataset.duration) || 0,
+      startTimeS: Number(line.dataset.time) || 0,
+    };
+    this.lineTimingCache.set(line, timing);
+    return timing;
+  }
+
   sync(mount: HTMLElement, timeS: number, forceImmediate = false): void {
-    const container = mount.querySelector<HTMLElement>(".blyrics-container");
+    const container =
+      this.lastContainer && this.lastContainer.isConnected && mount.contains(this.lastContainer)
+        ? this.lastContainer
+        : mount.querySelector<HTMLElement>(".blyrics-container");
     if (!container) {
       this.lastContainer = null;
       this.reset();
@@ -201,13 +221,16 @@ export class SharpenMarker {
     const descriptors: SharpenLineDescriptor[] = [];
     for (const child of container.children) {
       if (!(child instanceof HTMLElement) || !child.classList.contains("blyrics--line")) continue;
+      const isActive = child.classList.contains("blyrics--active");
+      const isAnimating = child.classList.contains("blyrics--animating");
+      const timing = this.readLineTiming(child);
       lineElements.push(child);
       descriptors.push({
-        isActive: child.classList.contains("blyrics--active"),
-        isAnimating: child.classList.contains("blyrics--animating"),
-        animDelayS: readAnimDelayS(child),
-        durationS: Number(child.dataset.duration) || 0,
-        startTimeS: Number(child.dataset.time) || 0,
+        isActive,
+        isAnimating,
+        animDelayS: isAnimating ? readAnimDelayS(child) : null,
+        durationS: timing.durationS,
+        startTimeS: timing.startTimeS,
       });
     }
 

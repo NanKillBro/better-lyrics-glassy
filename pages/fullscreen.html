@@ -11,11 +11,6 @@
 	</head>
 	<body>
 		<div id="blfw-drag"></div>
-		<button id="blfw-close" type="button" title="Close window" aria-label="Close window">
-			<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-				<path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z" fill="currentColor"></path>
-			</svg>
-		</button>
 		<!--
 			This is a deliberate skeleton of YouTube Music's fullscreen player page. The app's Glassy look
 			is a theme over exactly these ids, classes and attributes, so reproducing the skeleton lets the
@@ -64,6 +59,11 @@
 			<p id="blfw-status" hidden></p>
 			<pre id="blfw-debug" aria-hidden="true"></pre>
 		</main>
+		<button id="blfw-close" type="button" title="Close window" aria-label="Close window">
+			<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+				<path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z" fill="currentColor"></path>
+			</svg>
+		</button>
 		<script type="module" defer src="../src/modules/ui/fullscreenWindow/page.ts"></script>
 	</body>
 </html>

@@ -28,7 +28,9 @@ const ARTWORK_FORCE_VISIBLE_MS = 5_000;
 const BG_UPDATE_CROSSFADE_DELAY_MS = 1_000;
 const BLS_STATE_EVENT = "bls:fullscreen-state";
 const BLS_MEDIA_EVENT = "bls:fullscreen-media";
+const BLS_VISIBILITY_EVENT = "bls:fullscreen-visibility";
 const VIDEO_PORT_MSG_TYPE = "blfw-video-port";
+const WINDOW_VISIBILITY_MSG_TYPE = "blfw-window-visibility";
 const MERGE_THEME_STYLE_ID = "blfw-merge-theme";
 const SCROLL_SCRIPTS: Record<string, string> = {
   glassyflow: "/glassyflow.js",
@@ -64,6 +66,7 @@ interface Elements {
   readonly loader: HTMLElement;
   readonly mount: HTMLElement;
   readonly scroll: HTMLElement;
+  readonly progress: HTMLElement;
   readonly elapsed: HTMLElement;
   readonly remaining: HTMLElement;
   readonly progressFill: HTMLElement;
@@ -83,11 +86,13 @@ let lastVideoId: string | null = null;
 let artFront = 0;
 let hasCommittedArt = false;
 let artGeneration = 0;
+let colorGeneration = 0;
 let artCleanupTimer: number | null = null;
 let artSafetyTimer: number | null = null;
 let bgUpdateTimer: number | null = null;
 let artUrl: string | null = null;
 let animatedUrl: string | null = null;
+let desiredAnimatedUrl: string | null = null;
 let artVideoFront = 0;
 let animatedArtGeneration = 0;
 let animatedArtRemoveTimer: number | null = null;
@@ -102,7 +107,13 @@ let hasDecodedVideoFrame = false;
 let videoAspectRatio = 16 / 9;
 let videoReceiver: VideoFrameReceiver | null = null;
 let cursorIdleTimer: number | null = null;
+let pingTimer: number | null = null;
 let songInfoAnimation: Animation | null = null;
+let isWindowVisible = document.visibilityState === "visible";
+let rafId: number | null = null;
+let progressVisible = false;
+let lastProgressElapsedSec = -1;
+let lastProgressRemainingSec = -1;
 const sharpenMarker = new SharpenMarker();
 
 function reportDebug(): void {
@@ -149,6 +160,7 @@ function queryElements(): Elements {
     loader: get("#blyrics-loader"),
     mount: get("#blyrics-wrapper"),
     scroll: get("#tab-renderer"),
+    progress: get("#blfw-progress"),
     elapsed: get("#blfw-elapsed"),
     remaining: get("#blfw-remaining"),
     progressFill: get("#blfw-progress-fill"),
@@ -297,6 +309,8 @@ function applyArtworkCrossfade(nextUrl: string, onApplied?: () => void): void {
         if (gen !== artGeneration) return;
         artCleanupTimer = null;
         if (outgoing) {
+          outgoing.style.transition = "";
+          outgoing.style.opacity = "";
           outgoing.classList.remove("is-visible", "blfw-art--outgoing", "blfw-art--incoming");
         }
         incoming.classList.remove("blfw-art--incoming");
@@ -305,7 +319,10 @@ function applyArtworkCrossfade(nextUrl: string, onApplied?: () => void): void {
       incoming.style.transition = "";
       incoming.style.opacity = "";
       incoming.classList.add("is-visible");
-      layers[1 - incomingIndex].classList.remove("is-visible", "blfw-art--outgoing", "blfw-art--incoming");
+      const other = layers[1 - incomingIndex];
+      other.style.transition = "";
+      other.style.opacity = "";
+      other.classList.remove("is-visible", "blfw-art--outgoing", "blfw-art--incoming");
       onApplied?.();
     }
   };
@@ -316,10 +333,13 @@ function applyArtworkCrossfade(nextUrl: string, onApplied?: () => void): void {
       artSafetyTimer = null;
       incoming.onload = null;
       incoming.onerror = null;
-      incoming.style.transition = "none";
-      incoming.style.opacity = "1";
+      incoming.style.transition = "";
+      incoming.style.opacity = "";
       incoming.classList.add("is-visible");
+      incoming.classList.remove("blfw-art--incoming");
       if (outgoing) {
+        outgoing.style.transition = "";
+        outgoing.style.opacity = "";
         outgoing.classList.remove("is-visible", "blfw-art--outgoing", "blfw-art--incoming");
       }
       hasCommittedArt = true;
@@ -432,10 +452,6 @@ function startAnimatedArtwork(url: string): void {
   incoming.loop = true;
   incoming.playsInline = true;
   incoming.crossOrigin = "anonymous";
-  incoming.src = url;
-  incoming.load();
-  void incoming.play().catch(() => undefined);
-
   incoming.onerror = () => {
     if (generation !== animatedArtGeneration) return;
     stopAnimatedArtwork();
@@ -461,6 +477,9 @@ function startAnimatedArtwork(url: string): void {
       clearArtVideo(front);
     }, 650);
   };
+  incoming.src = url;
+  incoming.load();
+  void incoming.play().catch(() => undefined);
   animatedArtSafetyTimer = window.setTimeout(() => {
     animatedArtSafetyTimer = null;
     if (generation === animatedArtGeneration) stopAnimatedArtwork();
@@ -501,22 +520,25 @@ function applyTrack(next: FullscreenTrackInfo | null): void {
 
   const nextArtworkUrl = isUsableArtworkUrl(next.artworkUrl) ? next.artworkUrl : null;
   const artworkChanged = Boolean(nextArtworkUrl) && nextArtworkUrl !== artUrl;
-  const stopAnimatedAfterArtwork = !next.animatedArtworkUrl && animatedUrl !== null;
+  desiredAnimatedUrl = next.animatedArtworkUrl;
 
   const hasMainColors = applyMainAlbumColors(next);
+  if (hasMainColors) {
+    colorGeneration += 1;
+  }
   const applyArtworkSideEffects = (url: string): void => {
     elements.shell.setAttribute("data-blfw-artwork", url);
     elements.shell.style.setProperty("--blfw-art", `url("${url.replace(/"/g, '%22')}")`);
     elements.shell.setAttribute("data-has-art", "true");
     if (!hasMainColors) applyArtworkColors(url);
     window.dispatchEvent(new CustomEvent(BLS_MEDIA_EVENT, { detail: { artworkUrl: url } }));
-    if (stopAnimatedAfterArtwork) stopAnimatedArtwork();
+    if (!desiredAnimatedUrl && animatedUrl !== null) stopAnimatedArtwork();
   };
 
   if (artworkChanged && nextArtworkUrl) {
     artUrl = nextArtworkUrl;
     applyArtworkCrossfade(nextArtworkUrl, () => applyArtworkSideEffects(nextArtworkUrl));
-  } else if (stopAnimatedAfterArtwork) {
+  } else if (!desiredAnimatedUrl && animatedUrl !== null) {
     stopAnimatedArtwork();
   }
 
@@ -527,6 +549,11 @@ function applyTrack(next: FullscreenTrackInfo | null): void {
   if (previousVideoId !== null && titleChanged) {
     animateSongInfo();
   }
+}
+
+function refreshProgressVisibility(): void {
+  if (!elements?.progress) return;
+  progressVisible = window.getComputedStyle(elements.progress).display !== "none";
 }
 
 function ensureMergeTheme(): void {
@@ -540,6 +567,7 @@ function ensureMergeTheme(): void {
     document.head.appendChild(style);
   }
   if (style.textContent !== mergeThemeCss) style.textContent = mergeThemeCss;
+  refreshProgressVisibility();
 }
 
 function enforceGlassyFlowScrollVars(container: HTMLElement | null): void {
@@ -592,15 +620,20 @@ function installGlassyFlowFlip(): void {
       return read.call(this);
     },
     set(this: HTMLElement, value: number) {
-      const container = elements.mount.querySelector<HTMLElement>(".blyrics-container");
-      const animateScroll = container
-        ? getComputedStyle(container).getPropertyValue("--blyrics-animate-scroll").trim()
-        : "";
       const previous = read.call(this);
+      if (value === previous || (value <= 0 && previous === 0)) return;
+      const container = elements.mount.querySelector<HTMLElement>(".blyrics-container");
       write.call(this, value);
-      if (!container || animateScroll !== "0" || !container.classList.contains("blyrics--gf-managed")) {
+      if (!container || !container.classList.contains("blyrics--gf-managed")) {
         return;
       }
+      const inlineAnimate = container.style.getPropertyValue("--blyrics-animate-scroll").trim();
+      const animateScroll =
+        inlineAnimate ||
+        (usesGlassyFlow
+          ? "0"
+          : getComputedStyle(container).getPropertyValue("--blyrics-animate-scroll").trim());
+      if (animateScroll !== "0") return;
       const delta = read.call(this) - previous;
       if (delta === 0) return;
       container.style.transition = "none";
@@ -691,6 +724,7 @@ function buildLyrics(): void {
   const lyrics: Lyric[] | null = current?.lyrics ? [...current.lyrics] : null;
   if (!lyrics || lyrics.length === 0) {
     target.clear();
+    syncTickLoop();
     if (loaderShowing || !hasReceivedReady || !current) {
       elements.status.hidden = true;
     } else {
@@ -710,6 +744,8 @@ function buildLyrics(): void {
   target.relayout();
   enforceGlassyFlowScrollVars(target.container);
   ensureScrollScript();
+  runSingleTick();
+  syncTickLoop();
 }
 
 function currentTimeFrom(live: FullscreenPlaybackSnapshot): number {
@@ -720,42 +756,70 @@ function currentTimeFrom(live: FullscreenPlaybackSnapshot): number {
 }
 
 function updateProgress(time: number, duration: number): void {
+  if (!progressVisible) return;
   const ratio = duration > 0 ? Math.min(1, Math.max(0, time / duration)) : 0;
   elements.progressFill.style.transform = `scaleX(${ratio})`;
-  elements.elapsed.textContent = formatTime(time);
-  elements.remaining.textContent = duration > 0 ? `-${formatTime(Math.max(0, duration - time))}` : "--:--";
+  const elapsedSec = Number.isFinite(time) && time >= 0 ? Math.floor(time) : -1;
+  if (elapsedSec !== lastProgressElapsedSec) {
+    lastProgressElapsedSec = elapsedSec;
+    elements.elapsed.textContent = formatTime(time);
+  }
+  const remainingSec = duration > 0 ? Math.floor(Math.max(0, duration - time)) : -1;
+  if (remainingSec !== lastProgressRemainingSec) {
+    lastProgressRemainingSec = remainingSec;
+    elements.remaining.textContent = duration > 0 ? `-${formatTime(Math.max(0, duration - time))}` : "--:--";
+  }
 }
 
 let lastTickAt = 0;
 
-function tick(): void {
+function runSingleTick(now = performance.now()): void {
   const target = renderer;
   const live = snapshot;
-  const now = performance.now();
-  const due = now - lastTickAt >= 15;
-  if (due) lastTickAt = now;
-  if (due && target && live && payload?.lyrics) {
-    if (elements.shell.scrollTop !== 0) elements.shell.scrollTop = 0;
-    const time = currentTimeFrom(live);
-    updateProgress(time, live.durationS);
-    const suppressZero = time <= 0.05 && Date.now() < (payload.suppressZeroTimeUntil ?? 0);
-    if (!suppressZero) {
-      target.tick(time, {
-        eventCreationTime: Date.now(),
-        playbackRate: live.playbackRate,
-        isPlaying: live.isPlaying,
-        smoothScroll: true,
-        globalLyricOffset: payload.globalLyricOffset,
-        lyricOffset: payload.lyricOffset,
-        richsyncOffsetTrim: payload.richsyncOffsetTrim,
-        lineOffsetTrim: payload.lineOffsetTrim,
-        passiveScrollEnabled: payload.passiveScrollEnabled,
-      });
-      sharpenMarker.sync(elements.mount, time, forceSharpenImmediate);
-      forceSharpenImmediate = false;
-    }
+  if (!isWindowVisible || !target || !live || !payload?.lyrics) return;
+  lastTickAt = now;
+  const time = currentTimeFrom(live);
+  updateProgress(time, live.durationS);
+  const suppressZero = time <= 0.05 && Date.now() < (payload.suppressZeroTimeUntil ?? 0);
+  if (!suppressZero) {
+    target.tick(time, {
+      eventCreationTime: Date.now(),
+      playbackRate: live.playbackRate,
+      isPlaying: live.isPlaying,
+      smoothScroll: true,
+      globalLyricOffset: payload.globalLyricOffset,
+      lyricOffset: payload.lyricOffset,
+      richsyncOffsetTrim: payload.richsyncOffsetTrim,
+      lineOffsetTrim: payload.lineOffsetTrim,
+      passiveScrollEnabled: payload.passiveScrollEnabled,
+    });
+    sharpenMarker.sync(elements.mount, time, forceSharpenImmediate);
+    forceSharpenImmediate = false;
   }
-  window.requestAnimationFrame(tick);
+}
+
+function syncTickLoop(): void {
+  const wantLoop = isWindowVisible && Boolean(renderer && snapshot && payload?.lyrics && snapshot.isPlaying);
+  if (wantLoop) {
+    if (rafId === null) {
+      rafId = window.requestAnimationFrame(tick);
+    }
+  } else if (rafId !== null) {
+    window.cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+}
+
+function tick(): void {
+  rafId = null;
+  if (!isWindowVisible || !renderer || !snapshot || !payload?.lyrics || !snapshot.isPlaying) {
+    return;
+  }
+  const now = performance.now();
+  if (now - lastTickAt >= 15) {
+    runSingleTick(now);
+  }
+  rafId = window.requestAnimationFrame(tick);
 }
 
 /**
@@ -823,6 +887,8 @@ function handleMessage(message: FullscreenOutbound): void {
           renderer.relayout();
           enforceGlassyFlowScrollVars(renderer.container);
           forceSharpenImmediate = true;
+          runSingleTick();
+          syncTickLoop();
           return;
         }
         buildLyrics();
@@ -830,6 +896,8 @@ function handleMessage(message: FullscreenOutbound): void {
       break;
     case "snapshot":
       snapshot = message.payload;
+      runSingleTick();
+      syncTickLoop();
       break;
     case "track":
       applyTrack(message.payload);
@@ -868,9 +936,11 @@ function applyBaseVariables(): void {
 
 /** A 8x8 downscale is a cheap average, and gives the theme the artwork tint it expects. */
 function applyArtworkColors(url: string): void {
+  const gen = ++colorGeneration;
   const image = new Image();
   image.crossOrigin = "anonymous";
   image.onload = () => {
+    if (gen !== colorGeneration) return;
     try {
       const canvas = document.createElement("canvas");
       canvas.width = 8;
@@ -931,10 +1001,30 @@ function start(): void {
       syncVideoModeUi();
     },
   );
-  window.addEventListener("message", (event: MessageEvent<{ type?: string }>) => {
-    if (event.source !== window || event.data?.type !== VIDEO_PORT_MSG_TYPE) return;
-    const incomingPort = event.ports?.[0];
-    if (incomingPort) videoReceiver?.attachPort(incomingPort);
+  const applyWindowVisibility = (visible: boolean): void => {
+    if (isWindowVisible === visible) return;
+    isWindowVisible = visible;
+    window.dispatchEvent(new CustomEvent(BLS_VISIBILITY_EVENT, { detail: { visible } }));
+    if (visible) {
+      forceSharpenImmediate = true;
+      runSingleTick();
+    }
+    syncTickLoop();
+  };
+
+  window.addEventListener("message", (event: MessageEvent<{ type?: string; visible?: boolean }>) => {
+    if (event.source !== window || !event.data?.type) return;
+    if (event.data.type === VIDEO_PORT_MSG_TYPE) {
+      const incomingPort = event.ports?.[0];
+      if (incomingPort) videoReceiver?.attachPort(incomingPort);
+      return;
+    }
+    if (event.data.type === WINDOW_VISIBILITY_MSG_TYPE && typeof event.data.visible === "boolean") {
+      applyWindowVisibility(event.data.visible);
+    }
+  });
+  document.addEventListener("visibilitychange", () => {
+    applyWindowVisibility(document.visibilityState === "visible");
   });
   installGlassyFlowFlip();
   resetCursorIdle();
@@ -944,16 +1034,6 @@ function start(): void {
   document.getElementById("blfw-close")?.addEventListener("click", () => window.close());
   elements.artImage.addEventListener("load", () => elements.artImage.classList.remove("blfw-art--loading"));
   elements.artImage.addEventListener("error", () => elements.artImage.classList.remove("blfw-art--loading"));
-
-  const revealAnimatedVideo = (): void => {
-    if (!animatedUrl) return;
-    elements.shell.setAttribute("data-animated-art", "true");
-  };
-  elements.artVideo.addEventListener("canplay", revealAnimatedVideo);
-  elements.artVideo.addEventListener("loadeddata", revealAnimatedVideo);
-  elements.artVideo.addEventListener("error", () => {
-    elements.shell.removeAttribute("data-animated-art");
-  });
 
   if (debugEnabled) {
     document.documentElement.setAttribute("data-debug", "true");
@@ -968,7 +1048,7 @@ function start(): void {
   });
 
   sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "hello" });
-  window.setInterval(() => sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "ping" }), PING_INTERVAL_MS);
+  pingTimer = window.setInterval(() => sendToContent({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "ping" }), PING_INTERVAL_MS);
 
   window.setTimeout(() => {
     if (!payload && !snapshot) showStatus("Waiting for the player window...");
@@ -976,6 +1056,14 @@ function start(): void {
 
   window.addEventListener("pagehide", () => {
     clearArtworkTimers();
+    if (rafId !== null) {
+      window.cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    if (pingTimer !== null) {
+      window.clearInterval(pingTimer);
+      pingTimer = null;
+    }
     if (bgUpdateTimer !== null) {
       window.clearTimeout(bgUpdateTimer);
       bgUpdateTimer = null;
@@ -1004,7 +1092,7 @@ function start(): void {
     if (event.key === "Escape" && document.fullscreenElement) void document.exitFullscreen();
   });
 
-  window.requestAnimationFrame(tick);
+  syncTickLoop();
 }
 
 start();

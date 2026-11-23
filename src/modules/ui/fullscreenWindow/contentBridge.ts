@@ -32,9 +32,8 @@ import { currentViewLyrics } from "@modules/lyrics/viewLyrics";
  * interpolates between, the theme itself, the two URLs of the artwork, opaque `bls` shader state,
  * and decoded Music Video frames via Electron's `MessagePort`.
  *
- * Liveness is a heartbeat rather than a port: an extension page cannot hold a long-lived connection
- * to a content script, and a window that crashed must not leave the main window's lyric engine
- * parked forever.
+ * DOM observers, video event listeners, and the heartbeat timer are only active while a fullscreen
+ * window is attached so the main YTM renderer pays zero idle overhead when the window is closed.
  */
 const HEARTBEAT_TIMEOUT_MS = 15_000;
 const SNAPSHOT_MIN_INTERVAL_MS = 500;
@@ -44,14 +43,24 @@ const BLS_STATE_EVENT = "bls:fullscreen-state";
 const BLS_REQUEST_STATE_EVENT = "bls:fullscreen-request-state";
 const VIDEO_PORT_MSG_TYPE = "blfw-video-port";
 const VIDEO_PORT_REQUEST_TYPE = "blfw-request-video-port";
+const WINDOW_CLOSED_MSG_TYPE = "blfw-window-closed";
+const WINDOW_VISIBILITY_MSG_TYPE = "blfw-window-visibility";
+const MERGE_THEME_STYLE_ID = "force-nankill-skibidi-theme";
 
 let initialized = false;
+let disposeBridge: (() => void) | null = null;
 let isAttached = false;
+let isFullscreenWindowVisible = true;
 let lastPingAt = 0;
 let heartbeatTimer: number | null = null;
 let lastLyrics: FullscreenLyricsPayload | null = null;
 let lastSnapshot: FullscreenPlaybackSnapshot | null = null;
 let lastSnapshotSentAt = 0;
+let hasRawTime = false;
+let rawTimeS = 0;
+let rawDurationS = 0;
+let rawIsPlaying = false;
+let rawWallTime = 0;
 let lastTheme = "";
 let lastMergeTheme = "";
 let lastTrackKey = "";
@@ -66,9 +75,11 @@ let lastVideoStateKey = "";
 let boundVideoEl: HTMLVideoElement | null = null;
 let videoBindingAbort: AbortController | null = null;
 const videoSender = createVideoFrameSender();
-let unsubscribeLyrics: (() => void) | null = null;
+
+let themeObserver: MutationObserver | null = null;
+let modeObserver: MutationObserver | null = null;
 let artworkObserver: MutationObserver | null = null;
-let observedArtworkRoot: Element | null = null;
+let observedArtworkTargets = new Set<Element>();
 let barObserver: MutationObserver | null = null;
 let observedBarRoot: Element | null = null;
 let loaderObserver: MutationObserver | null = null;
@@ -76,6 +87,7 @@ let loaderTabObserver: MutationObserver | null = null;
 let observedLoaderEl: Element | null = null;
 let observedTabEl: Element | null = null;
 let videoStateObserver: MutationObserver | null = null;
+let observedVideoStateTargets = new Set<Element>();
 
 function send(message: FullscreenOutbound): void {
   try {
@@ -119,11 +131,22 @@ function readTrackInfo(): FullscreenTrackInfo {
 }
 
 function readMergeTheme(): string {
-  return document.getElementById("force-nankill-skibidi-theme")?.textContent ?? "";
+  return document.getElementById(MERGE_THEME_STYLE_ID)?.textContent ?? "";
 }
 
 function readTheme(): string {
   return ensureLetterWaveSetting(document.getElementById(CUSTOM_THEME_STYLE_ID)?.textContent ?? "");
+}
+
+function buildSnapshotFromRaw(): FullscreenPlaybackSnapshot | null {
+  if (!hasRawTime) return lastSnapshot;
+  return {
+    currentTimeS: rawTimeS,
+    durationS: rawDurationS,
+    playbackRate: AppState.playbackRate || 1,
+    isPlaying: rawIsPlaying,
+    wallTime: rawWallTime,
+  };
 }
 
 function buildSnapshot(detail: {
@@ -150,20 +173,125 @@ function publishTrackIfChanged(): void {
   send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "track", payload: track });
 }
 
+function isRelevantThemeMutation(mutations: MutationRecord[]): boolean {
+  for (const mutation of mutations) {
+    if (mutation.type === "characterData") {
+      const parent = mutation.target.parentElement;
+      if (parent && (parent.id === CUSTOM_THEME_STYLE_ID || parent.id === MERGE_THEME_STYLE_ID)) return true;
+      continue;
+    }
+    if (mutation.target instanceof HTMLElement) {
+      if (mutation.target.id === CUSTOM_THEME_STYLE_ID || mutation.target.id === MERGE_THEME_STYLE_ID) return true;
+    }
+    for (const node of mutation.addedNodes) {
+      if (
+        node instanceof HTMLElement &&
+        (node.id === CUSTOM_THEME_STYLE_ID || node.id === MERGE_THEME_STYLE_ID || node.nodeName === "STYLE")
+      ) {
+        return true;
+      }
+    }
+    for (const node of mutation.removedNodes) {
+      if (
+        node instanceof HTMLElement &&
+        (node.id === CUSTOM_THEME_STYLE_ID || node.id === MERGE_THEME_STYLE_ID || node.nodeName === "STYLE")
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function ensureThemeObserver(): void {
+  if (!isAttached || themeObserver || !document.head) return;
+  themeObserver = new MutationObserver((mutations) => {
+    if (!isAttached || !isRelevantThemeMutation(mutations)) return;
+    publishTheme(readTheme());
+    publishMergeTheme(readMergeTheme());
+  });
+  themeObserver.observe(document.head, { childList: true, subtree: true, characterData: true });
+}
+
+function ensureModeObserver(): void {
+  if (!isAttached || modeObserver || !document.documentElement) return;
+  modeObserver = new MutationObserver((mutations) => {
+    if (!isAttached) return;
+    let modeChanged = false;
+    let styleChanged = false;
+    for (const mutation of mutations) {
+      if (mutation.attributeName === COMPOSITE_LYRICS_ATTR) modeChanged = true;
+      else if (mutation.attributeName === "style") styleChanged = true;
+    }
+    if (modeChanged) publishMode();
+    if (styleChanged) publishTrackIfChanged();
+  });
+  modeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: [COMPOSITE_LYRICS_ATTR, "style"],
+  });
+}
+
 function ensureArtworkObserver(): void {
-  const root =
-    document.getElementById("main-panel") ?? document.querySelector("ytmusic-player") ?? document.getElementById("player");
-  if (root && (root !== observedArtworkRoot || !observedArtworkRoot.isConnected)) {
-    artworkObserver?.disconnect();
-    observedArtworkRoot = root;
-    artworkObserver = new MutationObserver(() => publishTrackIfChanged());
-    artworkObserver.observe(root, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ["src"],
+  if (!isAttached) return;
+
+  const songImage = document.getElementById("song-image");
+  const blsVideo = document.getElementById("bls-video");
+  const songInfo = document.getElementById("blyrics-song-info");
+  const fsInfoRow = document.getElementById("blyrics-fs-info-row");
+  const fsColumn = document.getElementById("blyrics-fs-column");
+  const player = document.querySelector("ytmusic-player") ?? document.getElementById("player");
+  const mainPanel = document.getElementById("main-panel");
+
+  const nextTargets: Array<{ el: Element; options: MutationObserverInit }> = [];
+  if (songImage) {
+    nextTargets.push({
+      el: songImage,
+      options: { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] },
     });
+  }
+  if (blsVideo) {
+    nextTargets.push({
+      el: blsVideo,
+      options: { childList: true, attributes: true, attributeFilter: ["src"] },
+    });
+  }
+  if (songInfo) {
+    nextTargets.push({
+      el: songInfo,
+      options: { childList: true, subtree: true, characterData: true },
+    });
+  }
+  // Observe direct child additions on ancestor shells so newly mounted `#bls-video`, `#song-image`,
+  // or `#blyrics-song-info` nodes are picked up without observing `#movie_player` or `#blyrics-fs-controls`.
+  for (const shell of [fsInfoRow, fsColumn, player, mainPanel]) {
+    if (shell) nextTargets.push({ el: shell, options: { childList: true } });
+  }
+
+  let needsRebind = nextTargets.length !== observedArtworkTargets.size;
+  if (!needsRebind) {
+    for (const { el } of nextTargets) {
+      if (!observedArtworkTargets.has(el) || !el.isConnected) {
+        needsRebind = true;
+        break;
+      }
+    }
+  }
+  if (needsRebind) {
+    artworkObserver?.disconnect();
+    observedArtworkTargets = new Set<Element>();
+    if (nextTargets.length > 0) {
+      artworkObserver = new MutationObserver(() => {
+        ensureArtworkObserver();
+        publishTrackIfChanged();
+      });
+      for (const { el, options } of nextTargets) {
+        artworkObserver.observe(el, options);
+        observedArtworkTargets.add(el);
+      }
+    } else {
+      artworkObserver = null;
+    }
   }
 
   const barRoot =
@@ -180,6 +308,60 @@ function ensureArtworkObserver(): void {
       attributes: true,
       attributeFilter: ["src"],
     });
+  }
+}
+
+function ensureVideoStateObserver(): void {
+  if (!isAttached) return;
+  const playerPage = document.getElementById("player-page");
+  const playerBar = document.querySelector("ytmusic-player-bar");
+  const moviePlayer = document.getElementById("movie_player");
+  const videoContainer = moviePlayer?.querySelector(".html5-video-container") ?? null;
+
+  const nextTargets: Array<{ el: Element; options: MutationObserverInit }> = [];
+  if (playerPage) {
+    nextTargets.push({
+      el: playerPage,
+      options: { attributes: true, attributeFilter: ["video-mode", "blyrics-video-mode"] },
+    });
+  }
+  if (playerBar) {
+    nextTargets.push({
+      el: playerBar,
+      options: { attributes: true, attributeFilter: ["ad-playing"] },
+    });
+  }
+  if (moviePlayer) {
+    nextTargets.push({ el: moviePlayer, options: { childList: true } });
+  }
+  if (videoContainer) {
+    nextTargets.push({ el: videoContainer, options: { childList: true } });
+  }
+
+  let needsRebind = nextTargets.length !== observedVideoStateTargets.size;
+  if (!needsRebind) {
+    for (const { el } of nextTargets) {
+      if (!observedVideoStateTargets.has(el) || !el.isConnected) {
+        needsRebind = true;
+        break;
+      }
+    }
+  }
+  if (!needsRebind) return;
+
+  videoStateObserver?.disconnect();
+  observedVideoStateTargets = new Set<Element>();
+  if (nextTargets.length === 0) {
+    videoStateObserver = null;
+    return;
+  }
+  videoStateObserver = new MutationObserver(() => {
+    ensureVideoStateObserver();
+    syncVideoMirrorState();
+  });
+  for (const { el, options } of nextTargets) {
+    videoStateObserver.observe(el, options);
+    observedVideoStateTargets.add(el);
   }
 }
 
@@ -235,13 +417,22 @@ function requestVideoPortIfNeeded(force = false): void {
   const now = Date.now();
   if (!force && now - lastVideoPortRequestAt < PORT_REQUEST_COOLDOWN_MS) return;
   lastVideoPortRequestAt = now;
-  window.postMessage({ type: VIDEO_PORT_REQUEST_TYPE }, "*");
+  window.postMessage({ type: VIDEO_PORT_REQUEST_TYPE }, window.location.origin);
+}
+
+function unbindPlayerVideoEvents(): void {
+  videoBindingAbort?.abort();
+  videoBindingAbort = null;
+  boundVideoEl = null;
 }
 
 function bindPlayerVideoEvents(video: HTMLVideoElement | null): void {
+  if (!isAttached) {
+    unbindPlayerVideoEvents();
+    return;
+  }
   if (video === boundVideoEl) return;
-  videoBindingAbort?.abort();
-  videoBindingAbort = null;
+  unbindPlayerVideoEvents();
   boundVideoEl = video;
   if (!video) return;
   const controller = new AbortController();
@@ -249,16 +440,18 @@ function bindPlayerVideoEvents(video: HTMLVideoElement | null): void {
   const sync = (): void => syncVideoMirrorState();
   const captureNow = (): void => {
     syncVideoMirrorState();
-    videoSender.captureOne();
+    if (isFullscreenWindowVisible) {
+      videoSender.captureOne();
+    }
   };
-  for (const name of ["loadedmetadata", "loadeddata", "playing", "pause", "resize", "emptied"]) {
+  for (const name of ["loadedmetadata", "loadeddata", "playing", "pause", "resize", "emptied", "seeked"]) {
     video.addEventListener(name, captureNow, { signal: controller.signal });
   }
-  video.addEventListener("seeked", captureNow, { signal: controller.signal });
   video.addEventListener("loadstart", sync, { signal: controller.signal });
 }
 
 function syncVideoMirrorState(): void {
+  if (!isAttached) return;
   const video = findPlayerMainVideo();
   bindPlayerVideoEvents(video);
 
@@ -268,7 +461,6 @@ function syncVideoMirrorState(): void {
 
   const videoModeActive = videoModeShown && !adPlaying;
   const playable =
-    isAttached &&
     videoModeActive &&
     video !== null &&
     video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
@@ -282,17 +474,19 @@ function syncVideoMirrorState(): void {
   lastVideoState = nextState;
 
   if (playable) {
-    requestVideoPortIfNeeded(false);
-    videoSender.setActive(true, video);
+    if (isFullscreenWindowVisible) {
+      requestVideoPortIfNeeded(false);
+      videoSender.setActive(true, video);
+    } else {
+      videoSender.pause();
+    }
   } else {
     videoSender.setActive(false, null);
   }
 
   if (nextKey !== lastVideoStateKey) {
     lastVideoStateKey = nextKey;
-    if (isAttached) {
-      send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "video-state", payload: nextState });
-    }
+    send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "video-state", payload: nextState });
   }
 }
 
@@ -306,16 +500,17 @@ function readLoaderState(): FullscreenLoaderState {
 }
 
 function publishLoaderIfChanged(): void {
+  if (!isAttached) return;
   ensureLoaderObserver();
   const next = readLoaderState();
   const key = `${next.state}\0${next.text}\0${next.hidden ? "1" : "0"}`;
   if (key === lastLoaderKey) return;
   lastLoaderKey = key;
-  if (!isAttached) return;
   send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "loader", payload: next });
 }
 
 function ensureLoaderObserver(): void {
+  if (!isAttached) return;
   const tab = document.querySelector("#side-panel #tab-renderer") ?? document.getElementById("tab-renderer");
   if (tab !== observedTabEl || (observedTabEl && !observedTabEl.isConnected)) {
     loaderTabObserver?.disconnect();
@@ -326,6 +521,8 @@ function ensureLoaderObserver(): void {
         publishLoaderIfChanged();
       });
       loaderTabObserver.observe(observedTabEl, { childList: true });
+    } else {
+      loaderTabObserver = null;
     }
   }
   const loader = document.getElementById("blyrics-loader");
@@ -338,17 +535,61 @@ function ensureLoaderObserver(): void {
         attributes: true,
         attributeFilter: ["state", "style", "hidden"],
       });
+    } else {
+      loaderObserver = null;
     }
+  }
+}
+
+function startAttachedObservers(): void {
+  ensureThemeObserver();
+  ensureModeObserver();
+  ensureVideoStateObserver();
+  ensureArtworkObserver();
+  ensureLoaderObserver();
+  if (heartbeatTimer === null) {
+    heartbeatTimer = window.setInterval(() => {
+      if (isAttached && Date.now() - lastPingAt > HEARTBEAT_TIMEOUT_MS) detach();
+    }, 5_000);
+  }
+}
+
+function stopAttachedObservers(): void {
+  themeObserver?.disconnect();
+  themeObserver = null;
+  modeObserver?.disconnect();
+  modeObserver = null;
+  videoStateObserver?.disconnect();
+  videoStateObserver = null;
+  observedVideoStateTargets.clear();
+  loaderObserver?.disconnect();
+  loaderObserver = null;
+  loaderTabObserver?.disconnect();
+  loaderTabObserver = null;
+  observedLoaderEl = null;
+  observedTabEl = null;
+  artworkObserver?.disconnect();
+  artworkObserver = null;
+  observedArtworkTargets.clear();
+  barObserver?.disconnect();
+  barObserver = null;
+  observedBarRoot = null;
+  unbindPlayerVideoEvents();
+  if (heartbeatTimer !== null) {
+    window.clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
   }
 }
 
 function attach(): void {
   lastPingAt = Date.now();
-  ensureArtworkObserver();
-  ensureLoaderObserver();
-  if (isAttached) return;
+  if (isAttached) {
+    startAttachedObservers();
+    return;
+  }
   isAttached = true;
   AppState.isFullscreenWindowOpen = true;
+  lastSnapshot = buildSnapshotFromRaw();
 
   lastTheme = readTheme();
   lastMergeTheme = readMergeTheme();
@@ -376,18 +617,18 @@ function attach(): void {
       } satisfies FullscreenLyricsPayload)
     : null;
 
+  startAttachedObservers();
   syncVideoMirrorState();
   logCore("Fullscreen window attached");
 }
 
 /**
- * Sends the whole state. Sent on every `hello`, not only on attach: closing a window can race the
- * `bye` message, leaving this side believing a window is still open. The next window's `hello` must
- * still receive the theme and lyrics, or it renders with the default theme.
+ * Sends the whole state. Sent on every `hello` (and on reconnect `ping` after main-window reload),
+ * because closing a window can race `bye` or a reload can reset `isAttached`.
  */
 function sendReady(): void {
   window.dispatchEvent(new CustomEvent(BLS_REQUEST_STATE_EVENT));
-  ensureLoaderObserver();
+  startAttachedObservers();
   syncVideoMirrorState();
   const loader = readLoaderState();
   lastLoaderKey = `${loader.state}\0${loader.text}\0${loader.hidden ? "1" : "0"}`;
@@ -397,7 +638,7 @@ function sendReady(): void {
     channel: FULLSCREEN_WINDOW_CHANNEL,
     type: "ready",
     track,
-    snapshot: lastSnapshot,
+    snapshot: buildSnapshotFromRaw(),
     theme: readTheme(),
     mergeTheme: readMergeTheme(),
     composite: readRendererMode(document),
@@ -411,8 +652,10 @@ function sendReady(): void {
 function detach(): void {
   if (!isAttached) return;
   isAttached = false;
+  isFullscreenWindowVisible = true;
   hasVideoPort = false;
   lastVideoStateKey = "";
+  stopAttachedObservers();
   setVideoQualityBoost("fullscreen", false);
   videoSender.stop();
   AppState.isFullscreenWindowOpen = false;
@@ -421,35 +664,57 @@ function detach(): void {
 
 /**
  * Starts forwarding page state to the fullscreen window whenever one announces itself.
- * Idempotent: the extension entry may be re-run when the page is re-initialised.
+ * Idempotent: returns a cleanup disposer for extension teardown / reinjection.
  */
-export function setupFullscreenWindowBridge(): void {
-  if (initialized) return;
+export function setupFullscreenWindowBridge(): () => void {
+  if (initialized && disposeBridge) return disposeBridge;
   initialized = true;
 
-  window.addEventListener(BLS_STATE_EVENT, (event: Event) => {
+  const onBlsState = (event: Event): void => {
     const detail = (event as CustomEvent<unknown>).detail;
     lastBlsState = detail;
     hasBlsState = true;
     if (isAttached) {
       send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "bls-state", payload: detail });
     }
-  });
+  };
+  window.addEventListener(BLS_STATE_EVENT, onBlsState);
 
-  window.addEventListener("message", (event: MessageEvent<{ type?: string }>) => {
-    if (event.source !== window || event.data?.type !== VIDEO_PORT_MSG_TYPE) return;
-    const incomingPort = event.ports?.[0];
-    if (!incomingPort) return;
-    hasVideoPort = true;
-    videoSender.attachPort(incomingPort);
-    syncVideoMirrorState();
-  });
+  const onWindowMessage = (event: MessageEvent<{ type?: string; visible?: boolean }>): void => {
+    if (event.source !== window || !event.data?.type) return;
+    if (event.data.type === VIDEO_PORT_MSG_TYPE) {
+      const incomingPort = event.ports?.[0];
+      if (!incomingPort) return;
+      hasVideoPort = true;
+      videoSender.attachPort(incomingPort);
+      syncVideoMirrorState();
+      return;
+    }
+    if (event.data.type === WINDOW_CLOSED_MSG_TYPE) {
+      detach();
+      return;
+    }
+    if (event.data.type === WINDOW_VISIBILITY_MSG_TYPE) {
+      const nextVisible = event.data.visible !== false;
+      if (isFullscreenWindowVisible === nextVisible) return;
+      isFullscreenWindowVisible = nextVisible;
+      if (isAttached) {
+        syncVideoMirrorState();
+      }
+    }
+  };
+  window.addEventListener("message", onWindowMessage);
 
-  chrome.runtime.onMessage.addListener((message: FullscreenInbound, _sender, sendResponse) => {
+  const onRuntimeMessage = (
+    message: FullscreenInbound,
+    _sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: unknown) => void,
+  ): undefined => {
     if (!message || message.channel !== FULLSCREEN_WINDOW_CHANNEL) return undefined;
     if (message.type === "hello") {
       // A newly opened fullscreen window gets its own renderer/MessagePort; drop stale port state.
       hasVideoPort = false;
+      isFullscreenWindowVisible = true;
       attach();
       sendReady();
       if (isVideoModeShown(document) && !isAdPlaying(document)) {
@@ -459,7 +724,14 @@ export function setupFullscreenWindowBridge(): void {
       return undefined;
     }
     if (message.type === "ping") {
+      const wasAttached = isAttached;
       attach();
+      if (!wasAttached) {
+        sendReady();
+        if (isVideoModeShown(document) && !isAdPlaying(document)) {
+          requestVideoPortIfNeeded(true);
+        }
+      }
       sendResponse({ ok: true });
       return undefined;
     }
@@ -473,93 +745,51 @@ export function setupFullscreenWindowBridge(): void {
       sendResponse({ ok: true });
     }
     return undefined;
-  });
+  };
+  chrome.runtime.onMessage.addListener(onRuntimeMessage);
 
-  unsubscribeLyrics = onLyrics(payload => publishLyrics(payload));
+  const unsubscribeLyrics = onLyrics((payload) => publishLyrics(payload));
 
-  document.addEventListener(PLAYER_TIME_EVENT, (event: Event) => {
+  const onPlayerTime = (event: Event): void => {
     const detail = (event as CustomEvent<Parameters<typeof buildSnapshot>[0] & { videoId?: string }>).detail;
     if (!detail) return;
+    rawTimeS = Number(detail.currentTime) || 0;
+    rawDurationS = Number(detail.duration) || 0;
+    rawIsPlaying = detail.playing === true;
+    rawWallTime = typeof detail.browserTime === "number" ? detail.browserTime : Date.now();
+    hasRawTime = true;
+    if (!isAttached) return;
+
     publishSnapshot(buildSnapshot(detail));
     const currentVideoId = typeof detail.videoId === "string" ? detail.videoId : AppState.lastVideoId;
     if (currentVideoId !== lastSeenVideoId) {
       lastSeenVideoId = currentVideoId ?? null;
       queueMicrotask(() => {
         ensureArtworkObserver();
+        ensureVideoStateObserver();
         publishTrackIfChanged();
       });
     }
-  });
+  };
+  document.addEventListener(PLAYER_TIME_EVENT, onPlayerTime);
 
-  const themeObserver = new MutationObserver(() => {
-    publishTheme(readTheme());
-    publishMergeTheme(readMergeTheme());
-  });
-  themeObserver.observe(document.head, { childList: true, subtree: true, characterData: true });
-
-  const modeObserver = new MutationObserver(mutations => {
-    let modeChanged = false;
-    let styleChanged = false;
-    for (const mutation of mutations) {
-      if (mutation.attributeName === COMPOSITE_LYRICS_ATTR) modeChanged = true;
-      else if (mutation.attributeName === "style") styleChanged = true;
-    }
-    if (modeChanged) publishMode();
-    if (styleChanged) publishTrackIfChanged();
-  });
-  modeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: [COMPOSITE_LYRICS_ATTR, "style"],
-  });
-
-  videoStateObserver = new MutationObserver(() => syncVideoMirrorState());
-  const playerPage = document.getElementById("player-page");
-  if (playerPage) {
-    videoStateObserver.observe(playerPage, {
-      attributes: true,
-      attributeFilter: ["video-mode", "blyrics-video-mode"],
-    });
-  }
-  const playerBar = document.querySelector("ytmusic-player-bar");
-  if (playerBar) {
-    videoStateObserver.observe(playerBar, { attributes: true, attributeFilter: ["ad-playing"] });
-  }
-  const moviePlayer = document.getElementById("movie_player");
-  if (moviePlayer) {
-    videoStateObserver.observe(moviePlayer, { childList: true, subtree: true });
-  }
-
-  ensureArtworkObserver();
-  ensureLoaderObserver();
-
-  heartbeatTimer = window.setInterval(() => {
-    if (isAttached && Date.now() - lastPingAt > HEARTBEAT_TIMEOUT_MS) detach();
-  }, 5_000);
-
-  window.addEventListener("pagehide", () => {
-    unsubscribeLyrics?.();
-    themeObserver.disconnect();
-    modeObserver.disconnect();
-    videoStateObserver?.disconnect();
-    videoStateObserver = null;
-    loaderObserver?.disconnect();
-    loaderObserver = null;
-    loaderTabObserver?.disconnect();
-    loaderTabObserver = null;
-    observedLoaderEl = null;
-    observedTabEl = null;
-    videoBindingAbort?.abort();
-    videoBindingAbort = null;
-    boundVideoEl = null;
-    videoSender.destroy();
-    artworkObserver?.disconnect();
-    artworkObserver = null;
-    observedArtworkRoot = null;
-    barObserver?.disconnect();
-    barObserver = null;
-    observedBarRoot = null;
-    if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
-    heartbeatTimer = null;
+  let cleanedUp = false;
+  const cleanup = (): void => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    initialized = false;
+    disposeBridge = null;
+    window.removeEventListener(BLS_STATE_EVENT, onBlsState);
+    window.removeEventListener("message", onWindowMessage);
+    window.removeEventListener("pagehide", cleanup);
+    document.removeEventListener(PLAYER_TIME_EVENT, onPlayerTime);
+    chrome.runtime.onMessage.removeListener(onRuntimeMessage);
+    unsubscribeLyrics();
     detach();
-  });
+    videoSender.destroy();
+  };
+
+  window.addEventListener("pagehide", cleanup);
+  disposeBridge = cleanup;
+  return cleanup;
 }
