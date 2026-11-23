@@ -1104,6 +1104,7 @@
 
     function boot() {
         console.info('[GlassyFlow Turbo] Booting compositor spring scroll...');
+        document.documentElement?.setAttribute('data-glassyflow-enabled', 'true');
         const existing = document.querySelector('.blyrics-container');
         if (existing) attach(existing);
 

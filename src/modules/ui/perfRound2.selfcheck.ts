@@ -575,4 +575,22 @@ const doc = window.document;
   handle.destroy();
 }
 
+// 4. Test mainLyricsView GlassyFlow smoothScroll suppression (survives resize/no-sync var removal)
+{
+  const { isGlassyFlowScrollEnabled, resolveMainViewTickOptions } = await import("@modules/ui/mainLyricsView");
+
+  doc.documentElement.removeAttribute("data-glassyflow-enabled");
+  assert.equal(isGlassyFlowScrollEnabled(doc), false);
+  const baseOpts = { isPlaying: true, smoothScroll: true };
+  assert.equal(resolveMainViewTickOptions(baseOpts, doc).smoothScroll, true);
+
+  doc.documentElement.setAttribute("data-glassyflow-enabled", "true");
+  doc.documentElement.style.removeProperty("--blyrics-animate-scroll");
+  assert.equal(isGlassyFlowScrollEnabled(doc), true);
+  assert.equal(resolveMainViewTickOptions(baseOpts, doc).smoothScroll, false);
+  assert.equal(resolveMainViewTickOptions({ isPlaying: true }, doc).smoothScroll, false);
+
+  doc.documentElement.removeAttribute("data-glassyflow-enabled");
+}
+
 console.log("perfRound2 self-check passed");

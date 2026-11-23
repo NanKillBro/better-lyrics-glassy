@@ -367,11 +367,20 @@ html[data-debug="true"] #blfw-debug {
 	-webkit-app-region: drag;
 }
 
-#blfw-close {
+#blfw-window-controls {
 	position: fixed;
 	top: 12px;
 	right: 14px;
 	z-index: 30;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+	-webkit-app-region: no-drag;
+}
+
+.blfw-window-btn {
 	display: grid;
 	place-items: center;
 	width: 34px;
@@ -382,21 +391,46 @@ html[data-debug="true"] #blfw-debug {
 	background: rgba(255, 255, 255, 0.08);
 	color: var(--blfw-dim);
 	cursor: pointer;
-	opacity: 0;
-	transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+	pointer-events: none;
+	transition: background 0.2s ease, color 0.2s ease;
 	-webkit-app-region: no-drag;
 }
 
-#blfw-shell:hover ~ #blfw-close,
-#blfw-drag:hover ~ #blfw-close,
-#blfw-close:hover,
-#blfw-close:focus-visible {
+html:not([data-cursor-idle="true"])[data-pointer-inside="true"] #blfw-window-controls,
+html:not([data-cursor-idle="true"]) #blfw-drag:hover ~ #blfw-window-controls,
+html:not([data-cursor-idle="true"]) #blfw-window-controls:hover,
+#blfw-window-controls:has(> .blfw-window-btn:focus-visible) {
 	opacity: 1;
 }
 
-#blfw-close:hover {
+html:not([data-cursor-idle="true"])[data-pointer-inside="true"] .blfw-window-btn,
+html:not([data-cursor-idle="true"]) #blfw-drag:hover ~ #blfw-window-controls .blfw-window-btn,
+html:not([data-cursor-idle="true"]) #blfw-window-controls:hover .blfw-window-btn,
+.blfw-window-btn:focus-visible {
+	pointer-events: auto;
+}
+
+.blfw-window-btn:hover,
+.blfw-window-btn:focus-visible {
 	background: rgba(255, 255, 255, 0.18);
 	color: #fff;
+	outline: none;
+}
+
+.blfw-fs-exit {
+	display: none;
+}
+
+html[data-window-fullscreen="true"] #blfw-drag {
+	display: none;
+}
+
+html[data-window-fullscreen="true"] .blfw-fs-enter {
+	display: none;
+}
+
+html[data-window-fullscreen="true"] .blfw-fs-exit {
+	display: block;
 }
 
 #blfw-status {
@@ -417,7 +451,9 @@ html[data-debug="true"] #blfw-debug {
 	#blfw-art-image,
 	#blfw-art-image-next,
 	#blfw-art-video,
-	#blfw-art-video-next {
+	#blfw-art-video-next,
+	#blfw-window-controls,
+	.blfw-window-btn {
 		animation: none;
 		transition: none;
 	}

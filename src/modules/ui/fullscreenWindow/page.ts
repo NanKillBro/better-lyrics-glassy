@@ -31,6 +31,7 @@ const BLS_MEDIA_EVENT = "bls:fullscreen-media";
 const BLS_VISIBILITY_EVENT = "bls:fullscreen-visibility";
 const VIDEO_PORT_MSG_TYPE = "blfw-video-port";
 const WINDOW_VISIBILITY_MSG_TYPE = "blfw-window-visibility";
+const WINDOW_FULLSCREEN_STATE_MSG_TYPE = "blfw-window-fullscreen-state";
 const MERGE_THEME_STYLE_ID = "blfw-merge-theme";
 const SCROLL_SCRIPTS: Record<string, string> = {
   glassyflow: "/glassyflow.js",
@@ -45,6 +46,9 @@ const debugEnabled = searchParams.get("debug") === "1";
 declare global {
   interface Window {
     __blsLastState?: unknown;
+    blfwHost?: {
+      toggleFullscreen?: () => void;
+    };
   }
 }
 
@@ -786,7 +790,7 @@ function runSingleTick(now = performance.now()): void {
       eventCreationTime: Date.now(),
       playbackRate: live.playbackRate,
       isPlaying: live.isPlaying,
-      smoothScroll: true,
+      smoothScroll: !usesGlassyFlow,
       globalLyricOffset: payload.globalLyricOffset,
       lyricOffset: payload.lyricOffset,
       richsyncOffsetTrim: payload.richsyncOffsetTrim,
@@ -975,14 +979,69 @@ function applyArtworkColors(url: string): void {
 }
 
 const CURSOR_IDLE_MS = 1500;
+let windowFullscreenBtn: HTMLButtonElement | null = null;
+let hasWindowFullscreenBridge = false;
+let isPointerInside = false;
+let isCursorIdle = false;
 
-function resetCursorIdle(): void {
-  document.documentElement.removeAttribute("data-cursor-idle");
+function setPointerInside(inside: boolean): void {
+  if (isPointerInside === inside) return;
+  isPointerInside = inside;
+  if (inside) {
+    document.documentElement.setAttribute("data-pointer-inside", "true");
+  } else {
+    document.documentElement.removeAttribute("data-pointer-inside");
+  }
+}
+
+function setCursorIdle(idle: boolean): void {
+  if (isCursorIdle === idle) return;
+  isCursorIdle = idle;
+  if (idle) {
+    document.documentElement.setAttribute("data-cursor-idle", "true");
+  } else {
+    document.documentElement.removeAttribute("data-cursor-idle");
+  }
+}
+
+function resetCursorIdle(markInside = true): void {
+  if (markInside) setPointerInside(true);
+  setCursorIdle(false);
   if (cursorIdleTimer !== null) window.clearTimeout(cursorIdleTimer);
   cursorIdleTimer = window.setTimeout(() => {
     cursorIdleTimer = null;
-    document.documentElement.setAttribute("data-cursor-idle", "true");
+    setCursorIdle(true);
   }, CURSOR_IDLE_MS);
+}
+
+function clearPointerPresence(): void {
+  setPointerInside(false);
+  setCursorIdle(false);
+  if (cursorIdleTimer !== null) {
+    window.clearTimeout(cursorIdleTimer);
+    cursorIdleTimer = null;
+  }
+}
+
+function syncFullscreenButtonState(fullscreen: boolean): void {
+  document.documentElement.toggleAttribute("data-window-fullscreen", fullscreen);
+  if (!windowFullscreenBtn) return;
+  const label = fullscreen ? "Exit fullscreen" : "Enter fullscreen";
+  windowFullscreenBtn.title = fullscreen ? "Exit fullscreen (F11 / Esc)" : "Enter fullscreen (F11)";
+  windowFullscreenBtn.setAttribute("aria-label", label);
+  windowFullscreenBtn.setAttribute("aria-pressed", fullscreen ? "true" : "false");
+}
+
+function toggleWindowFullscreen(): void {
+  if (typeof window.blfwHost?.toggleFullscreen === "function") {
+    window.blfwHost.toggleFullscreen();
+    return;
+  }
+  if (document.fullscreenElement) {
+    void document.exitFullscreen();
+  } else {
+    void document.documentElement.requestFullscreen?.();
+  }
 }
 
 function start(): void {
@@ -1012,7 +1071,7 @@ function start(): void {
     syncTickLoop();
   };
 
-  window.addEventListener("message", (event: MessageEvent<{ type?: string; visible?: boolean }>) => {
+  window.addEventListener("message", (event: MessageEvent<{ type?: string; visible?: boolean; fullscreen?: boolean }>) => {
     if (event.source !== window || !event.data?.type) return;
     if (event.data.type === VIDEO_PORT_MSG_TYPE) {
       const incomingPort = event.ports?.[0];
@@ -1021,16 +1080,40 @@ function start(): void {
     }
     if (event.data.type === WINDOW_VISIBILITY_MSG_TYPE && typeof event.data.visible === "boolean") {
       applyWindowVisibility(event.data.visible);
+      return;
+    }
+    if (event.data.type === WINDOW_FULLSCREEN_STATE_MSG_TYPE && typeof event.data.fullscreen === "boolean") {
+      hasWindowFullscreenBridge = true;
+      syncFullscreenButtonState(event.data.fullscreen);
     }
   });
   document.addEventListener("visibilitychange", () => {
     applyWindowVisibility(document.visibilityState === "visible");
   });
+  document.addEventListener("fullscreenchange", () => {
+    if (!hasWindowFullscreenBridge) {
+      syncFullscreenButtonState(Boolean(document.fullscreenElement));
+    }
+  });
   installGlassyFlowFlip();
-  resetCursorIdle();
-  window.addEventListener("pointermove", resetCursorIdle, { passive: true });
-  window.addEventListener("pointerdown", resetCursorIdle, { passive: true });
-  window.addEventListener("wheel", resetCursorIdle, { passive: true });
+
+  const onPointerActive = (): void => resetCursorIdle(true);
+  if (document.documentElement.matches(":hover")) {
+    resetCursorIdle(true);
+  }
+  document.documentElement.addEventListener("mouseenter", onPointerActive, { passive: true });
+  document.getElementById("blfw-drag")?.addEventListener("mouseenter", onPointerActive, { passive: true });
+  document.documentElement.addEventListener("mouseleave", clearPointerPresence, { passive: true });
+  window.addEventListener("blur", clearPointerPresence);
+  window.addEventListener("pointermove", onPointerActive, { passive: true });
+  window.addEventListener("pointerdown", onPointerActive, { passive: true });
+  window.addEventListener("wheel", onPointerActive, { passive: true });
+
+  windowFullscreenBtn = document.getElementById("blfw-fullscreen") as HTMLButtonElement | null;
+  windowFullscreenBtn?.addEventListener("click", (event) => {
+    toggleWindowFullscreen();
+    if (event.detail > 0) windowFullscreenBtn?.blur();
+  });
   document.getElementById("blfw-close")?.addEventListener("click", () => window.close());
   elements.artImage.addEventListener("load", () => elements.artImage.classList.remove("blfw-art--loading"));
   elements.artImage.addEventListener("error", () => elements.artImage.classList.remove("blfw-art--loading"));
@@ -1081,6 +1164,8 @@ function start(): void {
       animatedArtSafetyTimer = null;
     }
     document.documentElement.removeAttribute("data-cursor-idle");
+    document.documentElement.removeAttribute("data-pointer-inside");
+    document.documentElement.removeAttribute("data-window-fullscreen");
     clearArtVideo(elements.artVideo);
     clearArtVideo(elements.artVideoNext);
     videoReceiver?.destroy();
