@@ -1,5 +1,5 @@
+import type { LyricsRenderer, TickOptions } from "@braccato/core";
 import { ANIMATING_CLASS } from "@braccato/core/constants";
-import { mainView } from "@modules/ui/mainLyricsView";
 
 /**
  * GlassyFlow Bridge Module
@@ -15,15 +15,14 @@ const ANIMATING_EARLY_TIME_S = 2;
 const CLOCK_SKEW_BUFFER_S = 0.15;
 const REAPPLY_TIME_DRIFT_S = 0.25;
 
-type TickOptions = Parameters<typeof mainView.tick>[1];
-type TickFn = typeof mainView.tick;
-type RetickFn = NonNullable<typeof mainView.retickFromPlaybackClock>;
-type SetThemeFn = NonNullable<typeof mainView.setTheme>;
+type TickFn = LyricsRenderer["tick"];
+type RetickFn = LyricsRenderer["retickFromPlaybackClock"];
+type SetThemeFn = LyricsRenderer["setTheme"];
 
 export interface GlassyFlowBridgeTarget {
   readonly container: HTMLElement | null;
   readonly lines: readonly { time: number; duration: number; lyricElement: HTMLElement }[];
-  readonly syncType: typeof mainView.syncType;
+  readonly syncType: LyricsRenderer["syncType"];
   tick: TickFn;
   retickFromPlaybackClock?: RetickFn;
   setTheme?: SetThemeFn;
@@ -37,6 +36,7 @@ interface AppliedLineState {
 
 const patchedViews = new WeakSet<GlassyFlowBridgeTarget>();
 const inlineOffsetSignatures = new WeakMap<Element, string>();
+let defaultTargetRef: WeakRef<GlassyFlowBridgeTarget> | null = null;
 let observedContainer: HTMLElement | null = null;
 let offsetObserver: MutationObserver | null = null;
 let headObserver: MutationObserver | null = null;
@@ -155,11 +155,15 @@ function getTimingOffsetS(container: HTMLElement, isRichsync: boolean): number {
   return isRichsync ? cachedRichsyncOffsetS : cachedTimingOffsetS;
 }
 
-export function initGlassyFlowBridge(targetView: GlassyFlowBridgeTarget = mainView): void {
-  if (patchedViews.has(targetView)) return;
-  patchedViews.add(targetView);
+export function initGlassyFlowBridge(targetView?: GlassyFlowBridgeTarget): void {
+  const resolved = targetView ?? defaultTargetRef?.deref() ?? null;
+  if (!resolved) return;
+  const target: GlassyFlowBridgeTarget = resolved;
+  if (!defaultTargetRef?.deref()) defaultTargetRef = new WeakRef(target);
+  if (patchedViews.has(target)) return;
+  patchedViews.add(target);
 
-  const originalTick = targetView.tick;
+  const originalTick = target.tick;
   let appliedLines = new WeakMap<HTMLElement, AppliedLineState>();
   const animatingBeforeTick = new Set<HTMLElement>();
   let lastActualTime = Number.NaN;
@@ -167,8 +171,8 @@ export function initGlassyFlowBridge(targetView: GlassyFlowBridgeTarget = mainVi
 
   function snapshotAnimatingLines(): void {
     animatingBeforeTick.clear();
-    if (!targetView.container || targetView.lines.length === 0) return;
-    for (const line of targetView.lines) {
+    if (!target.container || target.lines.length === 0) return;
+    for (const line of target.lines) {
       const el = line.lyricElement;
       if (el.classList.contains(ANIMATING_CLASS) || el.classList.contains(PRE_ANIMATING_CLASS)) {
         animatingBeforeTick.add(el);
@@ -177,19 +181,19 @@ export function initGlassyFlowBridge(targetView: GlassyFlowBridgeTarget = mainVi
   }
 
   function applyDelayVars(currentTimeS: number, options: TickOptions): void {
-    if (!targetView.container || targetView.lines.length === 0) return;
+    if (!target.container || target.lines.length === 0) return;
 
     const eventCreationTime = options.eventCreationTime ?? -1;
     const isPlaying = Boolean(options.isPlaying);
     const timeOffsetS = isPlaying && eventCreationTime !== -1 ? Math.max(0, (Date.now() - eventCreationTime) / 1000) : 0;
 
     let actualTime = currentTimeS + timeOffsetS;
-    if (targetView.syncType === "richsync") {
+    if (target.syncType === "richsync") {
       actualTime -= options.richsyncOffsetTrim ?? 0;
-      actualTime += getTimingOffsetS(targetView.container, true);
+      actualTime += getTimingOffsetS(target.container, true);
     } else {
       actualTime -= options.lineOffsetTrim ?? 0;
-      actualTime += getTimingOffsetS(targetView.container, false);
+      actualTime += getTimingOffsetS(target.container, false);
     }
     actualTime -= (options.globalLyricOffset ?? 0) + (options.lyricOffset ?? 0);
 
@@ -201,7 +205,7 @@ export function initGlassyFlowBridge(targetView: GlassyFlowBridgeTarget = mainVi
     const earlyTime = isPlaying ? ANIMATING_EARLY_TIME_S : 0;
     const skewBuffer = isPlaying ? CLOCK_SKEW_BUFFER_S : 0;
 
-    for (const line of targetView.lines) {
+    for (const line of target.lines) {
       const el = line.lyricElement;
       // Skip lines that were already animating before the core tick ran.
       if (animatingBeforeTick.has(el)) {
@@ -230,8 +234,8 @@ export function initGlassyFlowBridge(targetView: GlassyFlowBridgeTarget = mainVi
     animatingBeforeTick.clear();
   }
 
-  targetView.tick = function (currentTimeS, options) {
-    const hasLines = Boolean(targetView.container && targetView.lines.length > 0);
+  target.tick = function (currentTimeS, options) {
+    const hasLines = Boolean(target.container && target.lines.length > 0);
     if (hasLines) {
       if (!(currentTimeS === 0 && !options.isPlaying)) {
         lastRawTimeS = currentTimeS;
@@ -249,11 +253,11 @@ export function initGlassyFlowBridge(targetView: GlassyFlowBridgeTarget = mainVi
     return result;
   };
 
-  if (typeof targetView.retickFromPlaybackClock === "function") {
-    const originalRetick = targetView.retickFromPlaybackClock;
-    targetView.retickFromPlaybackClock = function (buildOptions) {
+  if (typeof target.retickFromPlaybackClock === "function") {
+    const originalRetick = target.retickFromPlaybackClock;
+    target.retickFromPlaybackClock = function (buildOptions) {
       let capturedOpts: TickOptions | null = null;
-      const hasLines = Boolean(targetView.container && targetView.lines.length > 0 && Number.isFinite(lastRawTimeS));
+      const hasLines = Boolean(target.container && target.lines.length > 0 && Number.isFinite(lastRawTimeS));
       if (hasLines) {
         snapshotAnimatingLines();
       } else {
@@ -275,9 +279,9 @@ export function initGlassyFlowBridge(targetView: GlassyFlowBridgeTarget = mainVi
     };
   }
 
-  if (typeof targetView.setTheme === "function") {
-    const originalSetTheme = targetView.setTheme;
-    targetView.setTheme = function (css) {
+  if (typeof target.setTheme === "function") {
+    const originalSetTheme = target.setTheme;
+    target.setTheme = function (css) {
       cachedOffsetsValid = false;
       return originalSetTheme.call(this, css);
     };

@@ -24,7 +24,25 @@ function invalidateAfter<Args extends unknown[], Result>(
  * Handed out without `destroy`, because destruction is final and there is no path back: this view
  * lives for as long as the tab does, and seven modules can reach it.
  */
+const GLASSYFLOW_ENABLED_ATTR = "data-glassyflow-enabled";
+
+export function isGlassyFlowScrollEnabled(doc: Document | null | undefined = document): boolean {
+  return doc?.documentElement?.getAttribute(GLASSYFLOW_ENABLED_ATTR) === "true";
+}
+
+export function resolveMainViewTickOptions(options: TickOptions, doc: Document | null | undefined = document): TickOptions {
+  if (!isGlassyFlowScrollEnabled(doc) || options.smoothScroll === false) {
+    return options;
+  }
+  return { ...options, smoothScroll: false };
+}
+
 export const mainView: Omit<LyricsRenderer, "destroy"> = createLyricsRenderer({ document, window, host: ytmHost });
+const baseMainTick = mainView.tick;
+mainView.tick = (currentTimeS, options) => baseMainTick(currentTimeS, resolveMainViewTickOptions(options));
+const baseMainRetick = mainView.retickFromPlaybackClock;
+mainView.retickFromPlaybackClock = (buildOptions) =>
+  baseMainRetick((eventCreationTime, isPlaying) => resolveMainViewTickOptions(buildOptions(eventCreationTime, isPlaying)));
 mainView.setLyrics = invalidateAfter(mainView.setLyrics);
 mainView.setLanguage = invalidateAfter(mainView.setLanguage);
 mainView.setTheme = invalidateAfter(mainView.setTheme);
@@ -80,4 +98,4 @@ export function lyricsElementAdded(): void {
   mainView.scheduleLyricPositionUpdate(() => AppState.areLyricsTicking, retickMainView);
 }
 
-initGlassyFlowBridge();
+initGlassyFlowBridge(mainView);

@@ -7,6 +7,7 @@ import { initProviders } from "@modules/lyrics/providers/shared";
 import { disposeKaraoke, syncKaraoke } from "@modules/karaoke/karaokeView";
 import { loadKaraokeSettings } from "@modules/karaoke/settings";
 import { setupRequestSniffer } from "@modules/lyrics/requestSniffer/requestSniffer";
+import { setupFullscreenWindowBridge } from "@modules/ui/fullscreenWindow/contentBridge";
 import {
   handleSettings,
   hideCursorOnIdle,
@@ -59,7 +60,10 @@ import { startVideoQualitySettingsBridge } from "@modules/settings/videoQualityB
  * This method orchestrates the setup of logging, DOM injection, observers, settings,
  * storage, and lyric providers.
  */
-async function modify(isDisposed: () => boolean): Promise<void> {
+async function modify(
+  isDisposed: () => boolean,
+  onCleanup: (cleanup: () => void) => void
+): Promise<void> {
   applyLoggingSetting();
   await injectHeadTags();
   if (isDisposed()) return;
@@ -70,6 +74,7 @@ async function modify(isDisposed: () => boolean): Promise<void> {
   subscribeToLocaleChanges(publishPictureInPictureResources);
   publishPictureInPictureResources();
   setupAdObserver();
+  onCleanup(setupFullscreenWindowBridge());
   enableLyricsTab();
   observeLyricsPageType();
   setupHomepageFullscreenHandler();
@@ -120,10 +125,18 @@ function init(): () => void {
   const cleanupPerformanceSettings = initPerformanceSettingsListener();
   let disposed = false;
   let modifyStarted = false;
+  const modifyCleanups: Array<() => void> = [];
+  const registerModifyCleanup = (cleanup: () => void): void => {
+    if (disposed) {
+      cleanup();
+      return;
+    }
+    modifyCleanups.push(cleanup);
+  };
   const runModify = (): void => {
     if (modifyStarted || disposed) return;
     modifyStarted = true;
-    void modify(() => disposed);
+    void modify(() => disposed, registerModifyCleanup);
   };
 
   initializePictureInPictureAutoRestore();
@@ -138,6 +151,9 @@ function init(): () => void {
   const cleanupPlayerBarReveal = setupFullscreenPlayerBarReveal();
   return () => {
     disposed = true;
+    for (const cleanup of modifyCleanups.splice(0)) {
+      cleanup();
+    }
     cleanupVideoQualitySettings();
     cleanupPerformanceSettings();
     disposeAdObserver();

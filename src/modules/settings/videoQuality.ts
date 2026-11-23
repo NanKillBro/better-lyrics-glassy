@@ -67,3 +67,42 @@ export function selectVideoQuality(
     .sort((a, b) => VIDEO_QUALITIES[b] - VIDEO_QUALITIES[a]);
   return choices.find(quality => VIDEO_QUALITIES[quality] <= ceiling) ?? choices.at(-1) ?? "auto";
 }
+
+export type VideoQualityBoostSource = "pip" | "fullscreen";
+
+export interface VideoQualityBoostCoordinator {
+  setSource(source: VideoQualityBoostSource, wanted: boolean): void;
+  readonly isBoosted: boolean;
+}
+
+/** Keeps video quality boost active whenever at least one auxiliary view wants video/ad playback. */
+export function createVideoQualityBoostCoordinator(
+  dispatchBoost: (wanted: boolean) => void
+): VideoQualityBoostCoordinator {
+  const sources = new Set<VideoQualityBoostSource>();
+  let boosted = false;
+  return {
+    get isBoosted() {
+      return boosted;
+    },
+    setSource(source: VideoQualityBoostSource, wanted: boolean): void {
+      if (wanted) sources.add(source);
+      else sources.delete(source);
+      const next = sources.size > 0;
+      if (next === boosted) return;
+      boosted = next;
+      dispatchBoost(next);
+    },
+  };
+}
+
+let defaultBoostCoordinator: VideoQualityBoostCoordinator | null = null;
+
+export function setVideoQualityBoost(source: VideoQualityBoostSource, wanted: boolean): void {
+  if (!defaultBoostCoordinator) {
+    defaultBoostCoordinator = createVideoQualityBoostCoordinator(next => {
+      document.dispatchEvent(new CustomEvent(VIDEO_QUALITY_BOOST_EVENT, { detail: JSON.stringify(next) }));
+    });
+  }
+  defaultBoostCoordinator.setSource(source, wanted);
+}

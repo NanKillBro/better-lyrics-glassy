@@ -15,7 +15,7 @@ export function publishPictureInPictureLyrics(): void {
     videoId: isSettled ? AppState.lastLoadedVideoId : null,
     suitsStage: syncType !== "none" || hasNoLyricsPlaceholder(),
   });
-  if (!AppState.isPictureInPictureOpen) return;
+  if (!AppState.isPictureInPictureOpen && !AppState.isFullscreenWindowOpen) return;
 
   sendLyrics({
     ...currentViewLyrics(),

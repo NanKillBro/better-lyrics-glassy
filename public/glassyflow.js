@@ -963,6 +963,7 @@
 
     function boot() {
         console.info('[GlassyFlow v5] Booting spring scroll extension...');
+        document.documentElement?.setAttribute('data-glassyflow-enabled', 'true');
         const existing = document.querySelector('.blyrics-container');
         if (existing) attach(existing);
 

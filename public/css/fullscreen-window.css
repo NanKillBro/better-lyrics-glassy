@@ -1,0 +1,465 @@
+/*
+ * Window layer for the fullscreen now-playing page.
+ *
+ * The page renders a skeleton of YouTube Music's fullscreen player page (see fullscreen.html), and
+ * the app's own theme — `mergetheme.js`, `css/ytmusic/index.css`, `css/blyrics/index.css`, plus the
+ * user's theme sheet — does the actual styling. This file therefore only does what a separate window
+ * needs on top of that: fill the frame, drop the 64px nav-bar offset YouTube Music reserves, provide
+ * the lyric scroller, and draw the window's own close affordance and progress row.
+ *
+ * The 10px root is required: YouTube Music's root is 10px and the lyric themes size everything in
+ * rem, so a browser-default 16px root would render every themed size 60% too large.
+ */
+
+:root {
+	--menu-bar-height: 32px;
+	--ytmusic-nav-bar-height: 64px;
+	--ytmusic-player-page-vertical-padding: 64px;
+	--ytmusic-player-page-horizontal-padding: 96px;
+	--blfw-text: rgba(255, 255, 255, 0.94);
+	--blfw-dim: rgba(255, 255, 255, 0.62);
+	--blfw-faint: rgba(255, 255, 255, 0.34);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html {
+	font-size: 10px;
+}
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+	overflow: hidden;
+	background: #030303;
+	color: var(--blfw-text);
+	font-family: Satoshi, "Satoshi Variable", Inter, system-ui, sans-serif;
+	-webkit-font-smoothing: antialiased;
+	user-select: none;
+}
+
+#blfw-shell {
+	position: fixed;
+	inset: 0;
+	overflow: hidden;
+}
+
+/* The theme treats the player page as a layer under YouTube Music's nav bar. There is no nav bar in
+   this window, so the reserved 64px is reclaimed and the page is pinned to the frame. */
+#player-page,
+ytmusic-player-page#player-page {
+	/* The theme's ambience and kawarp layers sit at negative z-index, so the page needs its own
+	   stacking context; the app gets this from the shaders extension's inline style. */
+	isolation: isolate;
+	z-index: 2;
+	top: 0 !important;
+	left: 0 !important;
+	width: 100% !important;
+	height: 100% !important;
+	position: absolute !important;
+}
+
+/*
+ * Custom elements are inline by default, and YouTube Music's own stylesheet is what normally makes
+ * these blocks. Without that stylesheet every one of them collapses, which is what hid the lyric
+ * column and let the artwork float in the middle of a black page.
+ */
+ytmusic-app-layout,
+ytmusic-player-page,
+ytmusic-player,
+ytmusic-tab-renderer {
+	display: block;
+}
+
+ytmusic-app-layout#layout {
+	position: absolute;
+	inset: 0;
+}
+
+#player-page > .content {
+	height: 100%;
+}
+
+/*
+ * The flex row below is YouTube Music's own layout, not the theme's: in the app `.content` is a flex
+ * row because YouTube's stylesheet says so. A skeleton without it stacks the lyric column under the
+ * artwork, which pushed the first lyric line from y=97 to y=~484. The widths are the app's measured
+ * fullscreen geometry at 1920 (main 491.5px, 96px gutter, lyrics 59.4%).
+ */
+#player-page > .content {
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+	padding: calc(var(--menu-bar-height) + var(--ytmusic-player-page-vertical-padding)) var(--ytmusic-player-page-horizontal-padding) 0;
+}
+
+#player-page[blyrics-video-mode] > .content {
+	padding-inline: calc(var(--ytmusic-player-page-horizontal-padding) / 2);
+}
+
+#main-panel {
+	display: flex;
+	flex: 1 1 0;
+	min-height: 0;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	margin-bottom: var(--ytmusic-player-page-vertical-padding);
+	transition: transform 0.3s ease-in-out;
+}
+
+#player {
+	width: 100%;
+	max-width: min(100%, calc(100vh - 280px));
+	flex: none;
+	margin: 0 auto;
+}
+
+#song-media-window {
+	display: none;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	background: #000;
+}
+
+/* `css/ytmusic/fullscreen.css` hides `#song-media-window > *` to suppress YTM's tap-catcher controls;
+   in this window `<video id="blfw-mv-video">` lives inside `#song-media-window` rather than `#movie_player`. */
+#blfw-shell #song-media-window > #blfw-mv-video,
+#blfw-mv-video {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+	visibility: visible;
+	background: #000;
+}
+
+#player-page[blyrics-video-mode] #player,
+ytmusic-player-page[player-fullscreened][blyrics-video-mode] #player.ytmusic-player-page {
+	width: min(100%, calc((100vh - 22rem) * var(--blyrics-video-aspect-ratio, 16 / 9))) !important;
+	max-width: 100% !important;
+	aspect-ratio: var(--blyrics-video-aspect-ratio, 16 / 9);
+}
+
+#player-page[blyrics-video-mode] #song-image {
+	display: none;
+}
+
+#player-page[blyrics-video-mode] #song-media-window {
+	display: block;
+}
+
+#blfw-shell #side-panel {
+	display: block;
+	flex: none;
+	width: 59.4%;
+	height: calc(100vh - var(--menu-bar-height)) !important;
+	margin-top: calc(var(--ytmusic-player-page-vertical-padding) * -1) !important;
+	margin-left: var(--ytmusic-player-page-horizontal-padding);
+	padding-top: 65px;
+	min-width: 0;
+	transform: none !important;
+}
+
+#blfw-shell #player-page[blyrics-video-mode] #side-panel {
+	width: var(--side-panel-fullscreen-video-width, 44%);
+}
+
+#blfw-shell #blyrics-fs-column {
+	width: 100%;
+	/* The theme lifts this block 64px to overlap the player shadow on the real player page. Here the
+	   column is tighter, so that lift put the info card on top of the artwork. */
+	transform: none !important;
+	animation: none !important;
+	margin-top: 2rem !important;
+}
+
+@media (max-width: 1280px) {
+	:root {
+		--ytmusic-player-page-horizontal-padding: 48px;
+	}
+}
+
+#tab-renderer {
+	display: block;
+	flex: 1 1 auto;
+	height: 100%;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	scrollbar-width: none;
+}
+
+#tab-renderer::-webkit-scrollbar {
+	display: none;
+}
+
+#blyrics-wrapper {
+	height: auto;
+	min-height: 100%;
+}
+
+/*
+ * GlassyFlow and the renderer both assume the container is a plain block inside the scroller. The
+ * theme turns `.blyrics-container` into its own scroller in fullscreen, which would give this window
+ * a second scroll owner; it stays a plain block here.
+ */
+#blyrics-wrapper > .blyrics-container {
+	overflow: visible !important;
+	margin: 0;
+	padding-inline: 0;
+	padding-top: var(--blyrics-padding-top, 2rem);
+}
+
+[data-glassyflow="true"] #blyrics-wrapper,
+[data-glassyflow="true"] #blyrics-wrapper > .blyrics-container {
+	--blyrics-animate-scroll: 0 !important;
+	--blyrics-lyric-scroll-duration: 0ms !important;
+}
+
+/* Culling stays the renderer's own. Forcing every line visible changed the measured heights and
+   made GlassyFlow's geometry jump against the renderer's scroll. */
+
+#blfw-debug {
+	display: none;
+	position: fixed;
+	left: 10px;
+	bottom: 10px;
+	z-index: 40;
+	margin: 0;
+	padding: 6px 8px;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.55);
+	color: rgba(255, 255, 255, 0.7);
+	font: 11px/1.4 monospace;
+	white-space: pre;
+	pointer-events: none;
+}
+
+html[data-debug="true"] #blfw-debug {
+	display: block;
+}
+
+/*
+ * Fallbacks for the pieces the theme normally paints, kept deliberately small. They only matter if a
+ * theme does not define them; when the Glassy theme is active its rules win because they are injected
+ * after these stylesheets.
+ */
+#song-image {
+	position: relative;
+	width: 100%;
+	padding-top: 100%;
+	overflow: hidden;
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.04);
+}
+
+#song-image > img,
+#song-image > video {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* Matches Better Lyrics's custom artwork crossfade (`dom.ts`): keep outgoing opaque underneath (z:1) while incoming fades in on top (z:2) at 600ms ease-in-out so opacity never dips mid-transition. */
+#blfw-art-image,
+#blfw-art-image-next {
+	opacity: 0;
+	z-index: 0;
+	transition: opacity 600ms ease-in-out;
+	pointer-events: none;
+}
+
+#blfw-art-image.is-visible,
+#blfw-art-image-next.is-visible {
+	opacity: 1;
+	z-index: 2;
+}
+
+#blfw-art-image.blfw-art--outgoing,
+#blfw-art-image-next.blfw-art--outgoing {
+	opacity: 1;
+	z-index: 1;
+	transition: none;
+}
+
+#blfw-art-image.blfw-art--incoming,
+#blfw-art-image-next.blfw-art--incoming {
+	z-index: 2;
+}
+
+#blfw-art-video,
+#blfw-art-video-next {
+	opacity: 0;
+	z-index: 3;
+	transition: opacity 600ms ease-in-out;
+	pointer-events: none;
+}
+
+#blfw-art-video.is-visible,
+#blfw-art-video-next.is-visible {
+	opacity: 1;
+}
+
+#blyrics-song-info p {
+	margin: 0;
+}
+
+#blyrics-title {
+	font-size: 2rem;
+	font-weight: 700;
+	line-height: 1.35;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#blyrics-artist {
+	margin-top: 0.25rem;
+	font-size: 1.5rem;
+	color: var(--blfw-dim);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* The app's fullscreen shows no timeline unless the pinned controls are turned on, so this row is
+   present in the DOM but off by default. */
+#blfw-progress {
+	display: none;
+	align-items: center;
+	gap: 1rem;
+	margin-top: 1.6rem;
+	font-size: 1.1rem;
+	color: var(--blfw-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+#blfw-progress-track {
+	flex: 1;
+	height: 3px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.16);
+	overflow: hidden;
+}
+
+#blfw-progress-fill {
+	height: 100%;
+	width: 100%;
+	transform: scaleX(0);
+	transform-origin: left center;
+	background: rgba(255, 255, 255, 0.82);
+	transition: transform 0.18s linear;
+}
+
+#blfw-drag {
+	position: fixed;
+	inset: 0 0 auto 0;
+	height: var(--menu-bar-height);
+	z-index: 20;
+	-webkit-app-region: drag;
+}
+
+#blfw-window-controls {
+	position: fixed;
+	top: 12px;
+	right: 14px;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+	-webkit-app-region: no-drag;
+}
+
+.blfw-window-btn {
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--blfw-dim);
+	cursor: pointer;
+	pointer-events: none;
+	transition: background 0.2s ease, color 0.2s ease;
+	-webkit-app-region: no-drag;
+}
+
+html:not([data-cursor-idle="true"])[data-pointer-inside="true"] #blfw-window-controls,
+html:not([data-cursor-idle="true"]) #blfw-drag:hover ~ #blfw-window-controls,
+html:not([data-cursor-idle="true"]) #blfw-window-controls:hover,
+#blfw-window-controls:has(> .blfw-window-btn:focus-visible) {
+	opacity: 1;
+}
+
+html:not([data-cursor-idle="true"])[data-pointer-inside="true"] .blfw-window-btn,
+html:not([data-cursor-idle="true"]) #blfw-drag:hover ~ #blfw-window-controls .blfw-window-btn,
+html:not([data-cursor-idle="true"]) #blfw-window-controls:hover .blfw-window-btn,
+.blfw-window-btn:focus-visible {
+	pointer-events: auto;
+}
+
+.blfw-window-btn:hover,
+.blfw-window-btn:focus-visible {
+	background: rgba(255, 255, 255, 0.18);
+	color: #fff;
+	outline: none;
+}
+
+.blfw-fs-exit {
+	display: none;
+}
+
+html[data-window-fullscreen="true"] #blfw-drag {
+	display: none;
+}
+
+html[data-window-fullscreen="true"] .blfw-fs-enter {
+	display: none;
+}
+
+html[data-window-fullscreen="true"] .blfw-fs-exit {
+	display: block;
+}
+
+#blfw-status {
+	position: absolute;
+	inset: auto 0 12% 0;
+	z-index: 2;
+	margin: 0;
+	text-align: center;
+	font-size: 1.4rem;
+	color: var(--blfw-dim);
+}
+
+#blfw-status[hidden] {
+	display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#blfw-art-image,
+	#blfw-art-image-next,
+	#blfw-art-video,
+	#blfw-art-video-next,
+	#blfw-window-controls,
+	.blfw-window-btn {
+		animation: none;
+		transition: none;
+	}
+}
+
+html[data-cursor-idle="true"],
+html[data-cursor-idle="true"] * {
+	cursor: none !important;
+}
