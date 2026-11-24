@@ -28,6 +28,10 @@ export interface GlassyFlowBridgeTarget {
   setTheme?: SetThemeFn;
 }
 
+export interface GlassyFlowBridgeOptions {
+  isViewVisible?: () => boolean;
+}
+
 interface AppliedLineState {
   stage: 1 | 2;
   actualTime: number;
@@ -155,7 +159,10 @@ function getTimingOffsetS(container: HTMLElement, isRichsync: boolean): number {
   return isRichsync ? cachedRichsyncOffsetS : cachedTimingOffsetS;
 }
 
-export function initGlassyFlowBridge(targetView?: GlassyFlowBridgeTarget): void {
+export function initGlassyFlowBridge(
+  targetView?: GlassyFlowBridgeTarget,
+  options?: GlassyFlowBridgeOptions
+): void {
   const resolved = targetView ?? defaultTargetRef?.deref() ?? null;
   if (!resolved) return;
   const target: GlassyFlowBridgeTarget = resolved;
@@ -164,8 +171,10 @@ export function initGlassyFlowBridge(targetView?: GlassyFlowBridgeTarget): void 
   patchedViews.add(target);
 
   const originalTick = target.tick;
+  const isViewVisible = options?.isViewVisible;
   let appliedLines = new WeakMap<HTMLElement, AppliedLineState>();
   const animatingBeforeTick = new Set<HTMLElement>();
+  let skippedWhileHidden = false;
   let lastActualTime = Number.NaN;
   let lastRawTimeS = Number.NaN;
 
@@ -240,16 +249,31 @@ export function initGlassyFlowBridge(targetView?: GlassyFlowBridgeTarget): void 
       if (!(currentTimeS === 0 && !options.isPlaying)) {
         lastRawTimeS = currentTimeS;
       }
-      snapshotAnimatingLines();
     } else {
       animatingBeforeTick.clear();
       lastRawTimeS = Number.NaN;
+      return originalTick.call(this, currentTimeS, options);
     }
 
-    const result = originalTick.call(this, currentTimeS, options);
-    if (hasLines) {
-      applyDelayVars(currentTimeS, options);
+    if (currentTimeS === 0 && !options.isPlaying) {
+      animatingBeforeTick.clear();
+      return originalTick.call(this, currentTimeS, options);
     }
+
+    if (isViewVisible && !isViewVisible()) {
+      skippedWhileHidden = true;
+      animatingBeforeTick.clear();
+      return originalTick.call(this, currentTimeS, options);
+    }
+
+    if (skippedWhileHidden) {
+      skippedWhileHidden = false;
+      appliedLines = new WeakMap<HTMLElement, AppliedLineState>();
+    }
+
+    snapshotAnimatingLines();
+    const result = originalTick.call(this, currentTimeS, options);
+    applyDelayVars(currentTimeS, options);
     return result;
   };
 
@@ -258,11 +282,23 @@ export function initGlassyFlowBridge(targetView?: GlassyFlowBridgeTarget): void 
     target.retickFromPlaybackClock = function (buildOptions) {
       let capturedOpts: TickOptions | null = null;
       const hasLines = Boolean(target.container && target.lines.length > 0 && Number.isFinite(lastRawTimeS));
-      if (hasLines) {
-        snapshotAnimatingLines();
-      } else {
+      if (!hasLines) {
         animatingBeforeTick.clear();
+        return originalRetick.call(this, buildOptions);
       }
+
+      if (isViewVisible && !isViewVisible()) {
+        skippedWhileHidden = true;
+        animatingBeforeTick.clear();
+        return originalRetick.call(this, buildOptions);
+      }
+
+      if (skippedWhileHidden) {
+        skippedWhileHidden = false;
+        appliedLines = new WeakMap<HTMLElement, AppliedLineState>();
+      }
+
+      snapshotAnimatingLines();
 
       const result = originalRetick.call(this, (eventCreationTime, isPlaying) => {
         const opts = buildOptions(eventCreationTime, isPlaying);
@@ -270,7 +306,7 @@ export function initGlassyFlowBridge(targetView?: GlassyFlowBridgeTarget): void 
         return opts;
       });
 
-      if (hasLines && capturedOpts && Number.isFinite(lastRawTimeS)) {
+      if (capturedOpts && Number.isFinite(lastRawTimeS)) {
         applyDelayVars(lastRawTimeS, capturedOpts);
       } else {
         animatingBeforeTick.clear();

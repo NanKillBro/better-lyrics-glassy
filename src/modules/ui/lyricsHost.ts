@@ -4,6 +4,7 @@ import { isKaraokeLayout } from "@modules/karaoke/state";
 import { seekPlayer } from "@modules/lyrics/lyrics";
 import { hideAdOverlay, isAdPlaying, isLoaderActive, showAdOverlay } from "@modules/ui/dom";
 import { getResumeScrollElement } from "@modules/ui/resumeScrollButton";
+import { shouldTreatDocumentAsHidden } from "@modules/ui/idleTickSuspension";
 import { getCachedViewVisibility } from "@modules/ui/visibilityCache";
 import { observeResize, type ObserverHandle } from "@modules/ui/layout/layoutWidth";
 import type { LyricsRendererHost } from "@braccato/core";
@@ -251,6 +252,7 @@ export function resetScrollHostCache(): void {
 }
 
 function computeViewVisibility(): boolean {
+  if (shouldTreatDocumentAsHidden()) return false;
   if (isKaraokeLayout()) return false;
 
   const tabSelector = document.getElementsByClassName(TAB_HEADER_CLASS)[1];

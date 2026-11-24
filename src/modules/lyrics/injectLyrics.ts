@@ -29,6 +29,7 @@ import {
   setFullscreenNoLyricsState,
 } from "@modules/ui/dom";
 import { lyricsElementAdded, mainView } from "@modules/ui/mainLyricsView";
+import { requestAnimationLoopSync, shouldEnableMainLyricsTicking } from "@modules/ui/idleTickSuspension";
 import { disableNativeLyricsFocus } from "@modules/ui/nativeLyricsFocus";
 import { publishSecondaryViews } from "@modules/ui/secondaryViews";
 import { injectRomanization, injectTranslation, type LineData } from "@modules/ui/lyricsRenderer";
@@ -262,13 +263,14 @@ function injectLyrics(
 
   void processBatchTranslationsAndRomanizations(doc, data, lines, scripts, isStale, signal);
 
-  AppState.areLyricsTicking = true;
+  AppState.areLyricsTicking = shouldEnableMainLyricsTicking(tabSelector);
   mainView.relayout();
   if (allZero) {
     logCore(SYNC_DISABLED_LOG);
   }
 
   AppState.areLyricsLoaded = true;
+  requestAnimationLoopSync();
 }
 
 /**

@@ -15,7 +15,15 @@ import { loadKaraokeSettings } from "@modules/karaoke/settings";
 import { migrateFullscreenControlsPref } from "@modules/settings/fullscreenControls";
 import { applyRendererModeSettings } from "@modules/settings/rendererModeSettings";
 import { clearCache as clearTranslationCache } from "@modules/lyrics/translation";
-import { mountDock, mountVotingSegment, reloadAlbumArt, syncAdCheckState, unmountDock, updateDockPosition } from "@modules/ui/dom";
+import {
+  mountDock,
+  mountVotingSegment,
+  reloadAlbumArt,
+  syncAdCheckState,
+  syncDockProximityMode,
+  unmountDock,
+  updateDockPosition,
+} from "@modules/ui/dom";
 import { applyGlobalOffsets } from "@modules/ui/lyricsDock/offset";
 import { RENDERER_MODE_DEFAULTS } from "@modules/ui/rendererMode";
 import { mainView } from "@modules/ui/mainLyricsView";
@@ -23,6 +31,7 @@ import { isPlayerFullscreened, onFullscreenChange } from "@modules/ui/observer";
 import { publishSecondaryViews } from "@modules/ui/secondaryViews";
 import { applyCustomStyles, getAndApplyCustomStyles } from "@modules/ui/styleInjector";
 import { resetScrollHostCache } from "@modules/ui/lyricsHost";
+import { isLyricsTabSelected, requestAnimationLoopSync } from "@modules/ui/idleTickSuspension";
 import { syncProgressBarOptimizationState } from "@modules/ui/playerControls/progressBar";
 import { disposeVisibilityCache, invalidateViewVisibilityCache } from "@modules/ui/visibilityCache";
 
@@ -195,6 +204,22 @@ function applyFastPipArtworkSetting(enabled: boolean): void {
   AppState.isFastPipArtworkEnabled = enabled;
 }
 
+function applyIdleTickSuspensionSetting(enabled: boolean): void {
+  if (AppState.isIdleTickSuspensionEnabled === enabled) return;
+  AppState.isIdleTickSuspensionEnabled = enabled;
+  invalidateViewVisibilityCache();
+  if (enabled && AppState.areLyricsTicking && !isLyricsTabSelected()) {
+    AppState.areLyricsTicking = false;
+  }
+  requestAnimationLoopSync();
+}
+
+function applyFastDockProximitySetting(enabled: boolean): void {
+  if (AppState.isFastDockProximityEnabled === enabled) return;
+  AppState.isFastDockProximityEnabled = enabled;
+  syncDockProximityMode();
+}
+
 export function loadPerformanceSettings(): void {
   getStorage(
     {
@@ -203,6 +228,8 @@ export function loadPerformanceSettings(): void {
       isOptimizedScrollHostEnabled: false,
       isOptimizedProgressBarEnabled: false,
       isFastPipArtworkEnabled: false,
+      isIdleTickSuspensionEnabled: false,
+      isFastDockProximityEnabled: false,
       ...RENDERER_MODE_DEFAULTS,
     },
     items => {
@@ -211,6 +238,8 @@ export function loadPerformanceSettings(): void {
       applyOptimizedScrollHostSetting(items.isOptimizedScrollHostEnabled === true);
       applyOptimizedProgressBarSetting(items.isOptimizedProgressBarEnabled === true);
       applyFastPipArtworkSetting(items.isFastPipArtworkEnabled === true);
+      applyIdleTickSuspensionSetting(items.isIdleTickSuspensionEnabled === true);
+      applyFastDockProximitySetting(items.isFastDockProximityEnabled === true);
       void applyRendererModeSettings(items);
     }
   );
@@ -236,6 +265,12 @@ export function initPerformanceSettingsListener(): () => void {
     }
     if ("isFastPipArtworkEnabled" in changes) {
       applyFastPipArtworkSetting(changes.isFastPipArtworkEnabled.newValue === true);
+    }
+    if ("isIdleTickSuspensionEnabled" in changes) {
+      applyIdleTickSuspensionSetting(changes.isIdleTickSuspensionEnabled.newValue === true);
+    }
+    if ("isFastDockProximityEnabled" in changes) {
+      applyFastDockProximitySetting(changes.isFastDockProximityEnabled.newValue === true);
     }
     if ("isCompositeLyricsEnabled" in changes) {
       void applyRendererModeSettings({ isCompositeLyricsEnabled: changes.isCompositeLyricsEnabled.newValue });

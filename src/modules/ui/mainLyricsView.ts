@@ -1,6 +1,7 @@
 import { AppState } from "@core/appState";
 import { invalidateScrollHostMetrics, ytmHost } from "@modules/ui/lyricsHost";
-import type { LyricsRenderer, TickOptions } from "@braccato/core";
+import type { LyricsRenderer, LyricsRendererHost, TickOptions } from "@braccato/core";
+import { requestAnimationLoopSync } from "@modules/ui/idleTickSuspension";
 import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
 
 function invalidateAfter<Args extends unknown[], Result>(
@@ -37,7 +38,48 @@ export function resolveMainViewTickOptions(options: TickOptions, doc: Document |
   return { ...options, smoothScroll: false };
 }
 
-export const mainView: Omit<LyricsRenderer, "destroy"> = createLyricsRenderer({ document, window, host: ytmHost });
+let scopedVisibilityDepth = 0;
+let scopedTickVisibility: boolean | null = null;
+
+export function runWithScopedMainViewVisibility<T>(fn: () => T): T {
+  if (scopedVisibilityDepth === 0) {
+    scopedTickVisibility = null;
+  }
+  scopedVisibilityDepth += 1;
+  try {
+    return fn();
+  } finally {
+    scopedVisibilityDepth -= 1;
+    if (scopedVisibilityDepth === 0) {
+      scopedTickVisibility = null;
+    }
+  }
+}
+
+export function readScopedMainViewVisibility(): boolean {
+  if (scopedVisibilityDepth > 0) {
+    if (scopedTickVisibility === null) {
+      scopedTickVisibility = ytmHost.isViewVisible();
+    }
+    return scopedTickVisibility;
+  }
+  return ytmHost.isViewVisible();
+}
+
+const mainViewHost: LyricsRendererHost = {
+  isViewVisible: readScopedMainViewVisibility,
+  isLoaderActive: () => ytmHost.isLoaderActive(),
+  syncAdState: () => ytmHost.syncAdState(),
+  setResumeAffordanceVisible: visible => ytmHost.setResumeAffordanceVisible(visible),
+  getScrollElement: () => ytmHost.getScrollElement(),
+  seek: timeS => ytmHost.seek(timeS),
+  get log() {
+    return ytmHost.log;
+  },
+  debug: ytmHost.debug,
+};
+
+export const mainView: Omit<LyricsRenderer, "destroy"> = createLyricsRenderer({ document, window, host: mainViewHost });
 const baseMainTick = mainView.tick;
 mainView.tick = (currentTimeS, options) => baseMainTick(currentTimeS, resolveMainViewTickOptions(options));
 const baseMainRetick = mainView.retickFromPlaybackClock;
@@ -84,6 +126,7 @@ export function retickMainView(): void {
   );
   if (status === "lyrics-missing") {
     AppState.areLyricsTicking = false;
+    requestAnimationLoopSync();
   }
 }
 
@@ -98,4 +141,11 @@ export function lyricsElementAdded(): void {
   mainView.scheduleLyricPositionUpdate(() => AppState.areLyricsTicking, retickMainView);
 }
 
-initGlassyFlowBridge(mainView);
+initGlassyFlowBridge(mainView, { isViewVisible: readScopedMainViewVisibility });
+
+const bridgedMainTick = mainView.tick;
+mainView.tick = (currentTimeS, options) =>
+  runWithScopedMainViewVisibility(() => bridgedMainTick(currentTimeS, options));
+const bridgedMainRetick = mainView.retickFromPlaybackClock;
+mainView.retickFromPlaybackClock = buildOptions =>
+  runWithScopedMainViewVisibility(() => bridgedMainRetick(buildOptions));

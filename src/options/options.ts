@@ -106,9 +106,11 @@ interface Options extends VideoQualitySettings, RendererModeOptions {
   isUnblurUpcomingLyricsEnabled: boolean;
   isLyricsBlurDisabled: boolean;
   isVisibilityCacheEnabled: boolean;
+  isIdleTickSuspensionEnabled: boolean;
   isAdCheckEnabled: boolean;
   isOptimizedScrollHostEnabled: boolean;
   isOptimizedProgressBarEnabled: boolean;
+  isFastDockProximityEnabled: boolean;
   isFastPipArtworkEnabled: boolean;
   isPictureInPictureEnabled: boolean;
   isPictureInPictureAutoRestoreEnabled: boolean;
@@ -192,10 +194,12 @@ const getOptionsFromForm = (): Options => {
       .checked,
     isLyricsBlurDisabled: (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked,
     isVisibilityCacheEnabled: (document.getElementById("isVisibilityCacheEnabled") as HTMLInputElement).checked,
+    isIdleTickSuspensionEnabled: (document.getElementById("isIdleTickSuspensionEnabled") as HTMLInputElement).checked,
     isAdCheckEnabled: (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked,
     isOptimizedScrollHostEnabled: (document.getElementById("isOptimizedScrollHostEnabled") as HTMLInputElement).checked,
     isOptimizedProgressBarEnabled: (document.getElementById("isOptimizedProgressBarEnabled") as HTMLInputElement)
       .checked,
+    isFastDockProximityEnabled: (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked,
     isFastPipArtworkEnabled: (document.getElementById("isFastPipArtworkEnabled") as HTMLInputElement).checked,
     ...readRendererModeForm(),
     isPictureInPictureEnabled: (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked,
@@ -397,9 +401,11 @@ const restoreOptions = (): void => {
     isUnblurUpcomingLyricsEnabled: false,
     isLyricsBlurDisabled: false,
     isVisibilityCacheEnabled: false,
+    isIdleTickSuspensionEnabled: false,
     isAdCheckEnabled: false,
     isOptimizedScrollHostEnabled: false,
     isOptimizedProgressBarEnabled: false,
+    isFastDockProximityEnabled: false,
     isFastPipArtworkEnabled: false,
     ...RENDERER_MODE_DEFAULTS,
     isPictureInPictureEnabled: true,
@@ -507,11 +513,15 @@ const setOptionsInForm = (items: Options): void => {
     items.isUnblurUpcomingLyricsEnabled;
   (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked = items.isLyricsBlurDisabled;
   (document.getElementById("isVisibilityCacheEnabled") as HTMLInputElement).checked = items.isVisibilityCacheEnabled;
+  (document.getElementById("isIdleTickSuspensionEnabled") as HTMLInputElement).checked =
+    items.isIdleTickSuspensionEnabled;
   (document.getElementById("isAdCheckEnabled") as HTMLInputElement).checked = items.isAdCheckEnabled;
   (document.getElementById("isOptimizedScrollHostEnabled") as HTMLInputElement).checked =
     items.isOptimizedScrollHostEnabled;
   (document.getElementById("isOptimizedProgressBarEnabled") as HTMLInputElement).checked =
     items.isOptimizedProgressBarEnabled;
+  (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked =
+    items.isFastDockProximityEnabled;
   (document.getElementById("isFastPipArtworkEnabled") as HTMLInputElement).checked = items.isFastPipArtworkEnabled;
   writeRendererModeForm(items);
   (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked = items.isPictureInPictureEnabled;

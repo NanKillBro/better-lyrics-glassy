@@ -17,7 +17,13 @@ import { getArtworkMetadata, getSongAlbum, getSongMetadata } from "@modules/lyri
 import type { ThumbnailElement } from "@modules/lyrics/requestSniffer/NextResponse";
 import { onAutoSwitchEnabled, onFullScreenDisabled, wakeDockIdle } from "@modules/settings/settings";
 import { adjustLyricOffset, OFFSET_STEP, OFFSET_STEP_LARGE } from "@modules/ui/lyricsDock/offset";
-import { currentTickOptions, mainView } from "@modules/ui/mainLyricsView";
+import {
+  currentTickOptions,
+  mainView,
+  readScopedMainViewVisibility,
+  runWithScopedMainViewVisibility,
+} from "@modules/ui/mainLyricsView";
+import { registerAnimationLoopSync, shouldRunAnimationLoop } from "@modules/ui/idleTickSuspension";
 import { preloadArtwork } from "@modules/ui/pictureInPicture/lyricsView";
 import { preloadFastPipNextArtwork } from "@modules/ui/pictureInPicture/fastArtwork";
 import { revealQueueAutoplaySection } from "@modules/ui/queueAutoplay";
@@ -88,6 +94,27 @@ function runAnimationEngine(now: number, force = false): void {
   }
 }
 
+function shouldRunMainAnimationLoop(): boolean {
+  if (!AppState.isIdleTickSuspensionEnabled) return true;
+  const isDocumentVisible = document.visibilityState === "visible";
+  const karaokeActive = isKaraokeActive();
+  return shouldRunAnimationLoop({
+    idleSuspensionEnabled: true,
+    isPlaying: latestPlayerPlaying,
+    isDocumentVisible,
+    isPictureInPictureOpen: AppState.isPictureInPictureOpen,
+    areLyricsTicking: AppState.areLyricsTicking,
+    isKaraokeActive: karaokeActive,
+    isMainViewVisible:
+      latestPlayerPlaying &&
+      (isDocumentVisible || AppState.isPictureInPictureOpen) &&
+      !karaokeActive &&
+      AppState.areLyricsTicking
+        ? readScopedMainViewVisibility()
+        : false,
+  });
+}
+
 /**
  * Ticks on the engine's own interval from a timer rather than a standing requestAnimationFrame. A
  * standing frame request makes the main thread produce a frame on every vsync, and once the lyric
@@ -95,13 +122,35 @@ function runAnimationEngine(now: number, force = false): void {
  * running animation. A tick that changes the DOM schedules its own frame.
  */
 function animationFrameLoop(): void {
-  runAnimationEngine(performance.now());
-  animationFrameRequest = window.setTimeout(animationFrameLoop, ANIMATION_ENGINE_INTERVAL_MS);
+  animationFrameRequest = null;
+  runWithScopedMainViewVisibility(() => {
+    if (!shouldRunMainAnimationLoop()) return;
+    runAnimationEngine(performance.now());
+    if (!shouldRunMainAnimationLoop()) return;
+    animationFrameRequest = window.setTimeout(animationFrameLoop, ANIMATION_ENGINE_INTERVAL_MS);
+  });
 }
 
 function startAnimationFrameLoop(): void {
   if (animationFrameRequest !== null) return;
   animationFrameRequest = window.setTimeout(animationFrameLoop, ANIMATION_ENGINE_INTERVAL_MS);
+}
+
+function stopAnimationFrameLoop(): void {
+  if (animationFrameRequest === null) return;
+  window.clearTimeout(animationFrameRequest);
+  animationFrameRequest = null;
+}
+
+function syncAnimationFrameLoop(): void {
+  if (!hasInitializedLyrics) return;
+  runWithScopedMainViewVisibility(() => {
+    if (shouldRunMainAnimationLoop()) {
+      startAnimationFrameLoop();
+    } else {
+      stopAnimationFrameLoop();
+    }
+  });
 }
 
 async function requestWakeLock(): Promise<void> {
@@ -208,12 +257,32 @@ export function enableLyricsTab(): void {
   tabSelector.setAttribute("aria-disabled", "false");
 
   lyricsTabObserver = new MutationObserver(mutations => {
+    let ariaSelectedChanged = false;
     mutations.forEach(mutation => {
       if (mutation.attributeName === "disabled") {
         tabSelector.removeAttribute("disabled");
         tabSelector.setAttribute("aria-disabled", "false");
+      } else if (mutation.attributeName === "aria-selected") {
+        ariaSelectedChanged = true;
       }
     });
+    if (ariaSelectedChanged && AppState.isIdleTickSuspensionEnabled) {
+      invalidateViewVisibilityCache();
+      if (tabSelector.getAttribute("aria-selected") === "true") {
+        window.setTimeout(() => {
+          if (tabSelector.getAttribute("aria-selected") !== "true") return;
+          if (AppState.areLyricsLoaded && !AppState.areLyricsTicking) {
+            AppState.areLyricsTicking = true;
+            mainView.relayout();
+            runAnimationEngine(performance.now(), true);
+          }
+          syncAnimationFrameLoop();
+        }, 0);
+      } else if (AppState.areLyricsTicking) {
+        AppState.areLyricsTicking = false;
+        syncAnimationFrameLoop();
+      }
+    }
   });
   lyricsTabObserver.observe(tabSelector, { attributes: true });
 }
@@ -248,6 +317,7 @@ export function disableInertWhenFullscreen(): void {
               currentTab = 1;
               if (AppState.areLyricsLoaded) {
                 AppState.areLyricsTicking = true;
+                syncAnimationFrameLoop();
               }
             }
           }
@@ -288,13 +358,21 @@ export function lyricReloader(): void {
           invalidateScrollHostMetrics();
           tabRenderer.scrollTop = scrollPositions[i];
           // Don't start ticking until we set the height
-          AppState.areLyricsTicking = AppState.areLyricsLoaded && i === 1;
+          const nextTicking = AppState.areLyricsLoaded && i === 1;
+          const becameTicking = nextTicking && !AppState.areLyricsTicking;
+          AppState.areLyricsTicking = nextTicking;
+          if (becameTicking && AppState.isIdleTickSuspensionEnabled) {
+            mainView.relayout();
+            runAnimationEngine(performance.now(), true);
+          }
+          syncAnimationFrameLoop();
         }, 0);
         currentTab = i;
 
         if (i !== 1) {
           // stop ticking immediately
           AppState.areLyricsTicking = false;
+          syncAnimationFrameLoop();
         }
       });
     }
@@ -334,12 +412,16 @@ export function initializeLyrics(): void {
   document.addEventListener("visibilitychange", () => {
     invalidateViewVisibilityCache();
     mainView.noteVisibilityChange();
-    if (document.visibilityState === "visible") {
-      runAnimationEngine(performance.now(), true);
-    }
+    runWithScopedMainViewVisibility(() => {
+      if (document.visibilityState === "visible") {
+        runAnimationEngine(performance.now(), true);
+      }
+      syncAnimationFrameLoop();
+    });
   });
 
-  startAnimationFrameLoop();
+  registerAnimationLoopSync(syncAnimationFrameLoop);
+  syncAnimationFrameLoop();
 
   // @ts-ignore
   document.addEventListener("blyrics-send-player-time", (event: CustomEvent<PlayerDetails>) => {
@@ -363,6 +445,7 @@ export function initializeLyrics(): void {
 
     if (currentVideoId !== AppState.lastVideoId || currentVideoDetails !== AppState.lastVideoDetails) {
       AppState.areLyricsTicking = false;
+      syncAnimationFrameLoop();
       AppState.lastVideoId = currentVideoId;
       AppState.lastVideoDetails = currentVideoDetails;
       resetThumbnailState();
@@ -440,7 +523,8 @@ export function initializeLyrics(): void {
 
     // Ticking is the side panel's business, but this warms the next song's artwork and lyrics for
     // whichever view is on screen, and the floating window is a view the side panel cannot see.
-    const isAnyViewShowingLyrics = AppState.areLyricsTicking || AppState.isPictureInPictureOpen;
+    const isAnyViewShowingLyrics =
+      AppState.areLyricsTicking || AppState.isPictureInPictureOpen || AppState.isFullscreenWindowOpen;
     if (isAnyViewShowingLyrics && AppState.areLyricsLoaded && !AppState.hasPreloadedNextSong) {
       AppState.hasPreloadedNextSong = true;
       logCore("Trying to preload next song");
@@ -521,9 +605,12 @@ export function initializeLyrics(): void {
     // word animations. The floating window term is not about the window: an opener that owns one
     // reports "hidden" for as long as it is open, however visible it actually is, so without it the
     // side panel would keep sweeping the current line after the user hits pause.
-    if (document.visibilityState === "visible" || AppState.isPictureInPictureOpen) {
-      runAnimationEngine(performance.now(), true);
-    }
+    runWithScopedMainViewVisibility(() => {
+      if (document.visibilityState === "visible" || AppState.isPictureInPictureOpen) {
+        runAnimationEngine(performance.now(), true);
+      }
+      syncAnimationFrameLoop();
+    });
   });
 }
 
@@ -724,8 +811,25 @@ export function setUpVideoModeListener(): void {
     wasVideo = isVideo;
   };
 
-  videoModeObserver = new MutationObserver(syncVideoMode);
-  videoModeObserver.observe(playerPage, { attributes: true, attributeFilter: ["video-mode"] });
+  videoModeObserver = new MutationObserver(mutations => {
+    let videoModeChanged = false;
+    let playerUiStateChanged = false;
+    for (const mutation of mutations) {
+      if (mutation.attributeName === "video-mode") videoModeChanged = true;
+      else if (mutation.attributeName === "player-ui-state") playerUiStateChanged = true;
+    }
+    if (videoModeChanged) syncVideoMode();
+    if (playerUiStateChanged && AppState.isIdleTickSuspensionEnabled) {
+      invalidateViewVisibilityCache();
+      runWithScopedMainViewVisibility(() => {
+        if (AppState.areLyricsTicking && readScopedMainViewVisibility()) {
+          runAnimationEngine(performance.now(), true);
+        }
+        syncAnimationFrameLoop();
+      });
+    }
+  });
+  videoModeObserver.observe(playerPage, { attributes: true, attributeFilter: ["video-mode", "player-ui-state"] });
   syncVideoMode();
   logCore("Set up video mode observer");
 }

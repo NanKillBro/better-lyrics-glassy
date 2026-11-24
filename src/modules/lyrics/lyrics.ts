@@ -8,6 +8,7 @@ import { AppState, type PlayerDetails, reloadLyrics } from "@core/appState";
 import { t } from "@core/i18n";
 import { type LineData, type LyricsData, processLyrics } from "@modules/lyrics/injectLyrics";
 import { flushLoader, refreshDockSources, refreshShownUnisonData, renderLoader } from "@modules/ui/dom";
+import { requestAnimationLoopSync, shouldEnableMainLyricsTicking } from "@modules/ui/idleTickSuspension";
 import { isLyricsWantedOffTab, publishSecondaryViews } from "@modules/ui/secondaryViews";
 import { LyricsLoadTimer } from "./lyricsLoadTimings";
 import type { Lyric, LyricSourceResult, ProviderParameters, SourceMapType } from "./providers/shared";
@@ -260,7 +261,8 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       keepsLinesOnScreen = isCounterpartSwitch;
       applySegmentMapToLyrics(AppState.lyricData, mainView.lines, segmentMap);
       AppState.suppressZeroTime = Date.now() + 5000;
-      AppState.areLyricsTicking = true; // Keep lyrics ticking while new lyrics are fetched.
+      AppState.areLyricsTicking = shouldEnableMainLyricsTicking(); // Keep lyrics ticking while new lyrics are fetched.
+      requestAnimationLoopSync();
       // The window keeps showing these lines through the refetch, so it needs the same deadline.
       publishSecondaryViews();
       logCore("Switching between audio/video: Skipping Loader", segmentMap);
@@ -268,7 +270,8 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       // Same-song reload (provider switch or translation/romanization toggle): keep the
       // current lyrics on screen and swap them in once the new ones are ready, no loader.
       AppState.suppressZeroTime = Date.now() + 5000;
-      AppState.areLyricsTicking = true;
+      AppState.areLyricsTicking = shouldEnableMainLyricsTicking();
+      requestAnimationLoopSync();
       publishSecondaryViews();
       logCore("Soft reload: keeping current lyrics, skipping loader");
     } else {
@@ -282,6 +285,7 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       segmentMap = matchingSong?.segmentMap || null;
       AppState.areLyricsLoaded = false;
       AppState.areLyricsTicking = false;
+      requestAnimationLoopSync();
       AppState.suppressZeroTime = 0;
       resetPlaybackClock();
     }
@@ -301,6 +305,7 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
     if (tabSelector?.getAttribute("aria-selected") !== "true" && !isLyricsWantedOffTab()) {
       AppState.areLyricsLoaded = false;
       AppState.areLyricsTicking = false;
+      requestAnimationLoopSync();
       AppState.lyricInjectionFailed = true;
       logCore(LYRICS_TAB_HIDDEN_LOG);
       return;

@@ -677,7 +677,7 @@ function ensureRenderer(): Renderer | null {
       log: (...args: unknown[]) => console.log("[blfw]", ...args),
     },
   });
-  initGlassyFlowBridge(renderer);
+  initGlassyFlowBridge(renderer, { isViewVisible: () => isWindowVisible });
   return renderer;
 }
 

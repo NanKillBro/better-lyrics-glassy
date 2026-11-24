@@ -6,6 +6,7 @@ import { disposePlayerPanelRefit, refitPlayerPanel } from "@modules/ui/layout/pl
 import type { LyricDecorations } from "@modules/lyrics/injectLyrics";
 import { currentViewLyrics } from "@modules/lyrics/viewLyrics";
 import { currentTickOptions, lyricsElementAdded } from "@modules/ui/mainLyricsView";
+import { requestAnimationLoopSync } from "@modules/ui/idleTickSuspension";
 import { getPlayerBar, isAdPlaying } from "@modules/ui/playerControls/playerBarControls";
 import type { KaraokeOverlayBar } from "@modules/karaoke/overlay";
 import { createKaraokeStage, type KaraokeStage } from "@modules/karaoke/stage";
@@ -142,6 +143,7 @@ export function syncKaraoke(): void {
   if (active !== wasActive) {
     wasActive = active;
     if (active) relayoutKaraoke();
+    requestAnimationLoopSync();
   }
   const layout = isKaraokeLayout();
   if (layout !== wasLayout) {
@@ -172,4 +174,5 @@ export function disposeKaraoke(): void {
   disposePlayerPanelRefit();
   wasActive = false;
   wasLayout = false;
+  requestAnimationLoopSync();
 }

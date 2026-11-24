@@ -9,7 +9,9 @@ import { versionedStylesheetUrl } from "@core/extensionStylesheet";
 import { t } from "@core/i18n";
 import { getStorage } from "@core/storage";
 import { getArtworkMetadata, getSongMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
+import { requestAnimationLoopSync } from "@modules/ui/idleTickSuspension";
 import { resumeAllAutoscroll } from "@modules/ui/lyricsRenderer";
+import { invalidateViewVisibilityCache } from "@modules/ui/visibilityCache";
 import { getPictureInPictureCapability } from "@modules/ui/pictureInPicture/capability";
 import { onSignal, sendInit, sendMetadata } from "@modules/ui/pictureInPicture/bridge";
 import { createGatedToggle } from "@modules/ui/pictureInPicture/controller";
@@ -86,6 +88,8 @@ const isolatedViewDependencies: PictureInPictureViewDependencies = {
 
 function markPictureInPictureOpened(): void {
   AppState.isPictureInPictureOpen = true;
+  invalidateViewVisibilityCache();
+  requestAnimationLoopSync();
   // The window builds from the lyrics the fetch retains, so a song that never got as far as an
   // injection has to be asked for now, whichever side panel tab the user is on.
   if (!AppState.areLyricsLoaded || AppState.lastLoadedVideoId !== AppState.lastVideoId) {
@@ -106,6 +110,8 @@ function markPictureInPictureOpened(): void {
 
 function markPictureInPictureClosed(): void {
   AppState.isPictureInPictureOpen = false;
+  invalidateViewVisibilityCache();
+  requestAnimationLoopSync();
 }
 
 function injectStylesheet(pipWindow: Window, stylesheet: string): void {

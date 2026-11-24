@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { ANIMATING_CLASS } from "@braccato/core/constants";
-import { LYRICS_WRAPPER_ID } from "@constants";
+import { LYRICS_WRAPPER_ID, TAB_HEADER_CLASS } from "@constants";
 import type { GlassyFlowBridgeTarget } from "@modules/ui/glassyFlowBridge";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true });
@@ -99,6 +99,17 @@ const doc = window.document;
 // 1. Test glassyFlowBridge.ts (already installed on mainView.tick at import time)
 {
   initGlassyFlowBridge();
+
+  const playerPage = doc.createElement("div");
+  playerPage.id = "player-page";
+  playerPage.setAttribute("player-ui-state", "PLAYER_PAGE_OPEN");
+  const tab0 = doc.createElement("tp-yt-paper-tab");
+  tab0.className = TAB_HEADER_CLASS;
+  const tab1 = doc.createElement("tp-yt-paper-tab");
+  tab1.className = TAB_HEADER_CLASS;
+  tab1.setAttribute("aria-selected", "true");
+  playerPage.append(tab0, tab1);
+  doc.body.appendChild(playerPage);
 
   const container = doc.createElement("div");
   container.style.setProperty("--blyrics-richsync-timing-offset", "100ms");
@@ -294,6 +305,50 @@ const doc = window.document;
   assert.ok(gcsCalls >= 2, "head <style> mutation invalidates cached timing offset");
   themeStyle.remove();
   await Promise.resolve();
+
+  // Unconditional glassyFlowBridge visibility guard: off-tab or collapsed player page skips all bridge DOM writes
+  const hiddenLineEl = doc.createElement("div");
+  container.appendChild(hiddenLineEl);
+  let hiddenWrites = 0;
+  const origHiddenSetProp = hiddenLineEl.style.setProperty.bind(hiddenLineEl.style);
+  hiddenLineEl.style.setProperty = ((prop: string, val: string | null, priority?: string) => {
+    if (prop === "--blyrics-anim-delay") hiddenWrites++;
+    return origHiddenSetProp(prop, val, priority);
+  }) as typeof hiddenLineEl.style.setProperty;
+  Object.defineProperty(mainView, "lines", {
+    value: [{ time: 50, duration: 3, lyricElement: hiddenLineEl, parts: [] }],
+    configurable: true,
+    writable: true,
+  });
+
+  // Off-tab: 0 delay writes even inside the 2s lookahead window, and visibility is checked once per tick
+  let visibilityChecks = 0;
+  const origIsViewVisible = ytmHost.isViewVisible;
+  ytmHost.isViewVisible = () => {
+    visibilityChecks++;
+    return origIsViewVisible.call(ytmHost);
+  };
+  try {
+    tab1.setAttribute("aria-selected", "false");
+    mainView.tick(48.5, { isPlaying: true } as any);
+    assert.equal(hiddenWrites, 0, "glassyFlowBridge writes nothing when lyrics tab is not selected");
+    assert.equal(visibilityChecks, 1, "mainView.tick reads ytmHost.isViewVisible() only once per tick");
+
+    // Collapsed player page: still 0 writes
+    tab1.setAttribute("aria-selected", "true");
+    playerPage.setAttribute("player-ui-state", "MINIPLAYER");
+    mainView.tick(48.7, { isPlaying: true } as any);
+    assert.equal(hiddenWrites, 0, "glassyFlowBridge writes nothing when player page is collapsed");
+
+    // Reopening player page re-arms cleanly
+    playerPage.setAttribute("player-ui-state", "PLAYER_PAGE_OPEN");
+    visibilityChecks = 0;
+    mainView.tick(48.8, { isPlaying: true } as any);
+    assert.equal(hiddenWrites, 1, "glassyFlowBridge resumes writing once view becomes visible again");
+    assert.equal(visibilityChecks, 1, "visible mainView.tick reads ytmHost.isViewVisible() only once per tick");
+  } finally {
+    ytmHost.isViewVisible = origIsViewVisible;
+  }
 
   globalThis.getComputedStyle = realGcs;
 }
