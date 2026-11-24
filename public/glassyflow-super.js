@@ -74,6 +74,9 @@
         mass: 1,
         scrollDelay: 240,
         deltaAdaptiveEnabled: true,
+        staggerScaleLines: 2.5,
+        largeJumpViewportRatio: 0.75,
+        attachSnapWindowMs: 600,
         avgLineHeightFallback: 48,
         arriveEpsilon: 0.1,
         bakeSamplesPerSec: 60,
@@ -209,28 +212,34 @@
         return oh + targetGeom.mt + targetGeom.mb;
     }
 
-    function _measureVisibleLines() {
-        const now = Date.now();
-        if (now - _viewportCache.ts < _VIEWPORT_CACHE_TTL) {
-            return _viewportCache.visibleLines;
-        }
-
-        if (!container) return _viewportCache.visibleLines;
+    function _getEffectiveViewportHeight() {
+        if (!container) return 0;
 
         if (!_vp.h || _vp.innerH !== window.innerHeight || _vpEl !== _getViewportElement()) {
-            if (!_refreshViewportElement()) return _viewportCache.visibleLines;
+            if (!_refreshViewportElement()) return 0;
         }
 
         let viewportH = _vp.h;
-        if (viewportH <= 0) {
-            return _viewportCache.visibleLines;
-        }
+        if (viewportH <= 0) return 0;
 
         const visibleTop = Math.max(_vp.top, 0);
         const visibleBottom = Math.min(_vp.bottom, _vp.innerH);
         const actualVisibleH = visibleBottom - visibleTop;
         if (actualVisibleH > 0 && actualVisibleH < viewportH) {
             viewportH = actualVisibleH;
+        }
+        return viewportH;
+    }
+
+    function _measureVisibleLines() {
+        const now = Date.now();
+        if (now - _viewportCache.ts < _VIEWPORT_CACHE_TTL) {
+            return _viewportCache.visibleLines;
+        }
+
+        const viewportH = _getEffectiveViewportHeight();
+        if (viewportH <= 0) {
+            return _viewportCache.visibleLines;
         }
 
         const lines = getLines();
@@ -262,18 +271,6 @@
         return visible;
     }
 
-    function getLookBehind() {
-        const v = _measureVisibleLines();
-        const raw = Math.round(v * CFG.lookBehindRatio);
-        return Math.max(CFG.lookBehindMin, Math.min(CFG.lookBehindMax, raw));
-    }
-
-    function getLookAhead() {
-        const v = _measureVisibleLines();
-        const raw = Math.round(v * CFG.lookAheadRatio);
-        return Math.max(CFG.lookAheadMin, Math.min(CFG.lookAheadMax, raw));
-    }
-
     let _avgLineHeightCache = { value: 48, ts: 0 };
 
     function _estimateAvgLineHeight(lines, ref) {
@@ -303,6 +300,8 @@
     let resizeTimer = null;
     let suppressTransform = false;
     let lastFlipTime = 0;
+    let attachedAt = 0;
+    let initialScrollTop = 0;
     let _domObserverTarget = null;
 
     const lineState = new WeakMap();
@@ -380,7 +379,16 @@
             if (animIdx < 0 && cl.contains('blyrics--animating')) animIdx = i;
         }
         if (animIdx >= 0) return animIdx;
-        return Math.floor(lines.length / 5);
+        if (lastScrollTop === null || lastScrollTop <= 1) return 0;
+        const vpH = _getEffectiveViewportHeight();
+        const targetY = lastScrollTop + (vpH > 0 ? vpH * 0.35 : 200);
+        let acc = 0;
+        for (let i = 0; i < lines.length; i++) {
+            const h = _getLineFullHeight(lines[i]);
+            acc += h > 0 ? h : CFG.avgLineHeightFallback;
+            if (acc >= targetY) return i;
+        }
+        return Math.max(0, lines.length - 1);
     }
 
     function getOrCreateLineState(line) {
@@ -600,31 +608,7 @@
         activeLines.delete(line);
     }
 
-    function applyLineWave(line, data, delta, totalDelayMs, nowTimeline, sharedIdleBakeCache) {
-        const totalDelaySec = totalDelayMs / 1000;
-        const hasRunningAnim =
-            activeLines.has(line) &&
-            data.anim &&
-            data.anim.playState === 'running';
-
-        let elapsedSec = 0;
-        if (hasRunningAnim) {
-            const animCurrentMs = Number(data.anim.currentTime);
-            elapsedSec = Number.isFinite(animCurrentMs) && animCurrentMs >= 0
-                ? animCurrentMs / 1000
-                : Math.max(0, (nowTimeline - data.tOriginMs) / 1000);
-            _foldReleasedWaves(data, elapsedSec);
-        } else {
-            if (data.anim) {
-                const stale = data.anim;
-                data.anim = null;
-                stale.cancel();
-            }
-            data.base = null;
-            data.pending.length = 0;
-            data.tOriginMs = nowTimeline;
-        }
-
+    function _pushWaveComponent(data, delta, elapsedSec, totalDelaySec, stiffness, damping, mass) {
         const tRelease = elapsedSec + totalDelaySec;
         if (totalDelaySec <= 0.0005) {
             const curPos = (data.base ? data.base.solver(0) : 0) + delta;
@@ -634,9 +618,9 @@
                     curPos,
                     curVel,
                     elapsedSec,
-                    data.stiffness,
-                    data.damping,
-                    data.mass
+                    stiffness,
+                    damping,
+                    mass
                 );
             } else {
                 data.base = null;
@@ -652,9 +636,9 @@
                     mergedAmp,
                     0,
                     last.tRelease,
-                    data.stiffness,
-                    data.damping,
-                    data.mass
+                    stiffness,
+                    damping,
+                    mass
                 );
             } else {
                 data.pending.pop();
@@ -665,11 +649,86 @@
                     delta,
                     0,
                     tRelease,
-                    data.stiffness,
-                    data.damping,
-                    data.mass
+                    stiffness,
+                    damping,
+                    mass
                 )
             );
+        }
+    }
+
+    function applyLineWave(
+        line,
+        data,
+        delta,
+        totalDelayMs,
+        nowTimeline,
+        sharedIdleBakeCache,
+        stiffness,
+        damping,
+        mass,
+        collapsePending
+    ) {
+        const totalDelaySec = totalDelayMs / 1000;
+        const hasRunningAnim =
+            activeLines.has(line) &&
+            data.anim &&
+            data.anim.playState === 'running';
+
+        let elapsedSec = 0;
+        if (hasRunningAnim) {
+            const rawCurrent = data.anim.currentTime;
+            const animCurrentMs = rawCurrent !== null ? Number(rawCurrent) : NaN;
+            elapsedSec = Number.isFinite(animCurrentMs) && animCurrentMs >= 0
+                ? animCurrentMs / 1000
+                : Math.max(0, (nowTimeline - data.tOriginMs) / 1000);
+
+            let shouldCollapse = collapsePending;
+            if (!shouldCollapse && data.pending.length > 0) {
+                for (let i = 0; i < data.pending.length; i++) {
+                    const c = data.pending[i];
+                    if (c.tRelease > elapsedSec + 0.0005 && c.amp * delta < 0) {
+                        shouldCollapse = true;
+                        break;
+                    }
+                }
+            }
+
+            data.stiffness = stiffness;
+            data.damping = damping;
+            data.mass = mass;
+
+            if (shouldCollapse) {
+                const curPos = _evalLinePos(data, elapsedSec) + delta;
+                const curVel = _evalLineVel(data, elapsedSec);
+                data.base = null;
+                data.pending.length = 0;
+                if (Math.abs(curPos) >= CFG.arriveEpsilon || Math.abs(curVel) >= CFG.arriveEpsilon) {
+                    if (Math.abs(curVel) >= CFG.arriveEpsilon || totalDelaySec <= 0.0005) {
+                        data.base = _createWaveComponent(curPos, curVel, elapsedSec, stiffness, damping, mass);
+                    } else {
+                        data.pending.push(
+                            _createWaveComponent(curPos, 0, elapsedSec + totalDelaySec, stiffness, damping, mass)
+                        );
+                    }
+                }
+            } else {
+                _foldReleasedWaves(data, elapsedSec);
+                _pushWaveComponent(data, delta, elapsedSec, totalDelaySec, stiffness, damping, mass);
+            }
+        } else {
+            if (data.anim) {
+                const stale = data.anim;
+                data.anim = null;
+                stale.cancel();
+            }
+            data.base = null;
+            data.pending.length = 0;
+            data.tOriginMs = nowTimeline;
+            data.stiffness = stiffness;
+            data.damping = damping;
+            data.mass = mass;
+            _pushWaveComponent(data, delta, 0, totalDelaySec, stiffness, damping, mass);
         }
 
         if (!data.base && data.pending.length === 0) {
@@ -683,7 +742,7 @@
         }
 
         let baked = null;
-        if (!hasRunningAnim && totalDelayMs === CFG.scrollDelay && sharedIdleBakeCache) {
+        if (!hasRunningAnim && sharedIdleBakeCache && totalDelayMs === sharedIdleBakeCache.delayMs) {
             if (!sharedIdleBakeCache.baked) {
                 sharedIdleBakeCache.baked = _bakeSuperposition(data, 0);
             }
@@ -724,53 +783,138 @@
             .catch(() => {});
     }
 
+    function _computeScrollRange(lines, ref, delta, viewportH) {
+        const baseAbovePx = viewportH * 0.55;
+        const baseBelowPx = viewportH * 0.75;
+        const extraAbovePx = CFG.deltaAdaptiveEnabled && delta > 0 ? delta : 0;
+        const extraBelowPx = CFG.deltaAdaptiveEnabled && delta < 0 ? -delta : 0;
+
+        let start = ref;
+        let accAbove = 0;
+        const needAboveBase = baseAbovePx + extraAbovePx;
+        while (start > 0 && (accAbove < needAboveBase || ref - start < CFG.lookBehindMin)) {
+            if (accAbove === 0 && ref - start >= CFG.lookBehindMax) break;
+            start--;
+            const h = _getLineFullHeight(lines[start]);
+            if (h > 0) accAbove += h;
+        }
+        const shortfallAbove = Math.max(0, baseAbovePx - accAbove);
+
+        let end = ref + 1;
+        let accBelow = 0;
+        const needBelow = baseBelowPx + shortfallAbove + extraBelowPx;
+        while (end < lines.length && (accBelow < needBelow || end - ref - 1 < CFG.lookAheadMin)) {
+            if (accBelow === 0 && end - ref - 1 >= CFG.lookAheadMax) break;
+            const h = _getLineFullHeight(lines[end]);
+            if (h > 0) accBelow += h;
+            end++;
+        }
+        const shortfallBelow = Math.max(0, baseBelowPx - accBelow);
+        if (shortfallBelow > 0 && start > 0 && accAbove > 0) {
+            const needMoreAbove = needAboveBase + shortfallBelow;
+            while (start > 0 && accAbove < needMoreAbove) {
+                start--;
+                const h = _getLineFullHeight(lines[start]);
+                if (h > 0) accAbove += h;
+            }
+        }
+        return { start, end };
+    }
+
     function applyStagger(delta) {
         if (!isScriptEnabled || Math.abs(delta) < CFG.minDelta) return;
 
         const lines = getLines();
         if (!lines.length) return;
 
-        const ref = getRefIndex(lines);
-        let lookBehind = getLookBehind();
-        let lookAhead = getLookAhead();
+        const viewportH = _getEffectiveViewportHeight() || (_measureVisibleLines() * CFG.avgLineHeightFallback);
+        const absDelta = Math.abs(delta);
 
-        if (CFG.deltaAdaptiveEnabled) {
-            const avgH = _estimateAvgLineHeight(lines, ref);
-            const extraLines = Math.ceil(Math.abs(delta) / avgH);
-            if (extraLines > 1) {
-                lookBehind = Math.min(lookBehind + extraLines, ref);
-                lookAhead = Math.min(lookAhead + extraLines, lines.length - ref);
+        // Snap song-switch initial scroll positioning instead of sweeping new lines across the viewport.
+        if (Date.now() - attachedAt < CFG.attachSnapWindowMs) {
+            const isInitialReset = initialScrollTop > CFG.minDelta && delta < 0;
+            const isInitialLargeJump = absDelta >= viewportH * 0.5;
+            if (isInitialReset || isInitialLargeJump) {
+                initialScrollTop = 0;
+                cancelActiveSprings();
+                return;
             }
+            initialScrollTop = 0;
         }
 
-        const start = Math.max(0, ref - lookBehind);
-        const end = Math.min(lines.length, ref + lookAhead + 1);
-        const nowTimeline = Number(document.timeline?.currentTime) || performance.now();
-        const sharedIdleBakeCache = { baked: null };
+        const ref = getRefIndex(lines);
+        const avgH = _estimateAvgLineHeight(lines, ref);
+        const isLargeJump = absDelta >= viewportH * CFG.largeJumpViewportRatio;
+        const scaleThreshold = avgH * CFG.staggerScaleLines;
+        const stepMs = isLargeJump
+            ? 0
+            : (absDelta > scaleThreshold ? CFG.staggerStep * (scaleThreshold / absDelta) : CFG.staggerStep);
+        const baseDelayMs = (isLargeJump || delta < -avgH * 2) ? 0 : CFG.scrollDelay;
+        const stiffness = CFG.stiffness;
+        const mass = CFG.mass;
+        // Slight margin above 2*sqrt(k*m) guarantees _solveSpringPair takes the critically damped branch.
+        const damping = isLargeJump ? Math.ceil(2 * Math.sqrt(stiffness * mass) * 100) / 100 : CFG.damping;
+        const collapsePending = isLargeJump;
 
-        let aheadCount = 0;
+        const { start, end } = _computeScrollRange(lines, ref, delta, viewportH);
+        const nowTimeline = Number(document.timeline?.currentTime) || performance.now();
+        const sharedIdleBakeCache = { delayMs: baseDelayMs, baked: null };
+
         const visited = new Set();
 
         for (let i = start; i < end; i++) {
             const line = lines[i];
             visited.add(line);
-            const staggerMs = i >= ref ? (aheadCount++) * CFG.staggerStep : 0;
-            const totalDelayMs = CFG.scrollDelay + staggerMs;
+            const staggerMs = stepMs > 0
+                ? (delta >= 0
+                    ? (i > ref ? (i - ref) * stepMs : 0)
+                    : (i < ref ? (ref - i) * stepMs : 0))
+                : 0;
+            const totalDelayMs = baseDelayMs + staggerMs;
             const data = getOrCreateLineState(line);
-            applyLineWave(line, data, delta, totalDelayMs, nowTimeline, sharedIdleBakeCache);
+            applyLineWave(
+                line,
+                data,
+                delta,
+                totalDelayMs,
+                nowTimeline,
+                sharedIdleBakeCache,
+                stiffness,
+                damping,
+                mass,
+                collapsePending
+            );
         }
 
         // Also update any line still settling outside [start, end) so it absorbs
         // the scrollTop shift seamlessly without jumping on screen.
         for (const line of Array.from(activeLines)) {
             if (visited.has(line)) continue;
-            if (!line.isConnected) {
+            if (!line.isConnected || isLargeJump) {
                 const data = lineState.get(line);
-                if (data) retireLine(line, data);
+                if (data) {
+                    if (data.anim) {
+                        const old = data.anim;
+                        data.anim = null;
+                        old.cancel();
+                    }
+                    retireLine(line, data);
+                }
                 continue;
             }
             const data = getOrCreateLineState(line);
-            applyLineWave(line, data, delta, CFG.scrollDelay, nowTimeline, sharedIdleBakeCache);
+            applyLineWave(
+                line,
+                data,
+                delta,
+                baseDelayMs,
+                nowTimeline,
+                sharedIdleBakeCache,
+                stiffness,
+                damping,
+                mass,
+                collapsePending
+            );
         }
     }
 
@@ -911,6 +1055,7 @@
 
         container = el;
         pendingDelta = 0;
+        attachedAt = Date.now();
         tabRenderer =
             el.closest('ytmusic-tab-renderer[page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"]') ||
             el.closest('ytmusic-tab-renderer') ||
@@ -919,6 +1064,7 @@
         installStyleObserver(el);
         _installLinesObserver(el);
         installScrollFallback(el);
+        initialScrollTop = lastScrollTop ?? 0;
         startNoSyncDetection(el);
 
         if (!isNoSyncMode) {
@@ -992,7 +1138,7 @@
         _avgLineHeightCache.ts = 0;
     }
 
-    function cleanupAllSprings() {
+    function cancelActiveSprings() {
         for (const line of activeLines) {
             const data = lineState.get(line);
             if (data) {
@@ -1008,6 +1154,10 @@
             if (line.style.translate) line.style.translate = '';
         }
         activeLines.clear();
+    }
+
+    function cleanupAllSprings() {
+        cancelActiveSprings();
         lastScrollTop = null;
         _resetGeometry();
     }
