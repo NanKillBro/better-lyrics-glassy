@@ -1050,7 +1050,32 @@
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      *  CONTAINER LIFECYCLE
      * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    function isWebglContainer(el) {
+        return Boolean(
+            (el && el.classList && el.classList.contains('brs-layout')) ||
+            document.documentElement?.hasAttribute('blyrics-webgl-lyrics')
+        );
+    }
+
+    function detachForWebgl() {
+        if (noSyncRetryTimer !== null) {
+            clearTimeout(noSyncRetryTimer);
+            noSyncRetryTimer = null;
+        }
+        setScrollOverride(false);
+        styleObserver?.disconnect();
+        _linesObserver?.disconnect();
+        removeScrollFallback();
+        cleanupAllSprings();
+        if (container) container.classList.remove('blyrics--gf-managed');
+        container = null;
+    }
+
     function attach(el) {
+        if (isWebglContainer(el)) {
+            detachForWebgl();
+            return;
+        }
         if (el === container) return;
         console.info('[GlassyFlow Turbo] Attaching to new container', el);
         cleanupAllSprings();
@@ -1287,8 +1312,12 @@
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
             isScriptEnabled = true;
-            setScrollOverride(true);
+            if (isWebglContainer(container)) {
+                detachForWebgl();
+                return;
+            }
             if (container && !isNoSyncMode) {
+                setScrollOverride(true);
                 container.classList.add('blyrics--gf-managed');
             }
             console.info('[GlassyFlow Turbo] Re-enabled after resize.');

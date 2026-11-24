@@ -16,7 +16,7 @@
 		<nav id="navbar">
 			<h1>
 				<img src="/images/icons/icon-48.png" alt="Better Lyrics" width="24" height="24">
-				<div class="heading">Better Lyrics Glassy <span id="app-version">3.0.2 2</span></div>
+				<div class="heading">Better Lyrics Glassy <span id="app-version">3.1.0-canary 0</span></div>
 			</h1>
 			<div class="nav-container">
 				<a class="ui-button ui-button--header ui-button--icon" href="https://github.com/NanKillBro/better-lyrics-glassy" target="_blank">
@@ -236,8 +236,8 @@
 								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isFastPipArtworkEnabled" aria-labelledby="isFastPipArtworkEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
 							</div>
 							<div class="ui-row">
-								<span class="ui-row__label" id="isCompositeLyricsEnabled-label">Composite lyrics<span class="setting-help" tabindex="0" data-tooltip="Uses @braccato/core 1.21.6 compositor-promoted translate and opacity word animations instead of the default 1.20.0 legacy renderer. Eliminates non-composited main-thread word paints at the cost of sharper gradient edges and more DOM nodes. Off by default." aria-label="Uses @braccato/core 1.21.6 compositor-promoted translate and opacity word animations instead of the default 1.20.0 legacy renderer. Eliminates non-composited main-thread word paints at the cost of sharper gradient edges and more DOM nodes. Off by default.">?</span></span>
-								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isCompositeLyricsEnabled" aria-labelledby="isCompositeLyricsEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
+								<span class="ui-row__label" id="isWebglLyricsEnabled-label">WebGL lyrics (beta)<span class="setting-help" tabindex="0" data-tooltip="Switches to @braccato/core 2.0 WebGL2 canvas rendering with built-in smooth scrolling. Off by default, keeping @braccato/core 1.20.0 DOM rendering with GlassyFlow, ambient glow, and per-syllable wobble." aria-label="Switches to @braccato/core 2.0 WebGL2 canvas rendering with built-in smooth scrolling. Off by default, keeping @braccato/core 1.20.0 DOM rendering with GlassyFlow, ambient glow, and per-syllable wobble.">?</span></span>
+								<label class="ui-switch"><input type="checkbox" role="switch" class="ui-switch__input" id="isWebglLyricsEnabled" aria-labelledby="isWebglLyricsEnabled-label"><span class="ui-switch__track" aria-hidden="true"></span></label>
 							</div>
 							<div class="ui-row">
 								<span class="ui-row__label" id="isOptimizedVideoQualityEnabled-label">Optimize video quality watcher<span class="setting-help" tabindex="0" data-tooltip="Caches player and ad container references and skips redundant 1s DOM polling once hooked while preserving navigation and loadedmetadata checks. Off by default." aria-label="Caches player and ad container references and skips redundant 1s DOM polling once hooked while preserving navigation and loadedmetadata checks. Off by default.">?</span></span>

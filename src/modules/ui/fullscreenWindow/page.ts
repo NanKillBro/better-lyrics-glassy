@@ -6,15 +6,17 @@ import { SharpenMarker } from "@modules/ui/fullscreenWindow/sharpenMarker";
 import { isUsableArtworkUrl } from "@modules/ui/fullscreenWindow/trackInfo";
 import { createVideoFrameReceiver, type VideoFrameReceiver } from "@modules/ui/fullscreenWindow/videoTransport";
 import { initGlassyFlowBridge } from "@modules/ui/glassyFlowBridge";
-import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
+import { createLyricsView } from "@modules/ui/lyricsRenderer";
+import { LEGACY_RENDERER_CSS_PATH, syncRendererModeStylesheets } from "@modules/ui/rendererMode";
+import { loadWebglRenderer } from "@modules/ui/webglRendererWasm";
 import {
   createFullscreenPlayerControls,
   type FullscreenPlayerControlsHandle,
 } from "@modules/ui/fullscreenWindow/playerControls";
 import { createProgressBar, type ProgressBarHandle } from "@modules/ui/playerControls/progressBar";
-import { LEGACY_RENDERER_CSS_PATH, syncRendererModeStylesheets } from "@modules/ui/rendererMode";
 import {
   FULLSCREEN_WINDOW_CHANNEL,
+  type FullscreenDisplayFlags,
   type FullscreenInbound,
   type FullscreenLoaderState,
   type FullscreenLyricsPayload,
@@ -41,13 +43,15 @@ function closestFromTarget(target: EventTarget | null, selector: string): boolea
   return target instanceof Element && Boolean(target.closest(selector));
 }
 const MERGE_THEME_STYLE_ID = "blfw-merge-theme";
+const LYRICS_BLUR_DISABLED_ATTR = "blyrics-disable-lyrics-blur";
+const UNBLUR_UPCOMING_LYRICS_ATTR = "blyrics-unblur-upcoming";
 const SCROLL_SCRIPTS: Record<string, string> = {
   "glassyflow-turbo": "/glassyflow-turbo.js",
   "glassyflow-super": "/glassyflow-super.js",
 };
 const searchParams = new URLSearchParams(window.location.search);
 const scrollMode = searchParams.get("scroll") ?? "";
-const usesGlassyFlow = scrollMode in SCROLL_SCRIPTS;
+const hasGlassyFlowScroll = scrollMode in SCROLL_SCRIPTS;
 const debugEnabled = searchParams.get("debug") === "1";
 
 declare global {
@@ -60,7 +64,7 @@ declare global {
   }
 }
 
-type Renderer = ReturnType<typeof createLyricsRenderer>;
+type Renderer = ReturnType<typeof createLyricsView>;
 
 interface Elements {
   readonly shell: HTMLElement;
@@ -90,7 +94,7 @@ let hasReceivedReady = false;
 let snapshot: FullscreenPlaybackSnapshot | null = null;
 let themeCss = "";
 let mergeThemeCss = "";
-let appliedComposite: boolean | null = null;
+let webglMode = false;
 let lastVideoId: string | null = null;
 let artFront = 0;
 let hasCommittedArt = false;
@@ -125,6 +129,10 @@ let timelineEnabled = searchParams.get("timeline") === "1";
 let playerControls: FullscreenPlayerControlsHandle | null = null;
 const sharpenMarker = new SharpenMarker();
 
+function isGlassyFlowActive(): boolean {
+  return !webglMode && hasGlassyFlowScroll;
+}
+
 function reportDebug(): void {
   const box = document.getElementById("blfw-debug");
   if (!box) return;
@@ -138,7 +146,7 @@ function reportDebug(): void {
     `mount=${elements.mount.getBoundingClientRect().width}x${elements.mount.getBoundingClientRect().height}`,
     `wrapper=${document.getElementById("blyrics-wrapper")?.getBoundingClientRect().height ?? "-"}`,
     `firstLine=${rect ? `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}` : "none"}`,
-    `composite=${String(appliedComposite)} sync=${payload?.syncType ?? "-"}`,
+    `webgl=${Boolean(renderer?.renderer)} canvas=${Boolean(elements.mount.querySelector("canvas"))} sync=${payload?.syncType ?? "-"}`,
     `mergeStyle=${document.getElementById(MERGE_THEME_STYLE_ID)?.textContent?.length ?? 0}`,
     `scrollTop=${Math.round(elements.scroll.scrollTop)} scrollH=${Math.round(elements.scroll.scrollHeight)}`,
     `active=${elements.mount.querySelectorAll(".blyrics--active").length} activeY=${Math.round(
@@ -581,32 +589,71 @@ function ensureMergeTheme(): void {
     style.id = MERGE_THEME_STYLE_ID;
     document.head.appendChild(style);
   } else if (document.head.lastElementChild !== style) {
-    // Keep the merge theme after `lyrics-legacy.css` / `#blyrics-custom-style`, matching the main window.
+    // Keep the merge theme after `#blyrics-custom-style`, matching the main window.
     document.head.appendChild(style);
   }
-  if (style.textContent !== mergeThemeCss) style.textContent = mergeThemeCss;
+  if (style.textContent !== mergeThemeCss) {
+    style.textContent = mergeThemeCss;
+    if (webglMode) renderer?.relayout();
+  }
+}
+
+function applyDisplayFlags(flags?: FullscreenDisplayFlags): void {
+  if (!flags) return;
+  const root = document.documentElement;
+  const blurChanged = root.hasAttribute(LYRICS_BLUR_DISABLED_ATTR) !== flags.lyricsBlurDisabled;
+  const upcomingChanged = root.hasAttribute(UNBLUR_UPCOMING_LYRICS_ATTR) !== flags.unblurUpcoming;
+  root.toggleAttribute(LYRICS_BLUR_DISABLED_ATTR, flags.lyricsBlurDisabled);
+  root.toggleAttribute(UNBLUR_UPCOMING_LYRICS_ATTR, flags.unblurUpcoming);
+  if ((blurChanged || upcomingChanged) && webglMode) {
+    renderer?.relayout();
+  }
 }
 
 function enforceGlassyFlowScrollVars(container: HTMLElement | null): void {
-  if (!usesGlassyFlow) return;
-  document.documentElement.style.setProperty("--blyrics-animate-scroll", "0", "important");
-  document.documentElement.style.setProperty("--blyrics-lyric-scroll-duration", "0ms", "important");
+  const active = isGlassyFlowActive();
+  if (elements?.shell) {
+    elements.shell.toggleAttribute("data-glassyflow", active);
+  }
+  if (active) {
+    document.documentElement.style.setProperty("--blyrics-animate-scroll", "0", "important");
+    document.documentElement.style.setProperty("--blyrics-lyric-scroll-duration", "0ms", "important");
+    if (elements?.mount) {
+      elements.mount.style.setProperty("--blyrics-animate-scroll", "0", "important");
+      elements.mount.style.setProperty("--blyrics-lyric-scroll-duration", "0ms", "important");
+    }
+    if (container && !container.classList.contains("brs-layout")) {
+      container.style.setProperty("--blyrics-animate-scroll", "0", "important");
+      container.style.setProperty("--blyrics-lyric-scroll-duration", "0ms", "important");
+    }
+    return;
+  }
+  document.documentElement.style.removeProperty("--blyrics-animate-scroll");
+  document.documentElement.style.removeProperty("--blyrics-lyric-scroll-duration");
   if (elements?.mount) {
-    elements.mount.style.setProperty("--blyrics-animate-scroll", "0", "important");
-    elements.mount.style.setProperty("--blyrics-lyric-scroll-duration", "0ms", "important");
+    elements.mount.style.removeProperty("--blyrics-animate-scroll");
+    elements.mount.style.removeProperty("--blyrics-lyric-scroll-duration");
   }
   if (container) {
-    container.style.setProperty("--blyrics-animate-scroll", "0", "important");
-    container.style.setProperty("--blyrics-lyric-scroll-duration", "0ms", "important");
+    container.style.removeProperty("--blyrics-animate-scroll");
+    container.style.removeProperty("--blyrics-lyric-scroll-duration");
   }
 }
 
+async function applyMode(nextWebgl: boolean): Promise<void> {
+  webglMode = nextWebgl;
+  await syncRendererModeStylesheets(document, webglMode, chrome.runtime.getURL(LEGACY_RENDERER_CSS_PATH), {
+    anchorHref: "/css/blyrics/index.css",
+    beforeId: MERGE_THEME_STYLE_ID,
+  });
+  enforceGlassyFlowScrollVars(renderer?.container ?? null);
+}
+
 function ensureScrollScript(): void {
-  if (scrollScriptInjected || !usesGlassyFlow) return;
+  if (scrollScriptInjected || !isGlassyFlowActive()) return;
   const src = SCROLL_SCRIPTS[scrollMode];
   /* GlassyFlow owns the scroll while it is injected, so the renderer's own scroll animation has to
      be switched off before the first theme cache / layout tick runs. */
-  elements.shell.setAttribute("data-glassyflow", "true");
   enforceGlassyFlowScrollVars(null);
   scrollScriptInjected = true;
   const script = document.createElement("script");
@@ -641,13 +688,13 @@ function installGlassyFlowFlip(): void {
       if (value === previous || (value <= 0 && previous === 0)) return;
       const container = elements.mount.querySelector<HTMLElement>(".blyrics-container");
       write.call(this, value);
-      if (!container || !container.classList.contains("blyrics--gf-managed")) {
+      if (!isGlassyFlowActive() || !container || container.classList.contains("brs-layout") || !container.classList.contains("blyrics--gf-managed")) {
         return;
       }
       const inlineAnimate = container.style.getPropertyValue("--blyrics-animate-scroll").trim();
       const animateScroll =
         inlineAnimate ||
-        (usesGlassyFlow ? "0" : getComputedStyle(container).getPropertyValue("--blyrics-animate-scroll").trim());
+        (isGlassyFlowActive() ? "0" : getComputedStyle(container).getPropertyValue("--blyrics-animate-scroll").trim());
       if (animateScroll !== "0") return;
       const delta = read.call(this) - previous;
       if (delta === 0) return;
@@ -660,8 +707,9 @@ function installGlassyFlowFlip(): void {
 function ensureRenderer(): Renderer | null {
   if (renderer) return renderer;
   if (!elements?.mount) return null;
+  loadWebglRenderer();
   enforceGlassyFlowScrollVars(null);
-  renderer = createLyricsRenderer({
+  renderer = createLyricsView({
     document,
     window,
     mount: elements.mount,
@@ -781,14 +829,16 @@ function runSingleTick(now = performance.now()): void {
       eventCreationTime: Date.now(),
       playbackRate: live.playbackRate,
       isPlaying: live.isPlaying,
-      smoothScroll: !usesGlassyFlow,
+      smoothScroll: !isGlassyFlowActive(),
       globalLyricOffset: payload.globalLyricOffset,
       lyricOffset: payload.lyricOffset,
       richsyncOffsetTrim: payload.richsyncOffsetTrim,
       lineOffsetTrim: payload.lineOffsetTrim,
       passiveScrollEnabled: payload.passiveScrollEnabled,
     });
-    sharpenMarker.sync(elements.mount, time, forceSharpenImmediate);
+    if (!webglMode) {
+      sharpenMarker.sync(elements.mount, time, forceSharpenImmediate);
+    }
     forceSharpenImmediate = false;
   }
 }
@@ -817,27 +867,6 @@ function tick(): void {
   rafId = window.requestAnimationFrame(tick);
 }
 
-/**
- * The renderer picks its engine from `blyrics-composite-lyrics` and depends on the matching
- * stylesheet: the legacy engine gets its sweep from `lyrics-legacy.css`, which registers the
- * `--lyric-transition-amount-*` properties the WAAPI animation drives. Loading only the modern sheet
- * leaves the legacy engine animating properties nothing defines, which is why the sweep vanished.
- */
-async function applyMode(composite: boolean, forceRebuild = false): Promise<void> {
-  const modeChanged = appliedComposite !== composite;
-  if (!modeChanged && !forceRebuild) return;
-  if (modeChanged) {
-    appliedComposite = composite;
-    await syncRendererModeStylesheets(document, composite, chrome.runtime.getURL(LEGACY_RENDERER_CSS_PATH));
-    if (renderer) {
-      renderer.destroy();
-      renderer = null;
-    }
-  }
-  applyTheme(false);
-  buildLyrics();
-}
-
 function enqueueWork(task: () => Promise<void> | void): void {
   modeQueue = modeQueue.then(task).catch(error => console.error("[blfw] queue", error));
 }
@@ -849,6 +878,7 @@ function handleMessage(message: FullscreenOutbound): void {
       hasReceivedReady = true;
       themeCss = message.theme;
       mergeThemeCss = message.mergeTheme;
+      applyDisplayFlags(message.displayFlags);
       publishBlsState(message.blsState);
       applyVideoState(message.video);
       applyLoader(message.loader);
@@ -860,7 +890,11 @@ function handleMessage(message: FullscreenOutbound): void {
       playerControls?.setVolume(message.volume ?? null);
       playerControls?.setRating(message.rating ?? null);
       if (message.lyrics) payload = message.lyrics;
-      enqueueWork(() => applyMode(message.composite, Boolean(message.lyrics)));
+      enqueueWork(async () => {
+        await applyMode(Boolean(message.webgl));
+        applyTheme(false);
+        if (message.lyrics) buildLyrics();
+      });
       hideStatus();
       break;
     case "loader":
@@ -913,7 +947,14 @@ function handleMessage(message: FullscreenOutbound): void {
       ensureMergeTheme();
       break;
     case "mode":
-      enqueueWork(() => applyMode(message.payload));
+      enqueueWork(async () => {
+        await applyMode(message.webgl);
+        applyTheme(false);
+        if (payload) buildLyrics();
+      });
+      break;
+    case "display-flags":
+      applyDisplayFlags(message.payload);
       break;
     case "unavailable":
       showStatus(message.reason);
@@ -1098,6 +1139,7 @@ function setupZoomControls(): void {
 }
 
 function start(): void {
+  loadWebglRenderer();
   elements = queryElements();
   applyBaseVariables();
   ensureScrollScript();
@@ -1209,6 +1251,7 @@ function start(): void {
   }
 
   ensureMergeTheme();
+  enqueueWork(() => applyMode(webglMode));
 
   chrome.runtime.onMessage.addListener((message: FullscreenOutbound) => {
     handleMessage(message);

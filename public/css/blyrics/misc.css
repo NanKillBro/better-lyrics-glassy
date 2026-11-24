@@ -68,3 +68,19 @@
 .blyrics-container:not([data-layout="stage"]) > .blyrics-credits {
 	transition: opacity 0.7s ease;
 }
+
+/* Bypass host GlassyFlow --blyrics-animate-scroll: 0 on :root when WebGL2 mode is active. */
+:root[blyrics-webgl-lyrics] .blyrics-container.brs-layout {
+	--blyrics-animate-scroll: 1 !important;
+}
+
+/* In place of the lyrics where the browser cannot draw them (no WebGL2). */
+.blyrics-renderer-unavailable-hint {
+	color: var(--blyrics-error-color);
+	font-family: var(--blyrics-font-family, var(--blyrics-default-font-family));
+	font-size: 1.6rem;
+	line-height: 1.5;
+	margin: 0;
+	max-width: 48ch;
+	opacity: var(--blyrics-error-opacity);
+}

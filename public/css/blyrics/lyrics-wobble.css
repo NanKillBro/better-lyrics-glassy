@@ -6,11 +6,9 @@
  * `max-width: 100%` lets it shrink to the line, and `overflow-wrap: anywhere` plus the
  * engine's `wbr` breaks still let a single long part wrap instead of overflowing.
  *
- * Bidi-sensitive lines are excluded because their words are deliberately kept in the normal
- * inline flow for bidi ordering, and `retargetPerWordWobble` leaves those groups on the
- * group-level wobble.
+ * Scoped away from WebGL2 `.brs-layout` and bidi-sensitive lines.
  */
-.blyrics-word-group-long .blyrics--word {
+.blyrics-container:not(.brs-layout) .blyrics-word-group-long .blyrics--word {
 	display: inline-block;
 	max-width: 100%;
 	overflow-wrap: anywhere;
@@ -18,7 +16,7 @@
 	white-space: normal;
 }
 
-.blyrics-bidi-sensitive .blyrics-word-group-long .blyrics--word {
+.blyrics-container:not(.brs-layout) .blyrics-bidi-sensitive .blyrics-word-group-long .blyrics--word {
 	display: inline;
 	max-width: none;
 	overflow-wrap: normal;

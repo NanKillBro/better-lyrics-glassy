@@ -36,6 +36,11 @@ export interface FullscreenLoaderState {
   readonly hidden: boolean;
 }
 
+export interface FullscreenDisplayFlags {
+  readonly lyricsBlurDisabled: boolean;
+  readonly unblurUpcoming: boolean;
+}
+
 export type FullscreenLyricsPayload = PictureInPictureLyricsPayload;
 
 export type FullscreenOutbound =
@@ -46,7 +51,8 @@ export type FullscreenOutbound =
       readonly snapshot: FullscreenPlaybackSnapshot | null;
       readonly theme: string;
       readonly mergeTheme: string;
-      readonly composite: boolean;
+      readonly webgl?: boolean;
+      readonly displayFlags?: FullscreenDisplayFlags;
       readonly lyrics: FullscreenLyricsPayload | null;
       readonly loader?: FullscreenLoaderState;
       readonly blsState?: unknown;
@@ -86,7 +92,12 @@ export type FullscreenOutbound =
       readonly type: "merge-theme";
       readonly payload: string;
     }
-  | { readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL; readonly type: "mode"; readonly payload: boolean }
+  | { readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL; readonly type: "mode"; readonly webgl: boolean }
+  | {
+      readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL;
+      readonly type: "display-flags";
+      readonly payload: FullscreenDisplayFlags;
+    }
   | {
       readonly channel: typeof FULLSCREEN_WINDOW_CHANNEL;
       readonly type: "volume";

@@ -6,6 +6,7 @@ import { hideAdOverlay, isAdPlaying, isLoaderActive, showAdOverlay } from "@modu
 import { getResumeScrollElement } from "@modules/ui/resumeScrollButton";
 import { shouldTreatDocumentAsHidden } from "@modules/ui/idleTickSuspension";
 import { getCachedViewVisibility } from "@modules/ui/visibilityCache";
+import { readRendererMode } from "@modules/ui/rendererMode";
 import { observeResize, type ObserverHandle } from "@modules/ui/layout/layoutWidth";
 import type { LyricsRendererHost } from "@braccato/core";
 import { resetDebugRender, resizeCanvas } from "./animationEngineDebug";
@@ -174,9 +175,9 @@ function ensureScrollHostObservers(el: HTMLElement): void {
 }
 
 function applyGlassyFlowFlip(scrollDeltaPx: number, optimized: boolean): void {
-  if (scrollDeltaPx === 0) return;
+  if (scrollDeltaPx === 0 || readRendererMode(document)) return;
   const lyricsElement = document.getElementById(LYRICS_WRAPPER_ID)?.firstElementChild as HTMLElement | null;
-  if (!lyricsElement) return;
+  if (!lyricsElement || lyricsElement.classList.contains("brs-layout")) return;
 
   const animateScroll = optimized
     ? getCachedAnimateScroll(lyricsElement)

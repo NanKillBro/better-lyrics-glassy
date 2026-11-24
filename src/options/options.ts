@@ -84,7 +84,6 @@ import {
 import { attachDeclaredScrollFades, attachScrollFade } from "@/ui/scrollFade";
 import { createSyncIcon, createSyncTag, syncTypeLabel } from "@/ui/syncTag";
 import { initTooltips } from "@/ui/tooltip";
-
 import {
   readRendererModeForm,
   RENDERER_MODE_DEFAULTS,

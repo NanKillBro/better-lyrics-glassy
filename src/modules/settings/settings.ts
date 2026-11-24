@@ -14,6 +14,7 @@ import { syncKaraoke } from "@modules/karaoke/karaokeView";
 import { loadKaraokeSettings } from "@modules/karaoke/settings";
 import { migrateFullscreenControlsPref } from "@modules/settings/fullscreenControls";
 import { applyRendererModeSettings } from "@modules/settings/rendererModeSettings";
+import { readRendererMode, RENDERER_MODE_DEFAULTS } from "@modules/ui/rendererMode";
 import { clearCache as clearTranslationCache } from "@modules/lyrics/translation";
 import {
   mountDock,
@@ -25,7 +26,6 @@ import {
   updateDockPosition,
 } from "@modules/ui/dom";
 import { applyGlobalOffsets } from "@modules/ui/lyricsDock/offset";
-import { RENDERER_MODE_DEFAULTS } from "@modules/ui/rendererMode";
 import { mainView } from "@modules/ui/mainLyricsView";
 import { isPlayerFullscreened, onFullscreenChange } from "@modules/ui/observer";
 import { publishSecondaryViews } from "@modules/ui/secondaryViews";
@@ -127,7 +127,9 @@ function applyFullscreenControlsPref(): void {
 const LYRICS_BLUR_DISABLED_ATTR = "blyrics-disable-lyrics-blur";
 
 function applyLyricsBlurSetting(disabled: boolean): void {
+  const prev = document.documentElement.hasAttribute(LYRICS_BLUR_DISABLED_ATTR);
   document.documentElement.toggleAttribute(LYRICS_BLUR_DISABLED_ATTR, disabled);
+  if (prev !== disabled && readRendererMode(document)) mainView.relayout();
 }
 
 function loadLyricsBlurSetting(): void {
@@ -139,7 +141,9 @@ function loadLyricsBlurSetting(): void {
 const UNBLUR_UPCOMING_LYRICS_ATTR = "blyrics-unblur-upcoming";
 
 function applyUnblurUpcomingLyricsSetting(enabled: boolean): void {
+  const prev = document.documentElement.hasAttribute(UNBLUR_UPCOMING_LYRICS_ATTR);
   document.documentElement.toggleAttribute(UNBLUR_UPCOMING_LYRICS_ATTR, enabled);
+  if (prev !== enabled && readRendererMode(document)) mainView.relayout();
 }
 
 function loadUnblurUpcomingLyricsSetting(): void {
@@ -153,7 +157,11 @@ let stylizedAnimationsGeneration = 0;
 async function applyStylizedAnimationsSetting(enabled: boolean): Promise<void> {
   const generation = ++stylizedAnimationsGeneration;
   if (enabled) {
-    document.getElementById(DISABLE_EFFECTS_STYLE_ID)?.remove();
+    const existing = document.getElementById(DISABLE_EFFECTS_STYLE_ID);
+    if (existing) {
+      existing.remove();
+      if (readRendererMode(document)) mainView.relayout();
+    }
     return;
   }
 
@@ -167,6 +175,7 @@ async function applyStylizedAnimationsSetting(enabled: boolean): Promise<void> {
   styleElem.id = DISABLE_EFFECTS_STYLE_ID;
   styleElem.textContent = cssText;
   document.head.appendChild(styleElem);
+  if (readRendererMode(document)) mainView.relayout();
 }
 
 function applyVisibilityCacheSetting(enabled: boolean): void {
@@ -272,14 +281,17 @@ export function initPerformanceSettingsListener(): () => void {
     if ("isFastDockProximityEnabled" in changes) {
       applyFastDockProximitySetting(changes.isFastDockProximityEnabled.newValue === true);
     }
-    if ("isCompositeLyricsEnabled" in changes) {
-      void applyRendererModeSettings({ isCompositeLyricsEnabled: changes.isCompositeLyricsEnabled.newValue });
-    }
     if ("isStylizedAnimationsEnabled" in changes) {
       void applyStylizedAnimationsSetting(changes.isStylizedAnimationsEnabled.newValue !== false);
     }
     if ("isLyricsBlurDisabled" in changes) {
       applyLyricsBlurSetting(changes.isLyricsBlurDisabled.newValue === true);
+    }
+    if ("isUnblurUpcomingLyricsEnabled" in changes) {
+      applyUnblurUpcomingLyricsSetting(changes.isUnblurUpcomingLyricsEnabled.newValue === true);
+    }
+    if ("isWebglLyricsEnabled" in changes) {
+      void applyRendererModeSettings({ isWebglLyricsEnabled: changes.isWebglLyricsEnabled.newValue });
     }
   };
 
@@ -423,10 +435,8 @@ export function listenForPopupMessages(): void {
         }
       );
       getAndApplyCustomStyles();
-      if (request.settings) {
-        void applyRendererModeSettings(request.settings).then(() => {
-          reloadLyrics();
-        });
+      if (request.settings && "isWebglLyricsEnabled" in request.settings) {
+        void applyRendererModeSettings(request.settings).then(() => reloadLyrics());
       } else {
         reloadLyrics();
       }

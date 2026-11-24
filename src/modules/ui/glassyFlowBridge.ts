@@ -180,7 +180,7 @@ export function initGlassyFlowBridge(
 
   function snapshotAnimatingLines(): void {
     animatingBeforeTick.clear();
-    if (!target.container || target.lines.length === 0) return;
+    if (!target.container || target.container.classList.contains("brs-layout") || target.lines.length === 0) return;
     for (const line of target.lines) {
       const el = line.lyricElement;
       if (el.classList.contains(ANIMATING_CLASS) || el.classList.contains(PRE_ANIMATING_CLASS)) {
@@ -190,7 +190,7 @@ export function initGlassyFlowBridge(
   }
 
   function applyDelayVars(currentTimeS: number, options: TickOptions): void {
-    if (!target.container || target.lines.length === 0) return;
+    if (!target.container || target.container.classList.contains("brs-layout") || target.lines.length === 0) return;
 
     const eventCreationTime = options.eventCreationTime ?? -1;
     const isPlaying = Boolean(options.isPlaying);

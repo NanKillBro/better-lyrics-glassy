@@ -11,6 +11,7 @@ import { getStorage } from "@core/storage";
 import { getArtworkMetadata, getSongMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
 import { requestAnimationLoopSync } from "@modules/ui/idleTickSuspension";
 import { resumeAllAutoscroll } from "@modules/ui/lyricsRenderer";
+import { rendererWasmDataUrl } from "@modules/ui/webglRendererWasm";
 import { invalidateViewVisibilityCache } from "@modules/ui/visibilityCache";
 import { getPictureInPictureCapability } from "@modules/ui/pictureInPicture/capability";
 import { onSignal, sendInit, sendMetadata } from "@modules/ui/pictureInPicture/bridge";
@@ -222,6 +223,7 @@ export function publishPictureInPictureResources(): void {
       karaokeEnabled: items.isKaraokeEnabled === true,
       windowLayout: String(items.pipWindowLayout),
       logsEnabled: items.isLogsEnabled !== false,
+      rendererWasm: rendererWasmDataUrl(),
     });
   });
 }

@@ -448,8 +448,8 @@ ytmusic-player-page[player-fullscreened][blyrics-video-mode] #player.ytmusic-pla
 	padding-top: var(--blyrics-padding-top, 2rem);
 }
 
-[data-glassyflow="true"] #blyrics-wrapper,
-[data-glassyflow="true"] #blyrics-wrapper > .blyrics-container {
+:root:not([blyrics-webgl-lyrics]) [data-glassyflow="true"] #blyrics-wrapper,
+:root:not([blyrics-webgl-lyrics]) [data-glassyflow="true"] #blyrics-wrapper > .blyrics-container {
 	--blyrics-animate-scroll: 0 !important;
 	--blyrics-lyric-scroll-duration: 0ms !important;
 }

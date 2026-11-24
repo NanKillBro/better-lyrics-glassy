@@ -6,6 +6,7 @@ import { ensureLetterWaveSetting } from "@modules/settings/letterWave";
 import { setVideoQualityBoost } from "@modules/settings/videoQuality";
 import {
   FULLSCREEN_WINDOW_CHANNEL,
+  type FullscreenDisplayFlags,
   type FullscreenInbound,
   type FullscreenLoaderState,
   type FullscreenLyricsPayload,
@@ -33,8 +34,8 @@ import {
   toggleLike,
   toggleMute,
 } from "@modules/ui/playerControls/playerBarControls";
-import { COMPOSITE_LYRICS_ATTR, readRendererMode } from "@modules/ui/rendererMode";
 import { currentViewLyrics } from "@modules/lyrics/viewLyrics";
+import { readRendererMode, WEBGL_LYRICS_ATTR } from "@modules/ui/rendererMode";
 
 /**
  * The fullscreen window's link to the page it mirrors. The window runs in its own renderer process,
@@ -56,6 +57,8 @@ const VIDEO_PORT_REQUEST_TYPE = "blfw-request-video-port";
 const WINDOW_CLOSED_MSG_TYPE = "blfw-window-closed";
 const WINDOW_VISIBILITY_MSG_TYPE = "blfw-window-visibility";
 const MERGE_THEME_STYLE_ID = "force-nankill-skibidi-theme";
+const LYRICS_BLUR_DISABLED_ATTR = "blyrics-disable-lyrics-blur";
+const UNBLUR_UPCOMING_LYRICS_ATTR = "blyrics-unblur-upcoming";
 
 let initialized = false;
 let disposeBridge: (() => void) | null = null;
@@ -225,22 +228,40 @@ function ensureThemeObserver(): void {
   themeObserver.observe(document.head, { childList: true, subtree: true, characterData: true });
 }
 
+function readDisplayFlags(): FullscreenDisplayFlags {
+  const root = document.documentElement;
+  return {
+    lyricsBlurDisabled: root?.hasAttribute(LYRICS_BLUR_DISABLED_ATTR) === true,
+    unblurUpcoming: root?.hasAttribute(UNBLUR_UPCOMING_LYRICS_ATTR) === true,
+  };
+}
+
 function ensureModeObserver(): void {
   if (!isAttached || modeObserver || !document.documentElement) return;
   modeObserver = new MutationObserver(mutations => {
     if (!isAttached) return;
     let modeChanged = false;
+    let flagsChanged = false;
     let styleChanged = false;
     for (const mutation of mutations) {
-      if (mutation.attributeName === COMPOSITE_LYRICS_ATTR) modeChanged = true;
-      else if (mutation.attributeName === "style") styleChanged = true;
+      if (mutation.attributeName === WEBGL_LYRICS_ATTR) {
+        modeChanged = true;
+      } else if (
+        mutation.attributeName === LYRICS_BLUR_DISABLED_ATTR ||
+        mutation.attributeName === UNBLUR_UPCOMING_LYRICS_ATTR
+      ) {
+        flagsChanged = true;
+      } else if (mutation.attributeName === "style") {
+        styleChanged = true;
+      }
     }
-    if (modeChanged) publishMode();
+    if (modeChanged) send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "mode", webgl: readRendererMode(document) });
+    if (flagsChanged) publishDisplayFlags();
     if (styleChanged) publishTrackIfChanged();
   });
   modeObserver.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: [COMPOSITE_LYRICS_ATTR, "style"],
+    attributeFilter: [WEBGL_LYRICS_ATTR, LYRICS_BLUR_DISABLED_ATTR, UNBLUR_UPCOMING_LYRICS_ATTR, "style"],
   });
 }
 
@@ -428,9 +449,9 @@ function publishMergeTheme(css: string): void {
   send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "merge-theme", payload: css });
 }
 
-function publishMode(): void {
+function publishDisplayFlags(): void {
   if (!isAttached) return;
-  send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "mode", payload: readRendererMode(document) });
+  send({ channel: FULLSCREEN_WINDOW_CHANNEL, type: "display-flags", payload: readDisplayFlags() });
 }
 
 function findPlayerMainVideo(): HTMLVideoElement | null {
@@ -671,7 +692,8 @@ function sendReady(): void {
     snapshot: buildSnapshotFromRaw(),
     theme: readTheme(),
     mergeTheme: readMergeTheme(),
-    composite: readRendererMode(document),
+    webgl: readRendererMode(document),
+    displayFlags: readDisplayFlags(),
     lyrics: lastLyrics,
     loader,
     blsState: hasBlsState ? lastBlsState : undefined,

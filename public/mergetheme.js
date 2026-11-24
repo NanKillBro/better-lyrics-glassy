@@ -24,10 +24,18 @@ ytmusic-app {
 /* ============================================== */
 /* 1. BIẾN CẤU HÌNH (ROOT VARIABLES)              */
 /* ============================================== */
-:root {
-  /* -- [ WAAPI Scroll & Scale Overrides for GlassyFlow & Custom CSS ] -- */
+:root:not([blyrics-webgl-lyrics]) {
+  /* -- [ WAAPI Scroll & Scale Overrides for GlassyFlow & Legacy 1.20.0 CSS ] -- */
   --blyrics-animate-line-scale: 0 !important;
+}
 
+:root[blyrics-webgl-lyrics] {
+  --blyrics-scale: 1;
+  --blyrics-active-scale: 1.02;
+  --blyrics-scale-transition-duration: 0.7s;
+}
+
+:root {
   /* -- [ Cấu hình chung ] -- */
   --blyrics-lyric-active-color: white;
   --blyrics-lyric-inactive-color: rgba(255, 255, 255, 0.4);
@@ -1311,6 +1319,37 @@ ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-sc
   font-size: 1.5rem;
   font-style: italic;
   opacity: 0.8;
+}
+
+/* WebGL2 (@braccato/core 2) opt-in mode: scoped strictly to .brs-layout */
+.blyrics-container.brs-layout {
+  overflow: visible !important;
+  --blyrics-line-opacity-after: 1 0.2;
+  --blyrics-line-opacity-before: 1 0.2;
+  --blyrics-line-blur-after: 0 2px 3.5px 5px 6.5px 8px 9.5px;
+  --blyrics-line-blur-before: 0 6px;
+  --blyrics-line-hover-opacity: 1;
+  --blyrics-line-hover-blur: 0;
+  --blyrics-line-hover-scale: 1.02;
+}
+
+.blyrics-container.brs-layout:not([data-layout="stage"]) > .blyrics--line {
+  --blyrics-padding: 3rem;
+}
+
+ytmusic-player-page[player-fullscreened] .blyrics-container.brs-layout {
+  overflow: visible !important;
+  --blyrics-line-opacity-before: 1 0;
+  --blyrics-line-blur-before: 0 5px;
+}
+
+:root[blyrics-unblur-upcoming] .blyrics-container.brs-layout {
+  --blyrics-line-opacity-after: 1 1 0.2;
+  --blyrics-line-blur-after: 0 0 2px 3.5px 5px 6.5px 8px;
+}
+
+:root[blyrics-disable-lyrics-blur] .blyrics-container.brs-layout {
+  --blyrics-line-blur-after: 0;
 }
 
 /* FULLSCREEN MODE FIXES */
@@ -3126,6 +3165,11 @@ function startNoSyncDetection(container) {
   if (noSyncContainer && noSyncContainer !== container) {
     noSyncContainer.classList.remove('blyrics--no-sync');
   }
+  if (container.classList.contains('brs-layout')) {
+    noSyncContainer = container;
+    isNoSyncMode = false;
+    return;
+  }
   noSyncContainer = container;
   isNoSyncMode = false;
 
@@ -3726,8 +3770,13 @@ function attachBehindObserver(container) {
 
   if (nankillBehindLineObserver) {
     nankillBehindLineObserver.disconnect();
+    nankillBehindLineObserver = null;
   }
   clearAllNankillSharpenTimers();
+  if (container.classList.contains('brs-layout')) {
+    nankillBehindContainer = container;
+    return;
+  }
   nankillBehindContainer = container;
   nankillBehindLastAnchor = -1;
   nankillBehindLastBelowAnchor = -1;

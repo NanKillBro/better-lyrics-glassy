@@ -1,15 +1,11 @@
-import {
-  DISABLE_EFFECTS_STYLE_ID,
-  FOOTER_CLASS,
-  PLAYER_TIME_EVENT,
-} from "@constants";
+import { DISABLE_EFFECTS_STYLE_ID, FOOTER_CLASS, PLAYER_TIME_EVENT } from "@constants";
 import { registerPipBaseProperties, syncPipRendererMode } from "@modules/ui/rendererMode";
 import { translateContributorCreditLabels } from "@modules/lyrics/contributorCredit";
 import type { PlayerDetails } from "@core/appState";
 import { CUSTOM_THEME_STYLE_ID } from "@braccato/core/constants";
 import { applyLyricDecorations } from "@modules/lyrics/lyricDecorations";
 import type { Lyric, LyricsRenderer } from "@braccato/core";
-import { createLyricsRenderer, lyricBuildSettingsKey } from "@modules/ui/lyricsRenderer";
+import { createLyricsView, lyricBuildSettingsKey } from "@modules/ui/lyricsRenderer";
 import { ensureLetterWaveSetting } from "@modules/settings/letterWave";
 import { setVideoQualityBoost } from "@modules/settings/videoQuality";
 import { shouldShowWindowStage } from "@modules/karaoke/gate";
@@ -284,7 +280,12 @@ export function createPictureInPictureHost(
     pipWindow.document.head.appendChild(effectsStyle);
 
     styleObserver = new MutationObserver(() => {
-      const modeSync = syncPipRendererMode(pipWindow, document, environment.stylesheetUrls().lyrics, CUSTOM_THEME_STYLE_ID);
+      const modeSync = syncPipRendererMode(
+        pipWindow,
+        document,
+        environment.stylesheetUrls().lyrics,
+        CUSTOM_THEME_STYLE_ID
+      );
       const themeChanged = syncTheme();
       syncEffects();
       if (modeSync.changed) {
@@ -596,7 +597,7 @@ export function createPictureInPictureHost(
         return environment.view.log;
       },
     });
-    activeRenderer = createLyricsRenderer({
+    activeRenderer = createLyricsView({
       document: pipWindow.document,
       window: pipWindow,
       host: createPictureInPictureLyricsHost(activeView, environment.view, () => isStageShown),

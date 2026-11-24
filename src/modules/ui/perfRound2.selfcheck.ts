@@ -272,26 +272,25 @@ const doc = window.document;
   const part2El = doc.createElement("span");
   line2El.appendChild(part2El);
   container.appendChild(line2El);
-  Object.defineProperty(mainView, "lines", {
-    value: [
-      {
-        time: 20,
-        duration: 3,
-        lyricElement: line2El,
-        parts: [{ time: 20, duration: 1, lyricElement: part2El }],
-      },
-    ],
-    configurable: true,
-    writable: true,
-  });
+  const retickView: GlassyFlowBridgeTarget = {
+    container,
+    syncType: "richsync" as const,
+    lines: [{ time: 20, duration: 3, lyricElement: line2El }],
+    tick: () => "ok",
+    retickFromPlaybackClock(buildOptions) {
+      buildOptions(Date.now() - 40, true);
+      return "ok";
+    },
+  };
+  initGlassyFlowBridge(retickView);
 
   // t=17.74 + 0.1s offset = 17.84s (timeToLine = 2.16s > 2.15s) -> not armed yet
-  mainView.tick(17.74, { isPlaying: true, eventCreationTime: Date.now() } as any);
+  retickView.tick(17.74, { isPlaying: true, eventCreationTime: Date.now() } as any);
   assert.equal(line2El.style.getPropertyValue("--blyrics-anim-delay"), "", "line 2 not armed before skew buffer");
 
   // retickFromPlaybackClock with 40ms elapsed eventCreationTime skew -> actualTime=17.88s (timeToLine=2.12s) -> armed!
-  mainView.retickFromPlaybackClock(
-    (_evt, isPlaying) => ({ isPlaying: true, eventCreationTime: Date.now() - 40 }) as any
+  retickView.retickFromPlaybackClock?.(
+    (_evt, isPlaying) => ({ isPlaying, eventCreationTime: Date.now() - 40 }) as any
   );
   const retickDelay = parseFloat(line2El.style.getPropertyValue("--blyrics-anim-delay"));
   assert.ok(Number.isFinite(retickDelay) && retickDelay > 2.0 && retickDelay <= 2.15, "retick arms buffer with elapsed skew");
@@ -541,7 +540,7 @@ const doc = window.document;
     assert.equal(nativeClientGets, 2);
 
     rawHeight = 1600;
-    ytmHost.debug?.resize();
+    (ytmHost.debug as { resize?: () => void } | undefined)?.resize?.();
     assert.equal(el.scrollHeight, 1600);
     assert.equal(nativeHeightGets, 3);
 
@@ -644,6 +643,12 @@ const doc = window.document;
   assert.equal(isGlassyFlowScrollEnabled(doc), true);
   assert.equal(resolveMainViewTickOptions(baseOpts, doc).smoothScroll, false);
   assert.equal(resolveMainViewTickOptions({ isPlaying: true }, doc).smoothScroll, false);
+
+  // WebGL2 mode bypasses GlassyFlow scroll lock so @braccato/core 2 scrolls natively
+  doc.documentElement.setAttribute("blyrics-webgl-lyrics", "");
+  assert.equal(isGlassyFlowScrollEnabled(doc), false);
+  assert.equal(resolveMainViewTickOptions(baseOpts, doc).smoothScroll, true);
+  doc.documentElement.removeAttribute("blyrics-webgl-lyrics");
 
   doc.documentElement.removeAttribute("data-glassyflow-enabled");
 }

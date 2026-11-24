@@ -8,11 +8,11 @@ import {
 export { RENDERER_MODE_DEFAULTS };
 
 export interface RendererModeOptions {
-  isCompositeLyricsEnabled: boolean;
+  isWebglLyricsEnabled: boolean;
 }
 
 function getInput(): HTMLInputElement | null {
-  return document.getElementById("isCompositeLyricsEnabled") as HTMLInputElement | null;
+  return document.getElementById("isWebglLyricsEnabled") as HTMLInputElement | null;
 }
 
 /**
@@ -21,19 +21,19 @@ function getInput(): HTMLInputElement | null {
 export function syncOptionsRendererModeStyles(options: RendererModeOptions): void {
   void syncRendererModeStylesheets(
     document,
-    options.isCompositeLyricsEnabled,
+    options.isWebglLyricsEnabled,
     versionedStylesheetUrl(LEGACY_RENDERER_CSS_PATH)
   );
 }
 
 export function readRendererModeForm(): RendererModeOptions {
   return {
-    isCompositeLyricsEnabled: getInput()?.checked ?? false,
+    isWebglLyricsEnabled: getInput()?.checked ?? false,
   };
 }
 
 export function writeRendererModeForm(items: RendererModeOptions): void {
-  const composite = getInput();
-  if (composite) composite.checked = items.isCompositeLyricsEnabled;
+  const webgl = getInput();
+  if (webgl) webgl.checked = items.isWebglLyricsEnabled;
   syncOptionsRendererModeStyles(items);
 }

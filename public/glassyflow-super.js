@@ -1048,7 +1048,32 @@
         return null;
     }
 
+    function isWebglContainer(el) {
+        return Boolean(
+            (el && el.classList && el.classList.contains('brs-layout')) ||
+            document.documentElement?.hasAttribute('blyrics-webgl-lyrics')
+        );
+    }
+
+    function detachForWebgl() {
+        if (noSyncRetryTimer !== null) {
+            clearTimeout(noSyncRetryTimer);
+            noSyncRetryTimer = null;
+        }
+        setScrollOverride(false);
+        styleObserver?.disconnect();
+        _linesObserver?.disconnect();
+        removeScrollFallback();
+        cleanupAllSprings();
+        if (container) container.classList.remove('blyrics--gf-managed');
+        container = null;
+    }
+
     function attach(el) {
+        if (isWebglContainer(el)) {
+            detachForWebgl();
+            return;
+        }
         if (el === container) return;
         console.info('[GlassyFlow Super] Attaching to new container', el);
         cleanupAllSprings();
@@ -1228,8 +1253,12 @@
         resizeTimer = setTimeout(() => {
             isScriptEnabled = true;
             lastScrollTop = null;
-            setScrollOverride(true);
+            if (isWebglContainer(container)) {
+                detachForWebgl();
+                return;
+            }
             if (container && !isNoSyncMode) {
+                setScrollOverride(true);
                 container.classList.add('blyrics--gf-managed');
             }
             console.info('[GlassyFlow Super] Re-enabled after resize.');

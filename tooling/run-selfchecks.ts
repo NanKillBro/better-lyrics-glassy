@@ -20,10 +20,16 @@ if (files.length === 0) {
   process.exit(0);
 }
 
+const wasmLoaderPath = join(repoRoot, "tooling", "wasm-dataurl-loader.mjs");
+
 for (const file of files) {
   const label = relative(repoRoot, file);
   console.log(`Running ${label}`);
-  const result = spawnSync("npx", ["tsx", file], { stdio: "inherit", cwd: repoRoot, shell: true });
+  const result = spawnSync("npx", ["tsx", "--import", wasmLoaderPath, file], {
+    stdio: "inherit",
+    cwd: repoRoot,
+    shell: true,
+  });
   if (result.status !== 0) {
     console.error(`Self-check failed: ${label}`);
     process.exit(result.status ?? 1);

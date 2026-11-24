@@ -2,7 +2,8 @@ import { AppState } from "@core/appState";
 import { invalidateScrollHostMetrics, ytmHost } from "@modules/ui/lyricsHost";
 import type { LyricsRenderer, LyricsRendererHost, TickOptions } from "@braccato/core";
 import { requestAnimationLoopSync } from "@modules/ui/idleTickSuspension";
-import { createLyricsRenderer } from "@modules/ui/lyricsRenderer";
+import { createLyricsView } from "@modules/ui/lyricsRenderer";
+import { readRendererMode } from "@modules/ui/rendererMode";
 
 function invalidateAfter<Args extends unknown[], Result>(
   fn: (...args: Args) => Result
@@ -28,7 +29,7 @@ function invalidateAfter<Args extends unknown[], Result>(
 const GLASSYFLOW_ENABLED_ATTR = "data-glassyflow-enabled";
 
 export function isGlassyFlowScrollEnabled(doc: Document | null | undefined = document): boolean {
-  return doc?.documentElement?.getAttribute(GLASSYFLOW_ENABLED_ATTR) === "true";
+  return !readRendererMode(doc) && doc?.documentElement?.getAttribute(GLASSYFLOW_ENABLED_ATTR) === "true";
 }
 
 export function resolveMainViewTickOptions(options: TickOptions, doc: Document | null | undefined = document): TickOptions {
@@ -79,7 +80,7 @@ const mainViewHost: LyricsRendererHost = {
   debug: ytmHost.debug,
 };
 
-export const mainView: Omit<LyricsRenderer, "destroy"> = createLyricsRenderer({ document, window, host: mainViewHost });
+export const mainView: Omit<LyricsRenderer, "destroy"> = createLyricsView({ document, window, host: mainViewHost });
 const baseMainTick = mainView.tick;
 mainView.tick = (currentTimeS, options) => baseMainTick(currentTimeS, resolveMainViewTickOptions(options));
 const baseMainRetick = mainView.retickFromPlaybackClock;

@@ -1,56 +1,56 @@
+import { AppState, reloadLyrics } from "@core/appState";
+import { versionedStylesheetUrl } from "@core/extensionStylesheet";
+import { rebuildKaraoke } from "@modules/karaoke/karaokeView";
 import {
-  COMPOSITE_LYRICS_ATTR,
   LEGACY_RENDERER_CSS_PATH,
   LEGACY_RENDERER_STYLE_ID,
   RENDERER_MODE_DEFAULTS,
   syncRendererModeStylesheets,
+  WEBGL_LYRICS_ATTR,
 } from "@modules/ui/rendererMode";
-import { AppState, reloadLyrics } from "@core/appState";
-import { versionedStylesheetUrl } from "@core/extensionStylesheet";
-import { rebuildKaraoke } from "@modules/karaoke/karaokeView";
 
 let rendererModeGeneration = 0;
 
 /**
- * Applies composite mode attribute and legacy stylesheet state to `doc` using extension URLs.
+ * Applies WebGL mode attribute and legacy stylesheet state to `doc` using extension URLs.
  */
-export async function syncRendererModeDocument(doc: Document, composite: boolean): Promise<void> {
-  await syncRendererModeStylesheets(doc, composite, versionedStylesheetUrl(LEGACY_RENDERER_CSS_PATH));
+export async function syncRendererModeDocument(doc: Document, webgl: boolean): Promise<void> {
+  await syncRendererModeStylesheets(doc, webgl, versionedStylesheetUrl(LEGACY_RENDERER_CSS_PATH));
 }
 
 /**
- * Loads `isCompositeLyricsEnabled` into `AppState` and synchronizes stylesheets on `doc`.
+ * Loads `isWebglLyricsEnabled` into `AppState` and synchronizes stylesheets on `doc`.
  */
 export async function syncRendererModeFromStorage(doc: Document): Promise<void> {
   const items =
     typeof chrome !== "undefined" && chrome?.storage?.local?.get
       ? await chrome.storage.local.get(RENDERER_MODE_DEFAULTS).catch(() => RENDERER_MODE_DEFAULTS)
       : RENDERER_MODE_DEFAULTS;
-  const composite = items?.isCompositeLyricsEnabled === true;
-  AppState.isCompositeLyricsEnabled = composite;
-  await syncRendererModeDocument(doc, composite);
+  const webgl = items?.isWebglLyricsEnabled === true;
+  AppState.isWebglLyricsEnabled = webgl;
+  await syncRendererModeDocument(doc, webgl);
 }
 
 /**
  * Updates `AppState`, syncs mode stylesheets, and rebuilds active main/karaoke lyrics on change.
  */
 export async function applyRendererModeSettings(partial: {
-  readonly isCompositeLyricsEnabled?: unknown;
+  readonly isWebglLyricsEnabled?: unknown;
 }): Promise<void> {
-  if (!("isCompositeLyricsEnabled" in partial)) return;
+  if (!("isWebglLyricsEnabled" in partial)) return;
 
-  const nextComposite = partial.isCompositeLyricsEnabled === true;
-  const stateChanged = AppState.isCompositeLyricsEnabled !== nextComposite;
+  const nextWebgl = partial.isWebglLyricsEnabled === true;
+  const stateChanged = AppState.isWebglLyricsEnabled !== nextWebgl;
   const root = document.documentElement;
   const domOutOfSync =
-    root.hasAttribute(COMPOSITE_LYRICS_ATTR) !== nextComposite ||
-    Boolean(document.getElementById(LEGACY_RENDERER_STYLE_ID)) !== !nextComposite;
+    root.hasAttribute(WEBGL_LYRICS_ATTR) !== nextWebgl ||
+    Boolean(document.getElementById(LEGACY_RENDERER_STYLE_ID)) !== !nextWebgl;
 
   if (!stateChanged && !domOutOfSync) return;
 
   const generation = ++rendererModeGeneration;
-  AppState.isCompositeLyricsEnabled = nextComposite;
-  await syncRendererModeDocument(document, nextComposite);
+  AppState.isWebglLyricsEnabled = nextWebgl;
+  await syncRendererModeDocument(document, nextWebgl);
   if (generation !== rendererModeGeneration) return;
 
   if (stateChanged && (AppState.areLyricsLoaded || AppState.lyricData !== null)) {

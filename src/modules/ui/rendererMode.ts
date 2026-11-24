@@ -1,9 +1,9 @@
-export const COMPOSITE_LYRICS_ATTR = "blyrics-composite-lyrics" as const;
+export const WEBGL_LYRICS_ATTR = "blyrics-webgl-lyrics" as const;
 export const LEGACY_RENDERER_STYLE_ID = "blyrics-style-legacy" as const;
 export const LEGACY_RENDERER_CSS_PATH = "css/blyrics/lyrics-legacy.css" as const;
 
 export const RENDERER_MODE_DEFAULTS = {
-  isCompositeLyricsEnabled: false,
+  isWebglLyricsEnabled: false,
 } as const;
 
 export interface RendererModeSyncOptions {
@@ -27,10 +27,10 @@ const PIP_MARQUEE_PROPERTIES: readonly PropertyDefinition[] = [
 const LEGACY_ANCHOR_SELECTORS = ['link[id="blyrics-style-css/blyrics"]', 'link[href*="css/blyrics/lyrics.css"]'] as const;
 
 /**
- * Returns whether composite (`@braccato/core@1.21.6`) rendering is active on `doc`.
+ * Returns whether WebGL2 (`@braccato/core@2.0.0-beta.4`) rendering is active on `doc`.
  */
 export function readRendererMode(doc: Document | null | undefined): boolean {
-  return doc?.documentElement?.hasAttribute?.(COMPOSITE_LYRICS_ATTR) === true;
+  return doc?.documentElement?.hasAttribute?.(WEBGL_LYRICS_ATTR) === true;
 }
 
 /**
@@ -135,29 +135,29 @@ function syncLegacyStylesheet(
 
 function syncStylesheetInternal(
   doc: Document,
-  composite: boolean,
+  webgl: boolean,
   legacyHref: string | null,
   options?: RendererModeSyncOptions
 ): { changed: boolean; settled?: Promise<void> } {
-  const prevComposite = readRendererMode(doc);
-  doc.documentElement?.toggleAttribute?.(COMPOSITE_LYRICS_ATTR, composite);
-  const legacy = syncLegacyStylesheet(doc, !composite, legacyHref, options);
+  const prevWebgl = readRendererMode(doc);
+  doc.documentElement?.toggleAttribute?.(WEBGL_LYRICS_ATTR, webgl);
+  const legacy = syncLegacyStylesheet(doc, !webgl, legacyHref, options);
   return {
-    changed: prevComposite !== composite || legacy.changed,
+    changed: prevWebgl !== webgl || legacy.changed,
     settled: legacy.settled,
   };
 }
 
 /**
- * Sets `COMPOSITE_LYRICS_ATTR` and dynamically loads or removes the legacy `1.20.0` stylesheet on `doc`.
+ * Sets `WEBGL_LYRICS_ATTR` and dynamically loads or removes the legacy `1.20.0` stylesheet on `doc`.
  */
 export async function syncRendererModeStylesheets(
   doc: Document,
-  composite: boolean,
+  webgl: boolean,
   legacyHref: string | null,
   options?: RendererModeSyncOptions
 ): Promise<void> {
-  const { settled } = syncStylesheetInternal(doc, composite, legacyHref, options);
+  const { settled } = syncStylesheetInternal(doc, webgl, legacyHref, options);
   if (settled) await settled;
 }
 
@@ -174,7 +174,7 @@ export function registerPipBaseProperties(pipWindow: Window): void {
 }
 
 /**
- * Mirrors opener composite attribute, Gecko `@property` definitions, and legacy stylesheet
+ * Mirrors opener WebGL mode attribute, Gecko `@property` definitions, and legacy stylesheet
  * into `pipWindow` without touching extension-only APIs.
  */
 export function syncPipRendererMode(
@@ -183,26 +183,26 @@ export function syncPipRendererMode(
   baseLyricsHref: string,
   customStyleId: string
 ): { changed: boolean; settled?: Promise<void> } {
-  const composite = readRendererMode(openerDoc);
-  if (!composite) {
+  const webgl = readRendererMode(openerDoc);
+  if (!webgl) {
     registerAnimatableProperties(pipWindow, LEGACY_SWIPE_PROPERTIES);
   }
   return syncStylesheetInternal(
     pipWindow.document,
-    composite,
+    webgl,
     readLinkHref(openerDoc, LEGACY_RENDERER_STYLE_ID),
     { anchorHref: baseLyricsHref, beforeId: customStyleId }
   );
 }
 
 /**
- * Observes composite renderer attribute changes on `doc.documentElement`.
+ * Observes WebGL renderer attribute changes on `doc.documentElement`.
  */
 export function observeRendererModeChange(doc: Document, onChange: () => void): MutationObserver {
   const observer = new MutationObserver(onChange);
   observer.observe(doc.documentElement, {
     attributes: true,
-    attributeFilter: [COMPOSITE_LYRICS_ATTR],
+    attributeFilter: [WEBGL_LYRICS_ATTR],
   });
   return observer;
 }
