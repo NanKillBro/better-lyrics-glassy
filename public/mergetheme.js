@@ -30,9 +30,11 @@ ytmusic-app {
 }
 
 :root[blyrics-webgl-lyrics] {
-  --blyrics-scale: 1;
+  --blyrics-scale: 0.95;
   --blyrics-active-scale: 1.02;
-  --blyrics-scale-transition-duration: 0.7s;
+  --blyrics-scale-transition-duration: 1.3s;
+  --blyrics-line-enter-easing: ease;
+  --blyrics-line-exit-easing: ease-out;
 }
 
 :root {
@@ -1321,7 +1323,7 @@ ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-sc
   opacity: 0.8;
 }
 
-/* WebGL2 (@braccato/core 2) opt-in mode: scoped strictly to .brs-layout */
+/* WebGL2 (@braccato/core 2.0.0-beta.8+) opt-in mode: scoped strictly to .brs-layout */
 .blyrics-container.brs-layout {
   overflow: visible !important;
   --blyrics-line-opacity-after: 1 0.2;
@@ -1331,10 +1333,20 @@ ytmusic-player-page[player-fullscreened] .blyrics-container:not(.blyrics-user-sc
   --blyrics-line-hover-opacity: 1;
   --blyrics-line-hover-blur: 0;
   --blyrics-line-hover-scale: 1.02;
+  /* Restore per-syllable wobble and exact CSS 0->12.5% ease + 12.5->75% ease-in-out curve */
+  --blyrics-word-wobble-scope: syllable;
+  --blyrics-word-wobble-easing: linear(0, 0.0171 1.563%, 0.0511 3.125%, 0.0807 4.688%, 0.1003 6.25%, 0.1127 7.813%, 0.1201 9.375%, 0.1239 10.938%, 0.125 12.5%, 0.75 75%, 1);
 }
 
 .blyrics-container.brs-layout:not([data-layout="stage"]) > .blyrics--line {
   --blyrics-padding: 3rem;
+}
+
+/* Canvas shadow uses opaque #000 text (not 0.4 inactive alpha), so scale base alpha 0.5 -> 0.2 */
+.blyrics-container.brs-layout > .blyrics--line > .blyrics-line-main,
+.blyrics-container.brs-layout > .blyrics--line > .blyrics-background-line {
+  --blyrics-text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+  --blyrics-active-text-shadow: 0 0 5px rgba(255, 255, 255, 0.45);
 }
 
 ytmusic-player-page[player-fullscreened] .blyrics-container.brs-layout {
