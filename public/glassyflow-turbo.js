@@ -712,10 +712,153 @@
         }
     }
 
+    let layoutShiftTarget = null;
+    let layoutShiftHandler = null;
+    let pendingLayoutShifts = null;
+    let pendingLayoutMode = null;
+    let pendingLayoutFlushQueued = false;
+    let immediateScrollArmedUntil = 0;
+    let delayedLayoutShifts = null;
+    const delayedLayoutHoldAnims = new Map();
+
+    function isHiddenRevealLine(line) {
+        const cl = line?.classList;
+        return Boolean(cl && (cl.contains('blyrics--reveal-collapsed') || cl.contains('blyrics--reveal-exiting')));
+    }
+
+    function clearDelayedLayoutHolds() {
+        for (const anim of delayedLayoutHoldAnims.values()) {
+            try { anim.cancel(); } catch (_) {}
+        }
+        delayedLayoutHoldAnims.clear();
+        const taken = delayedLayoutShifts;
+        delayedLayoutShifts = null;
+        return taken;
+    }
+
+    function holdDelayedLayoutShifts(shifts) {
+        if (!shifts || shifts.size === 0) return;
+        for (const [line, dy] of shifts) {
+            if (!line.isConnected || Math.abs(dy) < CFG.arriveEpsilon) continue;
+            const data = lineState.get(line);
+            if (activeLines.has(line) && data && data.anim) {
+                nudgeLine(line, data, dy);
+                continue;
+            }
+            if (!delayedLayoutShifts) delayedLayoutShifts = new Map();
+            const totalDy = (delayedLayoutShifts.get(line) || 0) + dy;
+            delayedLayoutShifts.set(line, totalDy);
+            const prevHold = delayedLayoutHoldAnims.get(line);
+            if (prevHold) {
+                try { prevHold.cancel(); } catch (_) {}
+            }
+            if (typeof line.animate === 'function') {
+                const hold = line.animate(
+                    [{ translate: `0px ${totalDy.toFixed(2)}px` }, { translate: `0px ${totalDy.toFixed(2)}px` }],
+                    { duration: Math.max(CFG.scrollDelay + 80, 120), fill: 'forwards' }
+                );
+                delayedLayoutHoldAnims.set(line, hold);
+            }
+        }
+    }
+
+    function clearPendingLayoutShifts() {
+        pendingLayoutShifts = null;
+        pendingLayoutMode = null;
+        pendingLayoutFlushQueued = false;
+        immediateScrollArmedUntil = 0;
+        clearDelayedLayoutHolds();
+    }
+
+    function applyDirectLayoutShifts(shifts, delayMs, criticallyDamped) {
+        if (!shifts || shifts.size === 0 || !isScriptEnabled || isNoSyncMode) return;
+        const stiffness = criticallyDamped ? 55 : CFG.stiffness;
+        const mass = CFG.mass;
+        const damping = criticallyDamped
+            ? Math.ceil(2 * Math.sqrt(stiffness * mass) * 100) / 100
+            : CFG.damping;
+        for (const [line, dy] of shifts) {
+            if (!line.isConnected || Math.abs(dy) < CFG.arriveEpsilon) continue;
+            const data = getOrCreateLineState(line);
+            data.stiffness = stiffness;
+            data.damping = damping;
+            data.mass = mass;
+            if (activeLines.has(line) && data.anim) {
+                nudgeLine(line, data, dy);
+            } else {
+                startLine(line, data, dy, 0, delayMs);
+            }
+            if (data.anim) activeLines.add(line);
+        }
+        isAnimationBusy = activeLines.size > 0;
+    }
+
+    function flushPendingLayoutShifts() {
+        pendingLayoutFlushQueued = false;
+        if (!pendingLayoutShifts || pendingLayoutShifts.size === 0) {
+            pendingLayoutShifts = null;
+            pendingLayoutMode = null;
+            return;
+        }
+        const shifts = pendingLayoutShifts;
+        pendingLayoutShifts = null;
+        pendingLayoutMode = null;
+        immediateScrollArmedUntil = 0;
+        applyDirectLayoutShifts(shifts, 0, true);
+    }
+
+    function removeLayoutShiftListener() {
+        if (layoutShiftTarget && layoutShiftHandler) {
+            layoutShiftTarget.removeEventListener('blyrics-layout-shift', layoutShiftHandler);
+        }
+        layoutShiftTarget = null;
+        layoutShiftHandler = null;
+        clearPendingLayoutShifts();
+    }
+
+    function installLayoutShiftListener(el) {
+        removeLayoutShiftListener();
+        layoutShiftTarget = el;
+        layoutShiftHandler = (event) => {
+            if (!isScriptEnabled || isNoSyncMode || el !== container) return;
+            let payload = null;
+            try {
+                payload = typeof event.detail === 'string' ? JSON.parse(event.detail) : event.detail;
+            } catch (_) {
+                return;
+            }
+            if (!payload || typeof payload !== 'object') return;
+            const lines = getLines();
+            const entries = Array.isArray(payload.shifts) ? payload.shifts : [];
+            if (entries.length > 0) {
+                if (!pendingLayoutShifts) pendingLayoutShifts = new Map();
+                for (let i = 0; i < entries.length; i++) {
+                    const pair = entries[i];
+                    if (!Array.isArray(pair) || pair.length < 2) continue;
+                    const line = lines[pair[0]];
+                    const dy = Number(pair[1]);
+                    if (!line || !Number.isFinite(dy) || Math.abs(dy) < CFG.arriveEpsilon) continue;
+                    pendingLayoutShifts.set(line, (pendingLayoutShifts.get(line) || 0) + dy);
+                }
+            }
+            if (payload.mode === 'immediate') {
+                pendingLayoutMode = 'immediate';
+                immediateScrollArmedUntil = performance.now() + 80;
+            } else if (!pendingLayoutMode) {
+                pendingLayoutMode = 'sync-scroll';
+            }
+            if (!pendingLayoutFlushQueued) {
+                pendingLayoutFlushQueued = true;
+                queueMicrotask(flushPendingLayoutShifts);
+            }
+        };
+        el.addEventListener('blyrics-layout-shift', layoutShiftHandler);
+    }
+
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      *  APPLY STAGGER — start (or re-aim) one animation per line
      * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    function applyStagger(delta) {
+    function applyStagger(delta, layoutMap, forceImmediate) {
         if (!isScriptEnabled || Math.abs(delta) < CFG.minDelta) return;
 
         const lines = getLines();
@@ -755,11 +898,13 @@
 
         let aheadCount = 0;
 
-        const isFast = _checkFastTransition(lines, ref);
-        const currentStaggerStep = isFast ? CFG.fastStaggerStep : CFG.staggerStep;
-        const currentStiffness = isFast ? CFG.fastStiffness : CFG.stiffness;
-        const currentDamping = isFast ? CFG.fastDamping : CFG.damping;
+        const isFast = !forceImmediate && _checkFastTransition(lines, ref);
+        const currentStaggerStep = forceImmediate ? 0 : (isFast ? CFG.fastStaggerStep : CFG.staggerStep);
+        const currentStiffness = forceImmediate ? 55 : (isFast ? CFG.fastStiffness : CFG.stiffness);
         const currentMass = isFast ? CFG.fastMass : CFG.mass;
+        const currentDamping = forceImmediate
+            ? Math.ceil(2 * Math.sqrt(currentStiffness * currentMass) * 100) / 100
+            : (isFast ? CFG.fastDamping : CFG.damping);
 
         if (DEBUG && isFast) {
             console.info(`[GlassyFlow Turbo] ⚡ Fast Transition triggered (Gap < ${CFG.fastTransitionThreshold}s)`);
@@ -767,7 +912,12 @@
 
         for (let i = start; i < end; i++) {
             const line = lines[i];
-            const delay = i >= ref ? (aheadCount++) * currentStaggerStep : 0;
+            const hidden = isHiddenRevealLine(line);
+            const delay = i >= ref && !hidden ? (aheadCount++) * currentStaggerStep : 0;
+            const layoutDy = layoutMap ? (layoutMap.get(line) || 0) : 0;
+            if (layoutMap && layoutDy !== 0) layoutMap.delete(line);
+            const effectiveDelta = delta + layoutDy;
+            if (Math.abs(effectiveDelta) < CFG.arriveEpsilon && !activeLines.has(line)) continue;
 
             const data = getOrCreateLineState(line);
             data.stiffness = currentStiffness;
@@ -775,14 +925,18 @@
             data.mass = currentMass;
 
             if (activeLines.has(line) && data.anim) {
-                nudgeLine(line, data, delta);
+                nudgeLine(line, data, effectiveDelta);
             } else {
-                startLine(line, data, delta, 0, delay);
+                startLine(line, data, effectiveDelta, 0, delay);
             }
 
             // startLine may have retired the line immediately (already home);
             // only track it if it actually has a running animation.
             if (data.anim) activeLines.add(line);
+        }
+
+        if (layoutMap && layoutMap.size > 0) {
+            applyDirectLayoutShifts(layoutMap, 0, true);
         }
 
         isAnimationBusy = activeLines.size > 0;
@@ -795,13 +949,17 @@
      *  Nếu busy → defer + container compensate.
      *  Nếu rảnh → flush deferred + apply combined delta.
      * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    function _executeScroll(delta) {
+    function _executeScroll(delta, layoutMap) {
         if (!isScriptEnabled || isNoSyncMode || Math.abs(delta) < CFG.minDelta) {
+            if (layoutMap && layoutMap.size > 0) {
+                applyDirectLayoutShifts(layoutMap, 0, false);
+            }
             setContainerCompensation(deferredDelta);
             return;
         }
 
-        if (isAnimationBusy) {
+        const hasLayoutShifts = Boolean(layoutMap && layoutMap.size > 0);
+        if (isAnimationBusy && !hasLayoutShifts) {
             // ╔══════════════════════════════════════════════════════════╗
             // ║  BUSY: Defer delta, giữ nguyên vị trí bằng container     ║
             // ║  translate để bù scrollTop change.                       ║
@@ -843,7 +1001,7 @@
 
             deferredDelta = 0;
             try {
-                applyStagger(combined);
+                applyStagger(combined, layoutMap, false);
             } finally {
                 setContainerCompensation(0);
             }
@@ -891,10 +1049,47 @@
     function handleNewDelta(delta) {
         if (!isScriptEnabled || isNoSyncMode || Math.abs(delta) < CFG.minDelta) return;
 
+        const layoutMap = pendingLayoutShifts;
+        const isImmediateReveal =
+            pendingLayoutMode === 'immediate' ||
+            (immediateScrollArmedUntil > 0 && performance.now() <= immediateScrollArmedUntil);
+        pendingLayoutShifts = null;
+        pendingLayoutMode = null;
+        immediateScrollArmedUntil = 0;
+
+        if (isImmediateReveal) {
+            const heldShifts = clearDelayedLayoutHolds();
+            const mergedLayout = layoutMap ? new Map(layoutMap) : (heldShifts ? new Map() : null);
+            if (heldShifts && mergedLayout) {
+                for (const [line, dy] of heldShifts) {
+                    mergedLayout.set(line, (mergedLayout.get(line) || 0) + dy);
+                }
+            }
+            const combined = delta + delayedDelta + deferredDelta;
+            delayedDelta = 0;
+            deferredDelta = 0;
+            if (scrollDelayTimer !== null) {
+                clearTimeout(scrollDelayTimer);
+                scrollDelayTimer = null;
+            }
+            try {
+                applyStagger(combined, mergedLayout, true);
+            } finally {
+                setContainerCompensation(0);
+            }
+            return;
+        }
+
         // Không delay → thực hiện ngay
         if (CFG.scrollDelay <= 0) {
-            _executeScroll(delta);
+            _executeScroll(delta, layoutMap);
             return;
+        }
+
+        // Hold layout-shifted lines at their pre-shift screen positions during scrollDelay without
+        // marking isAnimationBusy so the scroll wave executes cleanly and merges both deltas.
+        if (layoutMap && layoutMap.size > 0) {
+            holdDelayedLayoutShifts(layoutMap);
         }
 
         // ── Có delay: tích lũy + debounce ──
@@ -915,12 +1110,13 @@
             scrollDelayTimer = null;
             const totalDelayed = delayedDelta;
             delayedDelta = 0;
+            const layoutForExec = clearDelayedLayoutHolds();
 
             if (DEBUG) console.debug(
                 `[GlassyFlow Turbo] Delay fired — executing ${totalDelayed.toFixed(1)}px`
             );
 
-            _executeScroll(totalDelayed);
+            _executeScroll(totalDelayed, layoutForExec);
         }, CFG.scrollDelay);
     }
 
@@ -1065,6 +1261,7 @@
         setScrollOverride(false);
         styleObserver?.disconnect();
         _linesObserver?.disconnect();
+        removeLayoutShiftListener();
         removeScrollFallback();
         cleanupAllSprings();
         if (container) container.classList.remove('blyrics--gf-managed');
@@ -1078,6 +1275,7 @@
         }
         if (el === container) return;
         console.info('[GlassyFlow Turbo] Attaching to new container', el);
+        removeLayoutShiftListener();
         cleanupAllSprings();
 
         container = el;
@@ -1094,6 +1292,7 @@
 
         installStyleObserver(el);
         _installLinesObserver(el);
+        installLayoutShiftListener(el);
         installScrollFallback(el);
         startNoSyncDetection(el);
 
@@ -1275,6 +1474,7 @@
             noSyncRetryTimer = null;
         }
         styleObserver?.disconnect();
+        removeLayoutShiftListener();
         removeScrollFallback();
         cleanupAllSprings();
         container = null;

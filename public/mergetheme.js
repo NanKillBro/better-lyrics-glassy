@@ -3425,6 +3425,7 @@ let nankillBehindContainer = null;
 let nankillBehindLastAnchor = -1;
 let nankillBehindLastBelowAnchor = -1;
 let nankillBehindLineCount = -1;
+let nankillBehindLastHiddenSig = '';
 let nankillPrevBelowNodes = [];
 let nankillPrevBelowRanks = [];
 
@@ -3640,6 +3641,11 @@ function setNankillBelowRank(el, rank, prevRank) {
   }
 }
 
+function isNankillRevealHidden(el) {
+  const cl = el?.classList;
+  return Boolean(cl && (cl.contains('blyrics--reveal-collapsed') || cl.contains('blyrics--reveal-exiting')));
+}
+
 function clearNankillBelow(el, prevRank) {
   if (!el || !el.classList) return;
   if (prevRank) {
@@ -3683,13 +3689,26 @@ function syncBehindClasses(force) {
   }
 
   const blurDisabled = document.documentElement.hasAttribute('blyrics-disable-lyrics-blur');
+  const autoHideActive = document.documentElement.hasAttribute('blyrics-auto-hide-instrumental-bg');
   const behindAnchor = firstSharpen >= 0 ? firstSharpen : firstActive;
   const belowAnchor = blurDisabled ? -2 : (lastSharpen >= 0 ? lastSharpen : lastActive);
+
+  let hiddenSig = '';
+  if (belowAnchor >= 0 && autoHideActive) {
+    let checked = 0;
+    for (let i = belowAnchor + 1; i < children.length && checked < 14; i++) {
+      const el = children[i];
+      if (!el.classList.contains('blyrics--line')) continue;
+      hiddenSig += isNankillRevealHidden(el) ? '1' : '0';
+      checked++;
+    }
+  }
 
   if (
     !force &&
     behindAnchor === nankillBehindLastAnchor &&
     belowAnchor === nankillBehindLastBelowAnchor &&
+    hiddenSig === nankillBehindLastHiddenSig &&
     children.length === nankillBehindLineCount
   ) {
     return;
@@ -3697,10 +3716,12 @@ function syncBehindClasses(force) {
 
   const prevBehind = nankillBehindLastAnchor;
   const prevBelow = nankillBehindLastBelowAnchor;
+  const prevHiddenSig = nankillBehindLastHiddenSig;
   const structuralChanged = force || children.length !== nankillBehindLineCount;
 
   nankillBehindLastAnchor = behindAnchor;
   nankillBehindLastBelowAnchor = belowAnchor;
+  nankillBehindLastHiddenSig = hiddenSig;
   nankillBehindLineCount = children.length;
 
   if (structuralChanged) {
@@ -3740,21 +3761,21 @@ function syncBehindClasses(force) {
       let rank = 1;
       for (let i = belowAnchor + 1; i < children.length && rank <= 6; i++) {
         const line = children[i];
-        if (!line.classList.contains('blyrics--line')) continue;
+        if (!line.classList.contains('blyrics--line') || (autoHideActive && isNankillRevealHidden(line))) continue;
         setNankillBelowRank(line, rank, 0);
         nankillPrevBelowNodes.push(line);
         nankillPrevBelowRanks.push(rank);
         rank++;
       }
     }
-  } else if (belowAnchor !== prevBelow) {
+  } else if (belowAnchor !== prevBelow || hiddenSig !== prevHiddenSig) {
     const nextNodes = [];
     const nextRanks = [];
     if (belowAnchor >= 0) {
       let rank = 1;
       for (let i = belowAnchor + 1; i < children.length && rank <= 6; i++) {
         const line = children[i];
-        if (!line.classList.contains('blyrics--line')) continue;
+        if (!line.classList.contains('blyrics--line') || (autoHideActive && isNankillRevealHidden(line))) continue;
         nextNodes.push(line);
         nextRanks.push(rank);
         rank++;
@@ -3793,6 +3814,7 @@ function attachBehindObserver(container) {
   nankillBehindLastAnchor = -1;
   nankillBehindLastBelowAnchor = -1;
   nankillBehindLineCount = -1;
+  nankillBehindLastHiddenSig = '';
   nankillPrevBelowNodes = [];
   nankillPrevBelowRanks = [];
 

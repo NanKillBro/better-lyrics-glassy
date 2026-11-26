@@ -1,4 +1,5 @@
 import { DISABLE_EFFECTS_STYLE_ID, FOOTER_CLASS, PLAYER_TIME_EVENT } from "@constants";
+import { AUTO_HIDE_INSTRUMENTAL_BG_ATTR, initActiveReveal, syncActiveReveal } from "@modules/ui/activeReveal";
 import { registerPipBaseProperties, syncPipRendererMode } from "@modules/ui/rendererMode";
 import { translateContributorCreditLabels } from "@modules/lyrics/contributorCredit";
 import type { PlayerDetails } from "@core/appState";
@@ -125,6 +126,7 @@ export function createPictureInPictureHost(
   let buildCount = 0;
   let syncFrame: number | null = null;
   let styleObserver: MutationObserver | null = null;
+  let rootAttrObserver: MutationObserver | null = null;
   let syncedLyricsFlag: PictureInPictureLyricsSynced | null = null;
   let playerVideoId: string | null = null;
   let windowFrame = readStoredWindowFrame();
@@ -227,6 +229,8 @@ export function createPictureInPictureHost(
   function stopStyleMirror(): void {
     styleObserver?.disconnect();
     styleObserver = null;
+    rootAttrObserver?.disconnect();
+    rootAttrObserver = null;
   }
 
   /**
@@ -301,6 +305,22 @@ export function createPictureInPictureHost(
       }
     });
     styleObserver.observe(document.head, { childList: true, subtree: true, characterData: true });
+
+    const syncAutoHideAttr = (): void => {
+      const enabled = document.documentElement.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR);
+      const changed = pipWindow.document.documentElement.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR) !== enabled;
+      pipWindow.document.documentElement.toggleAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, enabled);
+      if (changed) {
+        syncActiveReveal(renderer);
+        tickLyrics(false);
+      }
+    };
+    syncAutoHideAttr();
+    rootAttrObserver = new MutationObserver(syncAutoHideAttr);
+    rootAttrObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: [AUTO_HIDE_INSTRUMENTAL_BG_ATTR],
+    });
   }
 
   function injectLyricStyles(pipWindow: Window): void {
@@ -601,6 +621,11 @@ export function createPictureInPictureHost(
       document: pipWindow.document,
       window: pipWindow,
       host: createPictureInPictureLyricsHost(activeView, environment.view, () => isStageShown),
+    });
+    initActiveReveal(activeRenderer, {
+      document: pipWindow.document,
+      isViewVisible: () => !isStageShown,
+      getScrollElement: () => activeView?.scrollElement ?? null,
     });
     // After the renderer, because the theme is applied through it, and before the build below,
     // which reads the settings that theme declares.

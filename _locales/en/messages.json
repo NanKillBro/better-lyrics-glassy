@@ -164,6 +164,18 @@
     "message": "Removes the synced transition delay, so the active line sharpens as soon as it becomes active instead of staying blurred until its word animation starts. Only applies when the Glassy Merge Theme is selected.",
     "description": "Tooltip for the Show upcoming lyrics sooner setting"
   },
+  "options_display_autoHideInstrumentalBg": {
+    "message": "Show instrumental & background lyrics only when active",
+    "description": "Setting label to collapse and smoothly reveal instrumental notes and background vocals only when active"
+  },
+  "options_display_autoHideInstrumentalBgBadge": {
+    "message": "Beta",
+    "description": "Badge shown next to the active-only instrumental and background lyrics setting marking it as beta"
+  },
+  "options_display_autoHideInstrumentalBgHint": {
+    "message": "Collapses inactive instrumental notes and background vocals, smoothly animating them in when they become active. Legacy renderer only (inactive when WebGL lyrics beta is enabled).",
+    "description": "Tooltip for the Show instrumental & background lyrics only when active setting"
+  },
   "picture_in_picture_open": {
     "message": "Open Picture-in-Picture lyrics",
     "description": "Accessible label for the dock action that opens the floating lyrics window"

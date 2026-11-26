@@ -39,6 +39,7 @@ export interface FullscreenLoaderState {
 export interface FullscreenDisplayFlags {
   readonly lyricsBlurDisabled: boolean;
   readonly unblurUpcoming: boolean;
+  readonly autoHideInstrumentalBg?: boolean;
 }
 
 export type FullscreenLyricsPayload = PictureInPictureLyricsPayload;

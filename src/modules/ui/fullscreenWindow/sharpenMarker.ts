@@ -217,12 +217,21 @@ export class SharpenMarker {
       forceImmediate = true;
     }
 
+    const autoHideActive =
+      container.ownerDocument?.documentElement?.hasAttribute("blyrics-auto-hide-instrumental-bg") === true;
     const lineElements: HTMLElement[] = [];
     const descriptors: SharpenLineDescriptor[] = [];
+    let hiddenSig = "";
     for (const child of container.children) {
       if (!(child instanceof HTMLElement) || !child.classList.contains("blyrics--line")) continue;
       const isActive = child.classList.contains("blyrics--active");
       const isAnimating = child.classList.contains("blyrics--animating");
+      if (
+        autoHideActive &&
+        (child.classList.contains("blyrics--reveal-collapsed") || child.classList.contains("blyrics--reveal-exiting"))
+      ) {
+        hiddenSig += `${lineElements.length},`;
+      }
       const timing = this.readLineTiming(child);
       lineElements.push(child);
       descriptors.push({
@@ -235,7 +244,7 @@ export class SharpenMarker {
     }
 
     const snapshot = this.state.evaluate(timeS, descriptors, forceImmediate);
-    const key = `${lineElements.length}:${snapshot.noSync ? "1" : "0"}:${snapshot.indices.join(",")}:${snapshot.isOutro ? "1" : "0"}`;
+    const key = `${lineElements.length}:${snapshot.noSync ? "1" : "0"}:${snapshot.indices.join(",")}:${snapshot.isOutro ? "1" : "0"}:${hiddenSig}`;
     if (key === this.lastAppliedKey) return;
     this.lastAppliedKey = key;
 
@@ -244,20 +253,21 @@ export class SharpenMarker {
     const sharpenedSet = new Set(snapshot.indices);
     const firstAnchor = snapshot.indices[0] ?? -1;
     const lastAnchor = snapshot.indices[snapshot.indices.length - 1] ?? -1;
+    let visibleBelowRank = 0;
 
     for (let i = 0; i < lineElements.length; i += 1) {
       const line = lineElements[i];
+      const isRevealHidden =
+        autoHideActive &&
+        (line.classList.contains("blyrics--reveal-collapsed") || line.classList.contains("blyrics--reveal-exiting"));
       const wantBehind =
         !snapshot.noSync && (snapshot.isOutro || (firstAnchor >= 0 && i < firstAnchor));
       const wantSharpen = !snapshot.noSync && sharpenedSet.has(i);
-      const wantBelowRank =
-        snapshot.noSync || snapshot.isOutro
-          ? 0
-          : lastAnchor >= 0
-            ? i > lastAnchor
-              ? Math.min(BELOW_CLASS_COUNT, i - lastAnchor)
-              : 0
-            : Math.min(BELOW_CLASS_COUNT, i + 1);
+      let wantBelowRank = 0;
+      if (!snapshot.noSync && !snapshot.isOutro && !isRevealHidden && (lastAnchor < 0 || i > lastAnchor)) {
+        visibleBelowRank += 1;
+        wantBelowRank = Math.min(BELOW_CLASS_COUNT, visibleBelowRank);
+      }
 
       line.classList.toggle("blyrics--gf-behind", wantBehind);
       line.classList.toggle("blyrics--gf-sharpen", wantSharpen);

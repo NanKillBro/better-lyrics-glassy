@@ -5,6 +5,11 @@ import { hasSameRenderedLyrics } from "@modules/ui/fullscreenWindow/lyricsEquali
 import { SharpenMarker } from "@modules/ui/fullscreenWindow/sharpenMarker";
 import { isUsableArtworkUrl } from "@modules/ui/fullscreenWindow/trackInfo";
 import { createVideoFrameReceiver, type VideoFrameReceiver } from "@modules/ui/fullscreenWindow/videoTransport";
+import {
+  AUTO_HIDE_INSTRUMENTAL_BG_ATTR,
+  initActiveReveal,
+  syncActiveReveal,
+} from "@modules/ui/activeReveal";
 import { initGlassyFlowBridge } from "@modules/ui/glassyFlowBridge";
 import { createLyricsView } from "@modules/ui/lyricsRenderer";
 import { LEGACY_RENDERER_CSS_PATH, syncRendererModeStylesheets } from "@modules/ui/rendererMode";
@@ -603,8 +608,16 @@ function applyDisplayFlags(flags?: FullscreenDisplayFlags): void {
   const root = document.documentElement;
   const blurChanged = root.hasAttribute(LYRICS_BLUR_DISABLED_ATTR) !== flags.lyricsBlurDisabled;
   const upcomingChanged = root.hasAttribute(UNBLUR_UPCOMING_LYRICS_ATTR) !== flags.unblurUpcoming;
+  const nextAutoHide = flags.autoHideInstrumentalBg === true;
+  const autoHideChanged = root.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR) !== nextAutoHide;
   root.toggleAttribute(LYRICS_BLUR_DISABLED_ATTR, flags.lyricsBlurDisabled);
   root.toggleAttribute(UNBLUR_UPCOMING_LYRICS_ATTR, flags.unblurUpcoming);
+  root.toggleAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, nextAutoHide);
+  if (autoHideChanged && renderer && !webglMode) {
+    syncActiveReveal(renderer);
+    forceSharpenImmediate = true;
+    runSingleTick();
+  }
   if ((blurChanged || upcomingChanged) && webglMode) {
     renderer?.relayout();
   }
@@ -726,6 +739,10 @@ function ensureRenderer(): Renderer | null {
     },
   });
   initGlassyFlowBridge(renderer, { isViewVisible: () => isWindowVisible });
+  initActiveReveal(renderer, {
+    isViewVisible: () => isWindowVisible,
+    getScrollElement: () => elements.scroll,
+  });
   return renderer;
 }
 

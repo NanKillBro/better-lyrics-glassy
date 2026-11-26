@@ -1,0 +1,621 @@
+import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
+import type { Lyric, TickOptions } from "@braccato/core";
+
+const dom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true });
+const { window } = dom;
+let reducedMotion = false;
+
+const stubMatchMedia = (query: string) => ({
+  matches: query.includes("prefers-reduced-motion") ? reducedMotion : false,
+  media: query,
+  onchange: null,
+  addListener() {},
+  removeListener() {},
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent: () => false,
+});
+
+interface RecordedAnim {
+  target: Element;
+  keyframes: Keyframe[] | PropertyIndexedKeyframes | null;
+  options: KeyframeAnimationOptions | number | undefined;
+  cancelled: boolean;
+  resolveFinish: () => void;
+}
+
+const recordedAnims: RecordedAnim[] = [];
+
+Object.defineProperty(window.Element.prototype, "animate", {
+  configurable: true,
+  writable: true,
+  value(keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: KeyframeAnimationOptions | number) {
+    let resolveFinish!: () => void;
+    const finished = new Promise<void>(resolve => {
+      resolveFinish = resolve;
+    });
+    const record: RecordedAnim = {
+      target: this as Element,
+      keyframes,
+      options,
+      cancelled: false,
+      resolveFinish,
+    };
+    recordedAnims.push(record);
+    return {
+      finished,
+      cancel() {
+        record.cancelled = true;
+      },
+      play() {},
+      pause() {},
+    } as unknown as Animation;
+  },
+});
+
+Object.assign(globalThis, {
+  window,
+  document: window.document,
+  Element: window.Element,
+  HTMLElement: window.HTMLElement,
+  SVGElement: window.SVGElement,
+  Node: window.Node,
+  Event: window.Event,
+  CustomEvent: window.CustomEvent,
+  getComputedStyle: window.getComputedStyle.bind(window),
+  matchMedia: stubMatchMedia,
+});
+Object.assign(window, { matchMedia: stubMatchMedia });
+
+const {
+  AUTO_HIDE_INSTRUMENTAL_BG_ATTR,
+  BACKGROUND_ONLY_ATTR,
+  LAYOUT_SHIFT_EVENT,
+  REVEAL_COLLAPSED_CLASS,
+  REVEAL_EXITING_CLASS,
+  composeBlurFilter,
+  computeLineLayoutShifts,
+  extractBackgroundRowWindow,
+  initActiveReveal,
+  isAutoHideInstrumentalBgEnabled,
+  isBackgroundOnlyLine,
+  shouldItemBeVisible,
+  syncActiveReveal,
+} = await import("@modules/ui/activeReveal");
+const { WEBGL_LYRICS_ATTR } = await import("@modules/ui/rendererMode");
+const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMarker");
+
+// 1. Feature gate respects WebGL2 Legacy-only boundary
+{
+  const root = window.document.documentElement;
+  root.removeAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR);
+  root.removeAttribute(WEBGL_LYRICS_ATTR);
+  assert.equal(isAutoHideInstrumentalBgEnabled(window.document), false);
+
+  root.setAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, "");
+  assert.equal(isAutoHideInstrumentalBgEnabled(window.document), true);
+
+  root.setAttribute(WEBGL_LYRICS_ATTR, "");
+  assert.equal(isAutoHideInstrumentalBgEnabled(window.document), false);
+
+  root.removeAttribute(WEBGL_LYRICS_ATTR);
+}
+
+// 2. Background-only detection and background row timing extraction
+{
+  const doc = window.document;
+  const normal = doc.createElement("div");
+  normal.className = "blyrics--line";
+  normal.innerHTML = `<div class="blyrics-line-main"><span class="blyrics--word">Hello</span></div><div class="blyrics-background-line"><span class="blyrics--word" data-time="12" data-duration="1.5">yeah</span><span class="blyrics--word blyrics-word-highlight" data-time="12" data-duration="1.5">yeah</span><span class="blyrics--word" data-time="13.5" data-duration="1">oh</span></div>`;
+  assert.equal(isBackgroundOnlyLine(normal), false);
+  const bgRow = normal.querySelector<HTMLElement>(".blyrics-background-line")!;
+  assert.deepEqual(extractBackgroundRowWindow(bgRow, 10, 5), { startS: 12, endS: 14.5 });
+
+  const lineSyncedBg = doc.createElement("div");
+  lineSyncedBg.className = "blyrics-background-line";
+  lineSyncedBg.innerHTML = `<span class="blyrics--word" data-time="11" data-duration="0">echo</span>`;
+  assert.deepEqual(extractBackgroundRowWindow(lineSyncedBg, 10, 4), { startS: 11, endS: 14 });
+
+  const bgOnly = doc.createElement("div");
+  bgOnly.className = "blyrics--line";
+  bgOnly.innerHTML = `<div class="blyrics-line-main">   </div><div class="blyrics-background-line"><span class="blyrics--word" data-time="20" data-duration="2">ooh</span></div>`;
+  assert.equal(isBackgroundOnlyLine(bgOnly), true);
+
+  const inst = doc.createElement("div");
+  inst.className = "blyrics--line blyrics--instrumental";
+  inst.dataset.instrumental = "true";
+  assert.equal(isBackgroundOnlyLine(inst), false);
+}
+
+// 3. Layout shift computation & blur filter composition
+{
+  const oldTops = [100, 180, 260, 340];
+  const newTops = [142, 142, 222, 302];
+  assert.deepEqual(computeLineLayoutShifts(oldTops, newTops, 0, 4), [
+    [0, -42],
+    [1, 38],
+    [2, 38],
+    [3, 38],
+  ]);
+  assert.equal(shouldItemBeVisible({ kind: "background-row", lineIndex: 1, openAtS: 11.6, closeAtS: Number.POSITIVE_INFINITY }, 11.5), false);
+  assert.equal(shouldItemBeVisible({ kind: "background-row", lineIndex: 1, openAtS: 11.6, closeAtS: Number.POSITIVE_INFINITY }, 11.6), true);
+  assert.equal(shouldItemBeVisible({ kind: "background-row", lineIndex: 1, openAtS: 11.6, closeAtS: Number.POSITIVE_INFINITY }, 999), true);
+
+  assert.equal(composeBlurFilter("", 8), "blur(8px)");
+  assert.equal(composeBlurFilter("none", 0), "blur(0px)");
+  assert.equal(
+    composeBlurFilter("drop-shadow(0 0 5px rgba(255, 255, 255, 0.5))", 8),
+    "drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)) blur(8px)"
+  );
+}
+
+// 4. Full lifecycle harness with mock Legacy view
+{
+  const doc = window.document;
+  doc.documentElement.setAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, "");
+  doc.documentElement.removeAttribute(WEBGL_LYRICS_ATTR);
+
+  const scrollEl = doc.createElement("div");
+  let scrollTop = 0;
+  Object.defineProperty(scrollEl, "scrollTop", {
+    configurable: true,
+    get: () => scrollTop,
+    set: (v: number) => {
+      scrollTop = v;
+    },
+  });
+  Object.defineProperty(scrollEl, "clientHeight", { configurable: true, get: () => 800 });
+  doc.body.appendChild(scrollEl);
+
+  const container = doc.createElement("div");
+  container.className = "blyrics-container blyrics--gf-managed";
+  container.dataset.sync = "richsync";
+  scrollEl.appendChild(container);
+
+  interface FakeLine {
+    time: number;
+    duration: number;
+    position: number;
+    height: number;
+    lyricElement: HTMLElement;
+  }
+
+  let relayoutCount = 0;
+  let culledSeenDuringRelayout = false;
+  let tickScrollDelta = 0;
+  let activeIndexOnTick = -1;
+  let observedInstPosDuringTick = Number.NaN;
+  const fakeLines: FakeLine[] = [];
+
+  function makeLine(spec: {
+    time: number;
+    duration: number;
+    instrumental?: boolean;
+    mainText?: string;
+    bgWords?: Array<{ text: string; time: number; duration: number }>;
+    hasTranslation?: boolean;
+  }): FakeLine {
+    const el = doc.createElement("div");
+    el.className = "blyrics--line";
+    el.dataset.time = String(spec.time);
+    el.dataset.duration = String(spec.duration);
+    if (spec.instrumental) {
+      el.classList.add("blyrics--instrumental");
+      el.dataset.instrumental = "true";
+      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.classList.add("blyrics--instrumental-icon");
+      el.appendChild(svg);
+    } else {
+      const main = doc.createElement("div");
+      main.className = "blyrics-line-main";
+      main.textContent = spec.mainText ?? "";
+      el.appendChild(main);
+      if (spec.bgWords) {
+        const bg = doc.createElement("div");
+        bg.className = "blyrics-background-line";
+        for (const w of spec.bgWords) {
+          const span = doc.createElement("span");
+          span.className = "blyrics--word blyrics-background-lyric";
+          span.dataset.time = String(w.time);
+          span.dataset.duration = String(w.duration);
+          span.textContent = w.text;
+          bg.appendChild(span);
+        }
+        el.appendChild(bg);
+      }
+      if (spec.hasTranslation) {
+        const tr = doc.createElement("div");
+        tr.className = "blyrics--translated";
+        tr.textContent = "translated";
+        let trTop = 50;
+        Object.defineProperty(tr, "offsetTop", {
+          configurable: true,
+          get: () => {
+            const bg = el.querySelector<HTMLElement>(".blyrics-background-line");
+            const bgCollapsed =
+              bg && (bg.classList.contains(REVEAL_COLLAPSED_CLASS) || bg.classList.contains(REVEAL_EXITING_CLASS));
+            return bgCollapsed ? trTop : trTop + 36;
+          },
+        });
+        el.appendChild(tr);
+      }
+    }
+    container.appendChild(el);
+    return { time: spec.time, duration: spec.duration, position: 0, height: 0, lyricElement: el };
+  }
+
+  let creditsTop = 0;
+  let footerTop = 0;
+
+  function recomputeFakeLayout(): void {
+    const introExpanded =
+      fakeLines[0] &&
+      !fakeLines[0].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS) &&
+      !fakeLines[0].lyricElement.classList.contains(REVEAL_EXITING_CLASS);
+    let y = introExpanded ? 100 : 140;
+    for (const line of fakeLines) {
+      const el = line.lyricElement;
+      const collapsed =
+        el.classList.contains(REVEAL_COLLAPSED_CLASS) || el.classList.contains(REVEAL_EXITING_CLASS);
+      let h = 0;
+      if (!collapsed) {
+        h = el.dataset.instrumental === "true" ? 80 : 60;
+        const bg = el.querySelector<HTMLElement>(":scope > .blyrics-background-line");
+        if (
+          bg &&
+          !el.hasAttribute(BACKGROUND_ONLY_ATTR) &&
+          !bg.classList.contains(REVEAL_COLLAPSED_CLASS) &&
+          !bg.classList.contains(REVEAL_EXITING_CLASS)
+        ) {
+          h += 36;
+        }
+      }
+      line.position = y;
+      line.height = h;
+      y += h > 0 ? h + 20 : 0;
+    }
+    creditsTop = y;
+    footerTop = y + 48;
+  }
+
+  const layoutEvents: Array<{ shifts: [number, number][]; mode: string }> = [];
+  container.addEventListener(LAYOUT_SHIFT_EVENT, event => {
+    const raw = (event as CustomEvent<string>).detail;
+    layoutEvents.push(JSON.parse(raw));
+  });
+
+  const fakeView = {
+    container,
+    get lines() {
+      return fakeLines;
+    },
+    syncType: "richsync" as const,
+    setLyrics(_lyrics: Lyric[]) {
+      container.replaceChildren();
+      fakeLines.length = 0;
+      fakeLines.push(
+        makeLine({ time: 0, duration: 8, instrumental: true }),
+        makeLine({
+          time: 8,
+          duration: 6,
+          mainText: "Main lyric",
+          bgWords: [{ text: "echo", time: 11, duration: 2 }],
+          hasTranslation: true,
+        }),
+        makeLine({ time: 14, duration: 8, instrumental: true }),
+        makeLine({
+          time: 22,
+          duration: 3,
+          mainText: "",
+          bgWords: [{ text: "(ooh)", time: 22, duration: 3 }],
+        }),
+        makeLine({
+          time: 25,
+          duration: 4,
+          mainText: "Next verse",
+          bgWords: [{ text: "harmony", time: 25.1, duration: 2 }],
+        }),
+        makeLine({ time: 29, duration: 4, mainText: "Outro verse" })
+      );
+      const creditsEl = doc.createElement("div");
+      creditsEl.className = "blyrics-credits";
+      Object.defineProperty(creditsEl, "offsetTop", { configurable: true, get: () => creditsTop });
+      const footerEl = doc.createElement("div");
+      footerEl.className = "blyrics-footer";
+      Object.defineProperty(footerEl, "offsetTop", { configurable: true, get: () => footerTop });
+      container.appendChild(creditsEl);
+      container.appendChild(footerEl);
+      recomputeFakeLayout();
+    },
+    tick(_timeS: number, _opts: TickOptions) {
+      observedInstPosDuringTick = fakeLines[2]?.position ?? Number.NaN;
+      for (let i = 0; i < fakeLines.length; i++) {
+        fakeLines[i].lyricElement.classList.toggle("blyrics--active", i === activeIndexOnTick);
+      }
+      if (tickScrollDelta !== 0) {
+        scrollTop += tickScrollDelta;
+        tickScrollDelta = 0;
+      }
+      return "ok" as const;
+    },
+    retickFromPlaybackClock(build: (t: number, p: boolean) => TickOptions) {
+      build(Date.now(), true);
+      return "ok" as const;
+    },
+    relayout() {
+      relayoutCount += 1;
+      for (const line of fakeLines) {
+        if (line.lyricElement.style.contentVisibility === "auto") {
+          culledSeenDuringRelayout = true;
+        }
+      }
+      recomputeFakeLayout();
+    },
+    clear() {
+      container.replaceChildren();
+      fakeLines.length = 0;
+    },
+  };
+
+  const baseTick = (isPlaying = true): TickOptions => ({
+    eventCreationTime: -1,
+    isPlaying,
+    smoothScroll: false,
+    globalLyricOffset: 0,
+    lyricOffset: 0,
+    richsyncOffsetTrim: 0,
+    lineOffsetTrim: 0,
+    passiveScrollEnabled: true,
+    playbackRate: 1,
+  });
+
+  const originalViewTick = fakeView.tick;
+  const originalViewSetLyrics = fakeView.setLyrics;
+
+  initActiveReveal(fakeView, {
+    document: doc,
+    isViewVisible: () => true,
+    getScrollElement: () => scrollEl,
+  });
+  assert.notEqual(fakeView.tick, originalViewTick, "hooks attached when setting is enabled");
+
+  // Initial setLyrics collapses inactive items immediately before first paint
+  fakeView.setLyrics([]);
+  assert.equal(fakeLines[0].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), false, "intro stays expanded at t=0");
+  assert.equal(
+    fakeLines[1].lyricElement.querySelector(".blyrics-background-line")!.classList.contains(REVEAL_COLLAPSED_CLASS),
+    true,
+    "nested bg collapsed at t=0"
+  );
+  assert.equal(fakeLines[2].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), true, "interlude collapsed at t=0");
+  assert.equal(fakeLines[3].lyricElement.hasAttribute(BACKGROUND_ONLY_ATTR), true, "bg-only line stamped");
+  assert.equal(fakeLines[3].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), true, "bg-only collapsed at t=0");
+  assert.equal(relayoutCount, 1, "single synchronous relayout on setLyrics");
+
+  // First tick at t=0.2s snaps without spurious layout-shift events
+  activeIndexOnTick = 0;
+  fakeView.tick(0.2, baseTick());
+  assert.equal(layoutEvents.length, 0);
+
+  // Seek near end of intro (7.1s -> snap still expanded), then normal playback crosses 7.5s
+  fakeView.tick(7.1, baseTick());
+  assert.equal(fakeLines[0].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), false, "intro still expanded at 7.1s");
+
+  // Intro closes at t=7.55s (endS 8 - 0.5s scrollLead), synced with scroll to line 1
+  recordedAnims.length = 0;
+  layoutEvents.length = 0;
+  activeIndexOnTick = 1;
+  tickScrollDelta = 50;
+  fakeView.tick(7.55, baseTick());
+  assert.equal(fakeLines[0].lyricElement.classList.contains(REVEAL_EXITING_CLASS), true, "intro enters non-clipping exiting state");
+  assert.equal(layoutEvents.length, 1);
+  assert.equal(layoutEvents[0].mode, "sync-scroll");
+  // Intro top moved from 100->140 (-40), lines below moved up from 200->140 (+60)
+  assert.deepEqual(layoutEvents[0].shifts[0], [0, -40]);
+  assert.deepEqual(layoutEvents[0].shifts[1], [1, 60]);
+  const introExitAnim = recordedAnims.find(a => a.target.classList.contains("blyrics--instrumental-icon"));
+  assert.ok(introExitAnim, "exit WAAPI runs on instrumental icon");
+  assert.equal((introExitAnim.options as KeyframeAnimationOptions).delay, 140, "sync-scroll exit waits 140ms");
+  assert.equal((introExitAnim.options as KeyframeAnimationOptions).duration, 320, "exit duration is 320ms");
+  const introExitFrames = introExitAnim.keyframes as Keyframe[];
+  assert.ok(String(introExitFrames[0].filter).includes("blur(0px)"), "exit starts unblurred");
+  assert.ok(String(introExitFrames[1].filter).includes("blur(8px)"), "exit blurs out to 8px");
+  assert.ok(String(introExitFrames[1].transform).includes("scale(0.72)"), "exit scales to 0.72");
+  introExitAnim.resolveFinish();
+  await Promise.resolve();
+  assert.equal(fakeLines[0].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), true, "intro transitions to collapsed on finish");
+  assert.equal(fakeLines[0].lyricElement.classList.contains(REVEAL_EXITING_CLASS), false);
+
+  // Advance near bgStart=11 without reaching 10.6 (11 - 0.4s lead) -> still collapsed
+  fakeView.tick(8.2, baseTick());
+  fakeView.tick(8.8, baseTick());
+  fakeView.tick(9.4, baseTick());
+  fakeView.tick(10.0, baseTick());
+  fakeView.tick(10.55, baseTick());
+  const bgRow1 = fakeLines[1].lyricElement.querySelector<HTMLElement>(".blyrics-background-line")!;
+  assert.equal(bgRow1.classList.contains(REVEAL_COLLAPSED_CLASS), true);
+
+  // Mid-line nested background row opens at t=10.65s (>= 11 - 0.4) -> immediate mode + sibling FLIP + slow blur/scale
+  recordedAnims.length = 0;
+  layoutEvents.length = 0;
+  tickScrollDelta = 18;
+  fakeView.tick(10.65, baseTick());
+  assert.equal(bgRow1.classList.contains(REVEAL_COLLAPSED_CLASS), false, "nested bg opens at bgStart - 0.4s");
+  assert.equal(layoutEvents.length, 1);
+  assert.equal(layoutEvents[0].mode, "immediate", "mid-line bg shift uses immediate mode");
+  const trFlipAnim = recordedAnims.find(a => a.target.classList.contains("blyrics--translated"));
+  assert.ok(trFlipAnim, "translation sibling below bg row gets compositor FLIP");
+  const bgEnterAnim = recordedAnims.find(a => a.target === bgRow1);
+  assert.ok(bgEnterAnim, "bg row plays enter WAAPI");
+  assert.equal((bgEnterAnim.options as KeyframeAnimationOptions).delay, 0, "mid-line bg enter has 0 delay");
+  assert.equal((bgEnterAnim.options as KeyframeAnimationOptions).duration, 700, "bg enter runs over 700ms");
+  const bgEnterFrames = bgEnterAnim.keyframes as Keyframe[];
+  assert.ok(String(bgEnterFrames[0].filter).includes("blur(8px)"), "bg enter starts blurred at 8px");
+  assert.ok(String(bgEnterFrames[1].filter).includes("blur(0px)"), "bg enter settles unblurred");
+  assert.ok(String(bgEnterFrames[0].transform).includes("scale(0.78)"), "bg enter starts from smaller 0.78 scale");
+
+  // Paused at 10.65s freezes state; user-scrolling defers changes
+  fakeView.tick(10.65, baseTick(false));
+  assert.equal(bgRow1.classList.contains(REVEAL_COLLAPSED_CLASS), false);
+
+  container.classList.add("blyrics-user-scrolling");
+  fakeView.tick(13.6, baseTick());
+  assert.equal(fakeLines[2].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), true, "user-scrolling defers interlude expand");
+  container.classList.remove("blyrics-user-scrolling");
+
+  // Advance past bgEnd=13 without collapsing nested bg row (past-line fade hides it naturally)
+  fakeView.tick(11.3, baseTick());
+  fakeView.tick(12.0, baseTick());
+  fakeView.tick(12.7, baseTick());
+  fakeView.tick(13.35, baseTick());
+  assert.equal(bgRow1.classList.contains(REVEAL_COLLAPSED_CLASS), false, "nested bg stays expanded after bgEnd");
+  assert.equal(bgRow1.classList.contains(REVEAL_EXITING_CLASS), false, "nested bg does not exit after bgEnd");
+
+  // Mid-song instrumental opens at t=13.55s (14 - 0.5s): keeps true active line position (no scroll bias) + blur/scale enter
+  recordedAnims.length = 0;
+  layoutEvents.length = 0;
+  activeIndexOnTick = 2;
+  tickScrollDelta = 90;
+  fakeView.tick(13.55, baseTick());
+  assert.equal(fakeLines[2].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), false, "interlude opens at start - 0.5s");
+  assert.equal(bgRow1.classList.contains(REVEAL_COLLAPSED_CLASS), false, "nested bg remains expanded into interlude");
+  assert.equal(layoutEvents.length, 1);
+  assert.equal(layoutEvents[0].mode, "sync-scroll");
+  const expectedRealInstPos = fakeLines[1].position + fakeLines[1].height + 20;
+  assert.equal(observedInstPosDuringTick, expectedRealInstPos, "interlude uses true active line position during tick");
+  const instEnterAnim = recordedAnims.find(a => a.target === fakeLines[2].lyricElement.querySelector(".blyrics--instrumental-icon"));
+  assert.ok(instEnterAnim, "interlude enter WAAPI runs on icon");
+  assert.equal((instEnterAnim.options as KeyframeAnimationOptions).delay, 180, "interlude enter waits 180ms");
+  assert.equal((instEnterAnim.options as KeyframeAnimationOptions).duration, 420, "interlude enter runs over 420ms");
+  const instEnterFrames = instEnterAnim.keyframes as Keyframe[];
+  assert.ok(String(instEnterFrames[0].filter).includes("blur(8px)"), "interlude enter starts blurred at 8px");
+  assert.ok(String(instEnterFrames[1].filter).includes("blur(0px)"), "interlude enter settles unblurred");
+  assert.ok(String(instEnterFrames[0].transform).includes("scale(0.72)"), "interlude enter scales from 0.72");
+
+  // Backward seek jump (> 0.75s) before bg openAtS re-collapses nested bg and interlude cleanly
+  recordedAnims.length = 0;
+  layoutEvents.length = 0;
+  fakeView.tick(9.0, baseTick());
+  assert.equal(bgRow1.classList.contains(REVEAL_COLLAPSED_CLASS), true, "backward seek re-collapses nested bg");
+  assert.equal(fakeLines[2].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), true, "backward seek re-collapses interlude");
+  assert.equal(layoutEvents.length, 0, "seek snaps without FLIP dispatch");
+  assert.equal(recordedAnims.length, 0, "seek snaps without enter/exit WAAPI");
+
+  // Near-start nested bg on line 4 (lineStart=25, bgStart=25.1 <= 0.25s) aligns to lineStart - scrollLead (24.5s)
+  // and uses sync-scroll even when .blyrics--active was already stamped early if a real lyric scroll occurs.
+  fakeView.tick(24.0, baseTick());
+  const bgRow4 = fakeLines[4].lyricElement.querySelector<HTMLElement>(".blyrics-background-line")!;
+  assert.equal(bgRow4.classList.contains(REVEAL_COLLAPSED_CLASS), true, "near-start bg stays collapsed at 24.0s");
+  fakeLines[0].lyricElement.style.setProperty("content-visibility", "auto");
+  culledSeenDuringRelayout = false;
+  fakeLines[4].lyricElement.classList.add("blyrics--active"); // simulate 0.54s early active stamp
+  activeIndexOnTick = 4;
+  recordedAnims.length = 0;
+  layoutEvents.length = 0;
+  tickScrollDelta = 110; // real lyric scroll coinciding with bg open
+  fakeView.tick(24.55, baseTick());
+  assert.equal(culledSeenDuringRelayout, false, "culled lines un-culled before relayout measures scroll padding");
+  assert.equal(bgRow4.classList.contains(REVEAL_COLLAPSED_CLASS), false, "near-start bg aligns to lineStart - 0.5s");
+  assert.equal(layoutEvents.length, 1);
+  assert.equal(layoutEvents[0].mode, "sync-scroll", "coinciding lyric scroll uses sync-scroll even if active did not change");
+  assert.ok(
+    layoutEvents[0].shifts.some(([idx, dy]) => idx === fakeLines.length && dy === -36),
+    "credits shift included at lines.length"
+  );
+  assert.ok(
+    layoutEvents[0].shifts.some(([idx, dy]) => idx === fakeLines.length + 1 && dy === -36),
+    "footer (Unison/source credit) shift included at lines.length + 1"
+  );
+  const bg4EnterAnim = recordedAnims.find(a => a.target === bgRow4);
+  assert.ok(bg4EnterAnim);
+  assert.equal((bg4EnterAnim.options as KeyframeAnimationOptions).delay, 260, "sync-scroll bg enter waits 260ms until hold releases");
+
+  // Forward seek jump into interlude snaps nested bg expanded (already passed) and interlude expanded
+  recordedAnims.length = 0;
+  layoutEvents.length = 0;
+  fakeView.tick(15.0, baseTick());
+  assert.equal(bgRow1.classList.contains(REVEAL_COLLAPSED_CLASS), false, "forward seek keeps past bg expanded");
+  assert.equal(fakeLines[2].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), false, "forward seek snaps interlude expanded");
+  assert.equal(layoutEvents.length, 0, "seek snaps without FLIP dispatch");
+  assert.equal(recordedAnims.length, 0, "seek snaps without enter/exit WAAPI");
+
+  // Smooth Scrolling fallback (not GlassyFlow managed) runs standalone WAAPI FLIP
+  container.classList.remove("blyrics--gf-managed");
+  fakeView.tick(15.6, baseTick());
+  fakeView.tick(16.2, baseTick());
+  fakeView.tick(16.8, baseTick());
+  fakeView.tick(17.4, baseTick());
+  fakeView.tick(18.0, baseTick());
+  fakeView.tick(18.6, baseTick());
+  fakeView.tick(19.2, baseTick());
+  fakeView.tick(19.8, baseTick());
+  fakeView.tick(20.4, baseTick());
+  fakeView.tick(21.0, baseTick());
+  recordedAnims.length = 0;
+  layoutEvents.length = 0;
+  activeIndexOnTick = 3;
+  fakeView.tick(21.55, baseTick());
+  assert.equal(layoutEvents.length, 0, "non-GlassyFlow does not dispatch GlassyFlow event");
+  assert.equal(fakeLines[2].lyricElement.classList.contains(REVEAL_EXITING_CLASS), true, "interlude exits");
+  assert.equal(fakeLines[3].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), false, "bg-only opens at bgStart - 0.5s");
+
+  // Advancing past bg-only end keeps bg-only expanded (no disappear)
+  fakeView.tick(22.1, baseTick());
+  fakeView.tick(22.7, baseTick());
+  fakeView.tick(23.3, baseTick());
+  fakeView.tick(23.9, baseTick());
+  fakeView.tick(24.5, baseTick());
+  fakeView.tick(25.1, baseTick());
+  assert.equal(fakeLines[3].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), false, "bg-only stays expanded after end");
+  assert.equal(fakeLines[3].lyricElement.classList.contains(REVEAL_EXITING_CLASS), false, "bg-only does not exit after end");
+
+  // Reduced motion snaps transitions without WAAPI animations
+  fakeView.tick(13.0, baseTick()); // seek before interlude
+  assert.equal(fakeLines[2].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), true);
+  reducedMotion = true;
+  recordedAnims.length = 0;
+  fakeView.tick(13.6, baseTick());
+  assert.equal(fakeLines[2].lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), false, "interlude opens under reduced motion");
+  assert.equal(recordedAnims.length, 0, "no WAAPI animations under reduced motion");
+  reducedMotion = false;
+
+  // Live toggle OFF restores every element, relayouts once, and detaches view hooks (zero per-tick overhead)
+  const beforeRestoreRelayout = relayoutCount;
+  doc.documentElement.removeAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR);
+  syncActiveReveal(fakeView);
+  assert.equal(relayoutCount, beforeRestoreRelayout + 1);
+  assert.equal(fakeView.tick, originalViewTick, "tick hook detached when disabled");
+  assert.equal(fakeView.setLyrics, originalViewSetLyrics, "setLyrics hook detached when disabled");
+  for (const line of fakeLines) {
+    assert.equal(line.lyricElement.classList.contains(REVEAL_COLLAPSED_CLASS), false);
+    assert.equal(line.lyricElement.classList.contains(REVEAL_EXITING_CLASS), false);
+    assert.equal(line.lyricElement.hasAttribute(BACKGROUND_ONLY_ATTR), false);
+    const bg = line.lyricElement.querySelector(".blyrics-background-line");
+    if (bg) assert.equal(bg.classList.contains(REVEAL_COLLAPSED_CLASS), false);
+  }
+
+  // Re-enabling re-attaches hooks cleanly
+  doc.documentElement.setAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, "");
+  syncActiveReveal(fakeView);
+  assert.notEqual(fakeView.tick, originalViewTick, "tick hook re-attached when re-enabled");
+
+  // SharpenMarker skips collapsed lines when assigning below-1..6 ranks (only when setting enabled)
+  const marker = new SharpenMarker();
+  fakeLines[1].lyricElement.classList.add("blyrics--active", "blyrics--animating");
+  fakeLines[1].lyricElement.style.setProperty("--blyrics-anim-delay", "0s");
+  fakeLines[2].lyricElement.classList.add(REVEAL_COLLAPSED_CLASS);
+  fakeLines[3].lyricElement.classList.add(REVEAL_COLLAPSED_CLASS);
+  marker.sync(scrollEl, 9.0, true);
+  assert.equal(fakeLines[2].lyricElement.classList.contains("blyrics--gf-below-1"), false, "collapsed line skipped");
+  assert.equal(fakeLines[3].lyricElement.classList.contains("blyrics--gf-below-1"), false, "collapsed bg-only skipped");
+  assert.equal(fakeLines[4].lyricElement.classList.contains("blyrics--gf-below-1"), true, "first visible line below gets below-1");
+
+  // Expanding line 2 immediately updates below ranks
+  fakeLines[2].lyricElement.classList.remove(REVEAL_COLLAPSED_CLASS);
+  marker.sync(scrollEl, 9.1, false);
+  assert.equal(fakeLines[2].lyricElement.classList.contains("blyrics--gf-below-1"), true);
+  assert.equal(fakeLines[4].lyricElement.classList.contains("blyrics--gf-below-2"), true);
+}
+
+console.log("activeReveal self-checks passed");

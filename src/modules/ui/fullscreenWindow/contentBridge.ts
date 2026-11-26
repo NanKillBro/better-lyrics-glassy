@@ -35,6 +35,7 @@ import {
   toggleMute,
 } from "@modules/ui/playerControls/playerBarControls";
 import { currentViewLyrics } from "@modules/lyrics/viewLyrics";
+import { AUTO_HIDE_INSTRUMENTAL_BG_ATTR } from "@modules/ui/activeReveal";
 import { readRendererMode, WEBGL_LYRICS_ATTR } from "@modules/ui/rendererMode";
 
 /**
@@ -233,6 +234,7 @@ function readDisplayFlags(): FullscreenDisplayFlags {
   return {
     lyricsBlurDisabled: root?.hasAttribute(LYRICS_BLUR_DISABLED_ATTR) === true,
     unblurUpcoming: root?.hasAttribute(UNBLUR_UPCOMING_LYRICS_ATTR) === true,
+    autoHideInstrumentalBg: root?.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR) === true,
   };
 }
 
@@ -248,7 +250,8 @@ function ensureModeObserver(): void {
         modeChanged = true;
       } else if (
         mutation.attributeName === LYRICS_BLUR_DISABLED_ATTR ||
-        mutation.attributeName === UNBLUR_UPCOMING_LYRICS_ATTR
+        mutation.attributeName === UNBLUR_UPCOMING_LYRICS_ATTR ||
+        mutation.attributeName === AUTO_HIDE_INSTRUMENTAL_BG_ATTR
       ) {
         flagsChanged = true;
       } else if (mutation.attributeName === "style") {
@@ -261,7 +264,13 @@ function ensureModeObserver(): void {
   });
   modeObserver.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: [WEBGL_LYRICS_ATTR, LYRICS_BLUR_DISABLED_ATTR, UNBLUR_UPCOMING_LYRICS_ATTR, "style"],
+    attributeFilter: [
+      WEBGL_LYRICS_ATTR,
+      LYRICS_BLUR_DISABLED_ATTR,
+      UNBLUR_UPCOMING_LYRICS_ATTR,
+      AUTO_HIDE_INSTRUMENTAL_BG_ATTR,
+      "style",
+    ],
   });
 }
 

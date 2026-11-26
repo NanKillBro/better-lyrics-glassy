@@ -667,7 +667,9 @@
         stiffness,
         damping,
         mass,
-        collapsePending
+        collapsePending,
+        allowOppositeCollapse = true,
+        preserveRunningPhysics = false
     ) {
         const totalDelaySec = totalDelayMs / 1000;
         const hasRunningAnim =
@@ -684,7 +686,7 @@
                 : Math.max(0, (nowTimeline - data.tOriginMs) / 1000);
 
             let shouldCollapse = collapsePending;
-            if (!shouldCollapse && data.pending.length > 0) {
+            if (!shouldCollapse && allowOppositeCollapse && data.pending.length > 0) {
                 for (let i = 0; i < data.pending.length; i++) {
                     const c = data.pending[i];
                     if (c.tRelease > elapsedSec + 0.0005 && c.amp * delta < 0) {
@@ -694,27 +696,61 @@
                 }
             }
 
-            data.stiffness = stiffness;
-            data.damping = damping;
-            data.mass = mass;
+            const waveStiffness = (preserveRunningPhysics && data.base) ? data.stiffness : stiffness;
+            const waveDamping = (preserveRunningPhysics && data.base) ? data.damping : damping;
+            const waveMass = (preserveRunningPhysics && data.base) ? data.mass : mass;
+            if (!preserveRunningPhysics) {
+                data.stiffness = stiffness;
+                data.damping = damping;
+                data.mass = mass;
+            }
 
             if (shouldCollapse) {
-                const curPos = _evalLinePos(data, elapsedSec) + delta;
+                const oldPos = _evalLinePos(data, elapsedSec);
+                const curPos = oldPos + delta;
                 const curVel = _evalLineVel(data, elapsedSec);
                 data.base = null;
                 data.pending.length = 0;
                 if (Math.abs(curPos) >= CFG.arriveEpsilon || Math.abs(curVel) >= CFG.arriveEpsilon) {
-                    if (Math.abs(curVel) >= CFG.arriveEpsilon || totalDelaySec <= 0.0005) {
-                        data.base = _createWaveComponent(curPos, curVel, elapsedSec, stiffness, damping, mass);
-                    } else {
+                    if (totalDelaySec <= 0.0005) {
+                        data.base = _createWaveComponent(curPos, curVel, elapsedSec, waveStiffness, waveDamping, waveMass);
+                    } else if (Math.abs(curVel) < 40) {
                         data.pending.push(
-                            _createWaveComponent(curPos, 0, elapsedSec + totalDelaySec, stiffness, damping, mass)
+                            _createWaveComponent(curPos, 0, elapsedSec + totalDelaySec, waveStiffness, waveDamping, waveMass)
                         );
+                    } else if (oldPos * delta > 0) {
+                        data.base = _createWaveComponent(oldPos, curVel, elapsedSec, waveStiffness, waveDamping, waveMass);
+                        data.pending.push(
+                            _createWaveComponent(delta, 0, elapsedSec + totalDelaySec, waveStiffness, waveDamping, waveMass)
+                        );
+                    } else {
+                        data.base = _createWaveComponent(curPos, curVel, elapsedSec, waveStiffness, waveDamping, waveMass);
                     }
                 }
             } else {
                 _foldReleasedWaves(data, elapsedSec);
-                _pushWaveComponent(data, delta, elapsedSec, totalDelaySec, stiffness, damping, mass);
+                if (
+                    preserveRunningPhysics &&
+                    data.pending.length > 0 &&
+                    data.pending[0].tRelease > elapsedSec + 0.0005
+                ) {
+                    const first = data.pending[0];
+                    const mergedAmp = first.amp + delta;
+                    if (Math.abs(mergedAmp) >= CFG.arriveEpsilon) {
+                        data.pending[0] = _createWaveComponent(
+                            mergedAmp,
+                            0,
+                            first.tRelease,
+                            data.stiffness,
+                            data.damping,
+                            data.mass
+                        );
+                    } else {
+                        data.pending.shift();
+                    }
+                } else {
+                    _pushWaveComponent(data, delta, elapsedSec, totalDelaySec, waveStiffness, waveDamping, waveMass);
+                }
             }
         } else {
             if (data.anim) {
@@ -821,14 +857,147 @@
         return { start, end };
     }
 
+    let layoutShiftTarget = null;
+    let layoutShiftHandler = null;
+    let pendingLayoutShifts = null;
+    let pendingLayoutMode = null;
+    let pendingLayoutFlushQueued = false;
+    let immediateScrollArmedUntil = 0;
+    let userResumeUntil = 0;
+
+    function isHiddenRevealLine(line) {
+        const cl = line?.classList;
+        return Boolean(cl && (cl.contains('blyrics--reveal-collapsed') || cl.contains('blyrics--reveal-exiting')));
+    }
+
+    function retireHiddenLine(line) {
+        const data = lineState.get(line);
+        if (!data) return;
+        if (data.anim) {
+            const old = data.anim;
+            data.anim = null;
+            old.cancel();
+        }
+        retireLine(line, data);
+    }
+
+    function clearPendingLayoutShifts() {
+        pendingLayoutShifts = null;
+        pendingLayoutMode = null;
+        pendingLayoutFlushQueued = false;
+        immediateScrollArmedUntil = 0;
+    }
+
+    function flushPendingLayoutShifts() {
+        pendingLayoutFlushQueued = false;
+        immediateScrollArmedUntil = 0;
+        if (!pendingLayoutShifts || pendingLayoutShifts.size === 0) {
+            pendingLayoutShifts = null;
+            pendingLayoutMode = null;
+            return;
+        }
+        const shifts = pendingLayoutShifts;
+        pendingLayoutShifts = null;
+        pendingLayoutMode = null;
+        if (!isScriptEnabled || isNoSyncMode) return;
+
+        const autoHideActive = document.documentElement?.hasAttribute('blyrics-auto-hide-instrumental-bg') === true;
+        if (autoHideActive) {
+            for (const line of Array.from(activeLines)) {
+                if (isHiddenRevealLine(line)) {
+                    shifts.delete(line);
+                    retireHiddenLine(line);
+                }
+            }
+        }
+        const nowTimeline = Number(document.timeline?.currentTime) || performance.now();
+        const stiffness = 55;
+        const mass = CFG.mass;
+        const critDamp = Math.ceil(2 * Math.sqrt(stiffness * mass) * 100) / 100;
+        for (const [line, dy] of shifts) {
+            if (!line.isConnected) continue;
+            if (autoHideActive && isHiddenRevealLine(line)) {
+                retireHiddenLine(line);
+                continue;
+            }
+            if (Math.abs(dy) < CFG.arriveEpsilon) continue;
+            const data = getOrCreateLineState(line);
+            applyLineWave(line, data, dy, 0, nowTimeline, null, stiffness, critDamp, mass, false, false, true);
+        }
+    }
+
+    function removeLayoutShiftListener() {
+        if (layoutShiftTarget && layoutShiftHandler) {
+            layoutShiftTarget.removeEventListener('blyrics-layout-shift', layoutShiftHandler);
+        }
+        layoutShiftTarget = null;
+        layoutShiftHandler = null;
+        clearPendingLayoutShifts();
+    }
+
+    function installLayoutShiftListener(el) {
+        removeLayoutShiftListener();
+        layoutShiftTarget = el;
+        layoutShiftHandler = (event) => {
+            if (!isScriptEnabled || isNoSyncMode || el !== container) return;
+            let payload = null;
+            try {
+                payload = typeof event.detail === 'string' ? JSON.parse(event.detail) : event.detail;
+            } catch (_) {
+                return;
+            }
+            if (!payload || typeof payload !== 'object') return;
+            const lines = getLines();
+            const entries = Array.isArray(payload.shifts) ? payload.shifts : [];
+            if (entries.length > 0) {
+                if (!pendingLayoutShifts) pendingLayoutShifts = new Map();
+                for (let i = 0; i < entries.length; i++) {
+                    const pair = entries[i];
+                    if (!Array.isArray(pair) || pair.length < 2) continue;
+                    const line = lines[pair[0]];
+                    const dy = Number(pair[1]);
+                    if (!line || !Number.isFinite(dy) || Math.abs(dy) < CFG.arriveEpsilon) continue;
+                    pendingLayoutShifts.set(line, (pendingLayoutShifts.get(line) || 0) + dy);
+                }
+            }
+            if (payload.mode === 'immediate') {
+                pendingLayoutMode = 'immediate';
+                immediateScrollArmedUntil = performance.now() + 80;
+            } else if (!pendingLayoutMode) {
+                pendingLayoutMode = 'sync-scroll';
+            }
+            if (!pendingLayoutFlushQueued) {
+                pendingLayoutFlushQueued = true;
+                queueMicrotask(flushPendingLayoutShifts);
+            }
+        };
+        el.addEventListener('blyrics-layout-shift', layoutShiftHandler);
+    }
+
     function applyStagger(delta) {
         if (!isScriptEnabled || Math.abs(delta) < CFG.minDelta) return;
 
         const lines = getLines();
         if (!lines.length) return;
 
+        const layoutMap = pendingLayoutShifts;
+        let maxLayoutShiftPx = 0;
+        if (layoutMap) {
+            for (const dy of layoutMap.values()) {
+                const absDy = Math.abs(dy);
+                if (absDy > maxLayoutShiftPx) maxLayoutShiftPx = absDy;
+            }
+        }
         const viewportH = _getEffectiveViewportHeight() || (_measureVisibleLines() * CFG.avgLineHeightFallback);
         const absDelta = Math.abs(delta);
+        const isImmediateReveal =
+            pendingLayoutMode === 'immediate' ||
+            (immediateScrollArmedUntil > 0 &&
+                performance.now() <= immediateScrollArmedUntil &&
+                absDelta <= Math.max(maxLayoutShiftPx, 48) + 16);
+        pendingLayoutShifts = null;
+        pendingLayoutMode = null;
+        immediateScrollArmedUntil = 0;
 
         // Snap song-switch initial scroll positioning instead of sweeping new lines across the viewport.
         if (Date.now() - attachedAt < CFG.attachSnapWindowMs) {
@@ -846,14 +1015,29 @@
         const avgH = _estimateAvgLineHeight(lines, ref);
         const isLargeJump = absDelta >= viewportH * CFG.largeJumpViewportRatio;
         const scaleThreshold = avgH * CFG.staggerScaleLines;
-        const stepMs = isLargeJump
-            ? 0
-            : (absDelta > scaleThreshold ? CFG.staggerStep * (scaleThreshold / absDelta) : CFG.staggerStep);
-        const baseDelayMs = (isLargeJump || delta < -avgH * 2) ? 0 : CFG.scrollDelay;
-        const stiffness = CFG.stiffness;
+        let stepMs = 0;
+        if (!isImmediateReveal) {
+            if (isLargeJump) {
+                stepMs = 18;
+            } else if (absDelta > scaleThreshold) {
+                stepMs = Math.max(18, CFG.staggerStep * (scaleThreshold / absDelta));
+            } else {
+                stepMs = CFG.staggerStep;
+            }
+            if (delta < 0) {
+                stepMs = Math.min(stepMs, 24);
+            }
+        }
+        const autoHideActive = document.documentElement?.hasAttribute('blyrics-auto-hide-instrumental-bg') === true;
+        const isUserResume = userResumeUntil > 0 && performance.now() <= userResumeUntil;
+        if (isUserResume) userResumeUntil = 0;
+        const baseDelayMs = (isLargeJump || isImmediateReveal || isUserResume || delta < 0) ? 0 : CFG.scrollDelay;
+        const stiffness = isImmediateReveal ? 55 : CFG.stiffness;
         const mass = CFG.mass;
         // Slight margin above 2*sqrt(k*m) guarantees _solveSpringPair takes the critically damped branch.
-        const damping = isLargeJump ? Math.ceil(2 * Math.sqrt(stiffness * mass) * 100) / 100 : CFG.damping;
+        const damping = (isLargeJump || isImmediateReveal)
+            ? Math.ceil(2 * Math.sqrt(stiffness * mass) * 100) / 100
+            : CFG.damping;
         const collapsePending = isLargeJump;
 
         const { start, end } = _computeScrollRange(lines, ref, delta, viewportH);
@@ -861,28 +1045,72 @@
         const sharedIdleBakeCache = { delayMs: baseDelayMs, baked: null };
 
         const visited = new Set();
+        const staggerByIndex = new Map();
+        if (stepMs > 0) {
+            if (delta >= 0) {
+                const maxRanks = isLargeJump ? 6 : Infinity;
+                let rank = 0;
+                for (let i = ref + 1; i < end; i++) {
+                    if (autoHideActive && isHiddenRevealLine(lines[i])) continue;
+                    if (rank < maxRanks) rank += 1;
+                    staggerByIndex.set(i, rank * stepMs);
+                }
+            } else {
+                // Reverse/downward scroll (delta < 0): bottom visible line leads (0ms) and lines above
+                // trail monotonically (delay[i] >= delay[i+1]) so lyrics cascade downward without overlap.
+                const maxBelowPx = viewportH * 0.68;
+                const maxDownSteps = 6;
+                let leadAnchor = ref;
+                let accBelow = 0;
+                let stepsBelow = 0;
+                for (let i = ref + 1; i < end && stepsBelow < maxDownSteps; i++) {
+                    if (autoHideActive && isHiddenRevealLine(lines[i])) continue;
+                    const h = _getLineFullHeight(lines[i]);
+                    if (h <= 0) continue;
+                    accBelow += h;
+                    stepsBelow += 1;
+                    leadAnchor = i;
+                    if (accBelow >= maxBelowPx) break;
+                }
+                const maxTotalRanks = isLargeJump ? 7 : 10;
+                let rank = 0;
+                for (let i = leadAnchor - 1; i >= start; i--) {
+                    if (autoHideActive && isHiddenRevealLine(lines[i])) continue;
+                    if (rank < maxTotalRanks) rank += 1;
+                    staggerByIndex.set(i, rank * stepMs);
+                }
+            }
+        }
 
         for (let i = start; i < end; i++) {
             const line = lines[i];
             visited.add(line);
-            const staggerMs = stepMs > 0
-                ? (delta >= 0
-                    ? (i > ref ? (i - ref) * stepMs : 0)
-                    : (i < ref ? (ref - i) * stepMs : 0))
-                : 0;
+            if (autoHideActive && isHiddenRevealLine(line)) {
+                if (layoutMap) layoutMap.delete(line);
+                retireHiddenLine(line);
+                continue;
+            }
+            const layoutDy = layoutMap ? (layoutMap.get(line) || 0) : 0;
+            if (layoutMap && layoutDy !== 0) layoutMap.delete(line);
+            const effectiveDelta = delta + layoutDy;
+            if (Math.abs(effectiveDelta) < CFG.arriveEpsilon && !activeLines.has(line)) continue;
+            const staggerMs = staggerByIndex.get(i) || 0;
             const totalDelayMs = baseDelayMs + staggerMs;
             const data = getOrCreateLineState(line);
+            const allowOppositeCollapse = !isImmediateReveal && layoutDy === 0;
             applyLineWave(
                 line,
                 data,
-                delta,
+                effectiveDelta,
                 totalDelayMs,
                 nowTimeline,
-                sharedIdleBakeCache,
+                layoutDy === 0 ? sharedIdleBakeCache : null,
                 stiffness,
                 damping,
                 mass,
-                collapsePending
+                collapsePending,
+                allowOppositeCollapse,
+                isImmediateReveal
             );
         }
 
@@ -890,31 +1118,44 @@
         // the scrollTop shift seamlessly without jumping on screen.
         for (const line of Array.from(activeLines)) {
             if (visited.has(line)) continue;
-            if (!line.isConnected || isLargeJump) {
-                const data = lineState.get(line);
-                if (data) {
-                    if (data.anim) {
-                        const old = data.anim;
-                        data.anim = null;
-                        old.cancel();
-                    }
-                    retireLine(line, data);
-                }
+            if (!line.isConnected || isLargeJump || (autoHideActive && isHiddenRevealLine(line))) {
+                if (layoutMap) layoutMap.delete(line);
+                retireHiddenLine(line);
                 continue;
             }
+            const layoutDy = layoutMap ? (layoutMap.get(line) || 0) : 0;
+            if (layoutMap && layoutDy !== 0) layoutMap.delete(line);
+            const effectiveDelta = delta + layoutDy;
             const data = getOrCreateLineState(line);
+            const allowOppositeCollapse = !isImmediateReveal && layoutDy === 0;
             applyLineWave(
                 line,
                 data,
-                delta,
+                effectiveDelta,
                 baseDelayMs,
                 nowTimeline,
-                sharedIdleBakeCache,
+                layoutDy === 0 ? sharedIdleBakeCache : null,
                 stiffness,
                 damping,
                 mass,
-                collapsePending
+                collapsePending,
+                allowOppositeCollapse,
+                isImmediateReveal
             );
+        }
+
+        if (layoutMap && layoutMap.size > 0) {
+            const critDamp = Math.ceil(2 * Math.sqrt(stiffness * mass) * 100) / 100;
+            for (const [line, dy] of layoutMap) {
+                if (!line.isConnected) continue;
+                if (autoHideActive && isHiddenRevealLine(line)) {
+                    retireHiddenLine(line);
+                    continue;
+                }
+                if (Math.abs(dy) < CFG.arriveEpsilon) continue;
+                const data = getOrCreateLineState(line);
+                applyLineWave(line, data, dy, baseDelayMs, nowTimeline, null, stiffness, critDamp, mass, false, false, true);
+            }
         }
     }
 
@@ -933,9 +1174,18 @@
         styleObserver?.disconnect();
 
         let lastTransform = el.style.transform || '';
+        let wasUserScrolling = el.classList.contains('blyrics-user-scrolling');
 
         styleObserver = new MutationObserver(() => {
-            if (!isScriptEnabled || suppressTransform) return;
+            if (!isScriptEnabled) return;
+
+            const nowUserScrolling = el.classList.contains('blyrics-user-scrolling');
+            if (wasUserScrolling && !nowUserScrolling) {
+                userResumeUntil = performance.now() + 120;
+            }
+            wasUserScrolling = nowUserScrolling;
+
+            if (suppressTransform) return;
 
             const transformVal = el.style.transform;
             if (transformVal === lastTransform) return;
@@ -988,7 +1238,7 @@
 
         styleObserver.observe(el, {
             attributes: true,
-            attributeFilter: ['style'],
+            attributeFilter: ['style', 'class'],
         });
 
         console.info('[GlassyFlow Super] Style observer installed on', el);
@@ -1063,6 +1313,7 @@
         setScrollOverride(false);
         styleObserver?.disconnect();
         _linesObserver?.disconnect();
+        removeLayoutShiftListener();
         removeScrollFallback();
         cleanupAllSprings();
         if (container) container.classList.remove('blyrics--gf-managed');
@@ -1076,6 +1327,7 @@
         }
         if (el === container) return;
         console.info('[GlassyFlow Super] Attaching to new container', el);
+        removeLayoutShiftListener();
         cleanupAllSprings();
 
         container = el;
@@ -1088,6 +1340,7 @@
 
         installStyleObserver(el);
         _installLinesObserver(el);
+        installLayoutShiftListener(el);
         installScrollFallback(el);
         initialScrollTop = lastScrollTop ?? 0;
         startNoSyncDetection(el);
@@ -1184,6 +1437,7 @@
     function cleanupAllSprings() {
         cancelActiveSprings();
         lastScrollTop = null;
+        userResumeUntil = 0;
         _resetGeometry();
     }
 
@@ -1230,6 +1484,7 @@
             noSyncRetryTimer = null;
         }
         styleObserver?.disconnect();
+        removeLayoutShiftListener();
         removeScrollFallback();
         cleanupAllSprings();
         container = null;

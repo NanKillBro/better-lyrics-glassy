@@ -103,6 +103,7 @@ interface Options extends VideoQualitySettings, RendererModeOptions {
   letterWavePref: LetterWavePref;
   isPassiveScrollEnabled: boolean;
   isUnblurUpcomingLyricsEnabled: boolean;
+  isAutoHideInstrumentalBackgroundEnabled: boolean;
   isLyricsBlurDisabled: boolean;
   isVisibilityCacheEnabled: boolean;
   isIdleTickSuspensionEnabled: boolean;
@@ -191,6 +192,9 @@ const getOptionsFromForm = (): Options => {
     isPassiveScrollEnabled: (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked,
     isUnblurUpcomingLyricsEnabled: (document.getElementById("isUnblurUpcomingLyricsEnabled") as HTMLInputElement)
       .checked,
+    isAutoHideInstrumentalBackgroundEnabled: (
+      document.getElementById("isAutoHideInstrumentalBackgroundEnabled") as HTMLInputElement
+    ).checked,
     isLyricsBlurDisabled: (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked,
     isVisibilityCacheEnabled: (document.getElementById("isVisibilityCacheEnabled") as HTMLInputElement).checked,
     isIdleTickSuspensionEnabled: (document.getElementById("isIdleTickSuspensionEnabled") as HTMLInputElement).checked,
@@ -398,6 +402,7 @@ const restoreOptions = (): void => {
     letterWavePref: "off",
     isPassiveScrollEnabled: true,
     isUnblurUpcomingLyricsEnabled: false,
+    isAutoHideInstrumentalBackgroundEnabled: false,
     isLyricsBlurDisabled: false,
     isVisibilityCacheEnabled: false,
     isIdleTickSuspensionEnabled: false,
@@ -510,6 +515,8 @@ const setOptionsInForm = (items: Options): void => {
   (document.getElementById("isPassiveScrollEnabled") as HTMLInputElement).checked = items.isPassiveScrollEnabled;
   (document.getElementById("isUnblurUpcomingLyricsEnabled") as HTMLInputElement).checked =
     items.isUnblurUpcomingLyricsEnabled;
+  (document.getElementById("isAutoHideInstrumentalBackgroundEnabled") as HTMLInputElement).checked =
+    items.isAutoHideInstrumentalBackgroundEnabled;
   (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked = items.isLyricsBlurDisabled;
   (document.getElementById("isVisibilityCacheEnabled") as HTMLInputElement).checked = items.isVisibilityCacheEnabled;
   (document.getElementById("isIdleTickSuspensionEnabled") as HTMLInputElement).checked =

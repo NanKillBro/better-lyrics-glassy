@@ -25,8 +25,13 @@ import {
   unmountDock,
   updateDockPosition,
 } from "@modules/ui/dom";
+import {
+  AUTO_HIDE_INSTRUMENTAL_BG_ATTR,
+  AUTO_HIDE_INSTRUMENTAL_BG_DEFAULTS,
+  syncActiveReveal,
+} from "@modules/ui/activeReveal";
 import { applyGlobalOffsets } from "@modules/ui/lyricsDock/offset";
-import { mainView } from "@modules/ui/mainLyricsView";
+import { mainView, retickMainView } from "@modules/ui/mainLyricsView";
 import { isPlayerFullscreened, onFullscreenChange } from "@modules/ui/observer";
 import { publishSecondaryViews } from "@modules/ui/secondaryViews";
 import { applyCustomStyles, getAndApplyCustomStyles } from "@modules/ui/styleInjector";
@@ -81,6 +86,7 @@ export function handleSettings(): void {
 
   loadLyricsBlurSetting();
   loadUnblurUpcomingLyricsSetting();
+  loadAutoHideInstrumentalBgSetting();
   loadPerformanceSettings();
 }
 
@@ -149,6 +155,21 @@ function applyUnblurUpcomingLyricsSetting(enabled: boolean): void {
 function loadUnblurUpcomingLyricsSetting(): void {
   getStorage({ isUnblurUpcomingLyricsEnabled: false }, items => {
     applyUnblurUpcomingLyricsSetting(items.isUnblurUpcomingLyricsEnabled === true);
+  });
+}
+
+function applyAutoHideInstrumentalBgSetting(enabled: boolean): void {
+  const prev = document.documentElement.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR);
+  document.documentElement.toggleAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, enabled);
+  if (prev !== enabled && !readRendererMode(document)) {
+    syncActiveReveal(mainView);
+    retickMainView();
+  }
+}
+
+function loadAutoHideInstrumentalBgSetting(): void {
+  getStorage(AUTO_HIDE_INSTRUMENTAL_BG_DEFAULTS, items => {
+    applyAutoHideInstrumentalBgSetting(items.isAutoHideInstrumentalBackgroundEnabled === true);
   });
 }
 
@@ -290,8 +311,13 @@ export function initPerformanceSettingsListener(): () => void {
     if ("isUnblurUpcomingLyricsEnabled" in changes) {
       applyUnblurUpcomingLyricsSetting(changes.isUnblurUpcomingLyricsEnabled.newValue === true);
     }
+    if ("isAutoHideInstrumentalBackgroundEnabled" in changes) {
+      applyAutoHideInstrumentalBgSetting(changes.isAutoHideInstrumentalBackgroundEnabled.newValue === true);
+    }
     if ("isWebglLyricsEnabled" in changes) {
-      void applyRendererModeSettings({ isWebglLyricsEnabled: changes.isWebglLyricsEnabled.newValue });
+      void applyRendererModeSettings({ isWebglLyricsEnabled: changes.isWebglLyricsEnabled.newValue }).then(() => {
+        syncActiveReveal(mainView);
+      });
     }
   };
 
@@ -436,7 +462,10 @@ export function listenForPopupMessages(): void {
       );
       getAndApplyCustomStyles();
       if (request.settings && "isWebglLyricsEnabled" in request.settings) {
-        void applyRendererModeSettings(request.settings).then(() => reloadLyrics());
+        void applyRendererModeSettings(request.settings).then(() => {
+          syncActiveReveal(mainView);
+          reloadLyrics();
+        });
       } else {
         reloadLyrics();
       }

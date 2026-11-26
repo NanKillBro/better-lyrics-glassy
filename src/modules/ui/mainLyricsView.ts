@@ -131,6 +131,7 @@ export function retickMainView(): void {
   }
 }
 
+import { initActiveReveal } from "@modules/ui/activeReveal";
 import { initGlassyFlowBridge } from "@modules/ui/glassyFlowBridge";
 
 /**
@@ -143,6 +144,10 @@ export function lyricsElementAdded(): void {
 }
 
 initGlassyFlowBridge(mainView, { isViewVisible: readScopedMainViewVisibility });
+initActiveReveal(mainView, {
+  isViewVisible: readScopedMainViewVisibility,
+  getScrollElement: () => ytmHost.getScrollElement(),
+});
 
 const bridgedMainTick = mainView.tick;
 mainView.tick = (currentTimeS, options) =>
