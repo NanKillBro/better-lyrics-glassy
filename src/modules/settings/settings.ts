@@ -169,7 +169,7 @@ function applyAutoHideInstrumentalBgSetting(enabled: boolean): void {
 
 function loadAutoHideInstrumentalBgSetting(): void {
   getStorage(AUTO_HIDE_INSTRUMENTAL_BG_DEFAULTS, items => {
-    applyAutoHideInstrumentalBgSetting(items.isAutoHideInstrumentalBackgroundEnabled === true);
+    applyAutoHideInstrumentalBgSetting(items.isAutoHideInstrumentalBackgroundEnabled !== false);
   });
 }
 
@@ -312,7 +312,7 @@ export function initPerformanceSettingsListener(): () => void {
       applyUnblurUpcomingLyricsSetting(changes.isUnblurUpcomingLyricsEnabled.newValue === true);
     }
     if ("isAutoHideInstrumentalBackgroundEnabled" in changes) {
-      applyAutoHideInstrumentalBgSetting(changes.isAutoHideInstrumentalBackgroundEnabled.newValue === true);
+      applyAutoHideInstrumentalBgSetting(changes.isAutoHideInstrumentalBackgroundEnabled.newValue !== false);
     }
     if ("isWebglLyricsEnabled" in changes) {
       void applyRendererModeSettings({ isWebglLyricsEnabled: changes.isWebglLyricsEnabled.newValue }).then(() => {

@@ -51,7 +51,6 @@ const MERGE_THEME_STYLE_ID = "blfw-merge-theme";
 const LYRICS_BLUR_DISABLED_ATTR = "blyrics-disable-lyrics-blur";
 const UNBLUR_UPCOMING_LYRICS_ATTR = "blyrics-unblur-upcoming";
 const SCROLL_SCRIPTS: Record<string, string> = {
-  "glassyflow-turbo": "/glassyflow-turbo.js",
   "glassyflow-super": "/glassyflow-super.js",
 };
 const searchParams = new URLSearchParams(window.location.search);

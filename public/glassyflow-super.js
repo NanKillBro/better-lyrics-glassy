@@ -10,12 +10,11 @@
 (function () {
     'use strict';
 
-    if (window.__glassyFlowSuperInstalled || window.__glassyFlowTurboInstalled) {
+    if (window.__glassyFlowSuperInstalled) {
         console.warn('[GlassyFlow Super] Already installed — skipping duplicate injection.');
         return;
     }
     window.__glassyFlowSuperInstalled = true;
-    window.__glassyFlowTurboInstalled = true;
 
     function _solveSpringPair(from, velocity, to, stiffness, damping, mass) {
         const delta = to - from;

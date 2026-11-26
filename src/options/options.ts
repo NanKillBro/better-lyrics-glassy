@@ -402,7 +402,7 @@ const restoreOptions = (): void => {
     letterWavePref: "off",
     isPassiveScrollEnabled: true,
     isUnblurUpcomingLyricsEnabled: false,
-    isAutoHideInstrumentalBackgroundEnabled: false,
+    isAutoHideInstrumentalBackgroundEnabled: true,
     isLyricsBlurDisabled: false,
     isVisibilityCacheEnabled: false,
     isIdleTickSuspensionEnabled: false,

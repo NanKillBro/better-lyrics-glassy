@@ -3,7 +3,7 @@ import { readRendererMode } from "@modules/ui/rendererMode";
 
 export const AUTO_HIDE_INSTRUMENTAL_BG_ATTR = "blyrics-auto-hide-instrumental-bg" as const;
 export const AUTO_HIDE_INSTRUMENTAL_BG_DEFAULTS = {
-  isAutoHideInstrumentalBackgroundEnabled: false,
+  isAutoHideInstrumentalBackgroundEnabled: true,
 } as const;
 export const LAYOUT_SHIFT_EVENT = "blyrics-layout-shift" as const;
 export const REVEAL_COLLAPSED_CLASS = "blyrics--reveal-collapsed" as const;

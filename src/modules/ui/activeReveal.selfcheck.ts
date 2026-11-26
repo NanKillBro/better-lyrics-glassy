@@ -70,6 +70,7 @@ Object.assign(window, { matchMedia: stubMatchMedia });
 
 const {
   AUTO_HIDE_INSTRUMENTAL_BG_ATTR,
+  AUTO_HIDE_INSTRUMENTAL_BG_DEFAULTS,
   BACKGROUND_ONLY_ATTR,
   LAYOUT_SHIFT_EVENT,
   REVEAL_COLLAPSED_CLASS,
@@ -86,8 +87,9 @@ const {
 const { WEBGL_LYRICS_ATTR } = await import("@modules/ui/rendererMode");
 const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMarker");
 
-// 1. Feature gate respects WebGL2 Legacy-only boundary
+// 1. Default enabled + feature gate respects WebGL2 Legacy-only boundary
 {
+  assert.equal(AUTO_HIDE_INSTRUMENTAL_BG_DEFAULTS.isAutoHideInstrumentalBackgroundEnabled, true);
   const root = window.document.documentElement;
   root.removeAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR);
   root.removeAttribute(WEBGL_LYRICS_ATTR);

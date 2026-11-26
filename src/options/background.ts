@@ -122,6 +122,32 @@ async function migrateHighResolutionVideoDefault(): Promise<void> {
   }
 }
 
+// -- Active-Only Instrumental & Background Default --------------------------
+
+const AUTO_HIDE_INSTRUMENTAL_BG_DEFAULT_KEY = "autoHideInstrumentalBgDefaultMigrationVersion";
+const AUTO_HIDE_INSTRUMENTAL_BG_DEFAULT_VERSION = 1;
+
+/** Enables active-only instrumental & background reveal once for profiles holding the prior off default. */
+async function migrateAutoHideInstrumentalBgDefault(): Promise<void> {
+  try {
+    const stored = await getLocalStorage<{
+      [AUTO_HIDE_INSTRUMENTAL_BG_DEFAULT_KEY]?: number;
+      isAutoHideInstrumentalBackgroundEnabled?: boolean;
+    }>([AUTO_HIDE_INSTRUMENTAL_BG_DEFAULT_KEY, "isAutoHideInstrumentalBackgroundEnabled"]);
+    if ((stored[AUTO_HIDE_INSTRUMENTAL_BG_DEFAULT_KEY] ?? 0) >= AUTO_HIDE_INSTRUMENTAL_BG_DEFAULT_VERSION) return;
+
+    if (stored.isAutoHideInstrumentalBackgroundEnabled === false) {
+      await chrome.storage.local.set({ isAutoHideInstrumentalBackgroundEnabled: true });
+      logBackground("Enabled active-only instrumental & background reveal (new default)");
+    }
+    await chrome.storage.local.set({
+      [AUTO_HIDE_INSTRUMENTAL_BG_DEFAULT_KEY]: AUTO_HIDE_INSTRUMENTAL_BG_DEFAULT_VERSION,
+    });
+  } catch (err) {
+    warnBackground("Active-only instrumental & background migration failed:", err);
+  }
+}
+
 async function checkAndApplyThemeUpdates(): Promise<void> {
   try {
     const installed = await getInstalledStoreThemes();
@@ -158,6 +184,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   await migrateSymlinkedThemes();
   await resyncAppliedThemeCss();
   await migrateHighResolutionVideoDefault();
+  await migrateAutoHideInstrumentalBgDefault();
   checkAndApplyThemeUpdates();
 });
 
@@ -166,6 +193,7 @@ chrome.runtime.onStartup.addListener(async () => {
   await migrateSymlinkedThemes();
   await resyncAppliedThemeCss();
   await migrateHighResolutionVideoDefault();
+  await migrateAutoHideInstrumentalBgDefault();
   checkAndApplyThemeUpdates();
 });
 
@@ -191,6 +219,7 @@ chrome.runtime.onMessage.addListener(request => {
 
 // Electron does not emit onInstalled/onStartup for unpacked extensions.
 setupThemeUpdateAlarm();
+void migrateAutoHideInstrumentalBgDefault();
 initBackgroundAuth();
 initIdentityBackupWatcher(error => warnBackground("Identity backup watcher failed:", error));
 initIdentityFileDownloads(error => warnBackground("Identity download failed:", error));
