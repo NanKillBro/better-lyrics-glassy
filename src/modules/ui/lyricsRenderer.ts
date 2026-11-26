@@ -49,6 +49,9 @@ import { logCore } from "@core/logger";
 import { readRendererMode } from "@modules/ui/rendererMode";
 
 export type { LineData, LyricsRenderer };
+export type LyricsView = LyricsRenderer & {
+  relayoutChangedLines?: (changedIndices: readonly number[]) => void;
+};
 
 // -- Loading the WebGL2 renderer --------------------------
 
@@ -381,30 +384,30 @@ export function copyRendererCanvases(source: HTMLElement, clone: HTMLElement): v
 
 // -- The delegating 2-mode view --------------------------
 
-function buildLegacyAdapter(options: LyricsRendererOptions): LyricsRenderer {
+function buildLegacyAdapter(options: LyricsRendererOptions): LyricsView {
   const legacy = createLegacyLyricsRenderer(
     options as unknown as Parameters<typeof createLegacyLyricsRenderer>[0]
   );
-  return Object.assign(legacy, { renderer: null }) as unknown as LyricsRenderer;
+  return Object.assign(legacy, { renderer: null }) as unknown as LyricsView;
 }
 
 /**
  * Creates a delegating lyrics view selecting legacy `@braccato/core-legacy` (`1.20.0`, default)
  * or WebGL2 `@braccato/core` (`2.0.0-beta.4`, opt-in via `blyrics-webgl-lyrics`) from `options.document`.
  */
-export function createLyricsView(options: LyricsRendererOptions): LyricsRenderer {
+export function createLyricsView(options: LyricsRendererOptions): LyricsView {
   installWordWobblePatch(options.window);
 
   let destroyed = false;
   let activeWebgl = readRendererMode(options.document);
-  let active: LyricsRenderer | null = activeWebgl ? null : buildLegacyAdapter(options);
+  let active: LyricsView | null = activeWebgl ? null : buildLegacyAdapter(options);
   let currentMount = options.mount;
   let appliedThemeCss = lastAppliedThemeCss;
 
   const effectiveOptions = (): LyricsRendererOptions =>
     currentMount && currentMount !== options.mount ? { ...options, mount: currentMount } : options;
 
-  const ensureActive = (applySavedTheme: boolean): LyricsRenderer => {
+  const ensureActive = (applySavedTheme: boolean): LyricsView => {
     const nextWebgl = readRendererMode(options.document);
     if (active !== null && nextWebgl !== activeWebgl) {
       active.destroy();
@@ -493,6 +496,14 @@ export function createLyricsView(options: LyricsRendererOptions): LyricsRenderer
       return active?.tick(currentTimeS, tickOptions) ?? "lyrics-missing";
     },
     relayout: measureLines => active?.relayout(measureLines),
+    relayoutChangedLines(changedIndices) {
+      if (!active) return;
+      if (!activeWebgl && typeof active.relayoutChangedLines === "function") {
+        active.relayoutChangedLines(changedIndices);
+      } else {
+        active.relayout(true);
+      }
+    },
     clear: () => active?.clear(),
     destroy() {
       if (destroyed) return;

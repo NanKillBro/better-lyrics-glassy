@@ -1,0 +1,68 @@
+{
+  "name": "braccato-core-glassy",
+  "version": "1.20.0-glassy.1",
+  "description": "Synchronized lyrics renderer with word-by-word animations (local vendored @braccato/core 1.20.0 fork for Better Lyrics Glassy)",
+  "type": "module",
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-lyrics/braccato.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://braccato.boidu.dev",
+  "keywords": [
+    "lyrics",
+    "sync",
+    "web-component",
+    "music",
+    "karaoke",
+    "ttml"
+  ],
+  "sideEffects": [
+    "./dist/element.js",
+    "./dist/styles/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./element": {
+      "types": "./dist/element.d.ts",
+      "import": "./dist/element.js"
+    },
+    "./constants": {
+      "types": "./dist/constants.d.ts",
+      "import": "./dist/constants.js"
+    },
+    "./text": {
+      "types": "./dist/text.d.ts",
+      "import": "./dist/text.js"
+    },
+    "./themeSettings": {
+      "types": "./dist/themeSettings.d.ts",
+      "import": "./dist/themeSettings.js"
+    },
+    "./util": {
+      "types": "./dist/util.d.ts",
+      "import": "./dist/util.js"
+    },
+    "./styles/*.css": "./dist/styles/*.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@braccato/types": "^1.1.0"
+  },
+  "scripts": {
+    "build": "tsx ../../tooling/build-package.ts",
+    "typecheck": "tsc --noEmit",
+    "selfcheck": "tsx ../../tooling/run-selfchecks.ts",
+    "clean": "rm -rf dist"
+  }
+}

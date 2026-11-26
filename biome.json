@@ -10,6 +10,7 @@
       "!**/*.js.map",
       "!**/dist",
       "!**/node_modules",
+      "!**/vendor",
       "!**/.claude",
       "!**/docs",
       "!www/.next/**/*",
@@ -62,6 +63,7 @@
         "www/.next/**/*",
         "node_modules/**/*",
         "dist/**/*",
+        "vendor/**/*",
         "src/options.html",
         ".all-contributorsrc",
         "STYLING.md"

@@ -1,4 +1,6 @@
 dist/
+!vendor/braccato-core-glassy/dist/
+!vendor/braccato-core-glassy/dist/**
 .DS_Store
 # build*.sh
 # bump-ver.sh

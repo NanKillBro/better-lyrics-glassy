@@ -182,7 +182,7 @@ const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMark
   }
 
   let relayoutCount = 0;
-  let culledSeenDuringRelayout = false;
+  const incrementalRelayoutCalls: number[][] = [];
   let tickScrollDelta = 0;
   let activeIndexOnTick = -1;
   let observedInstPosDuringTick = Number.NaN;
@@ -345,11 +345,10 @@ const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMark
     },
     relayout() {
       relayoutCount += 1;
-      for (const line of fakeLines) {
-        if (line.lyricElement.style.contentVisibility === "auto") {
-          culledSeenDuringRelayout = true;
-        }
-      }
+      recomputeFakeLayout();
+    },
+    relayoutChangedLines(changedIndices: readonly number[]) {
+      incrementalRelayoutCalls.push([...changedIndices]);
       recomputeFakeLayout();
     },
     clear() {
@@ -508,14 +507,21 @@ const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMark
   const bgRow4 = fakeLines[4].lyricElement.querySelector<HTMLElement>(".blyrics-background-line")!;
   assert.equal(bgRow4.classList.contains(REVEAL_COLLAPSED_CLASS), true, "near-start bg stays collapsed at 24.0s");
   fakeLines[0].lyricElement.style.setProperty("content-visibility", "auto");
-  culledSeenDuringRelayout = false;
+  const fullRelayoutsBeforeBg4 = relayoutCount;
+  incrementalRelayoutCalls.length = 0;
   fakeLines[4].lyricElement.classList.add("blyrics--active"); // simulate 0.54s early active stamp
   activeIndexOnTick = 4;
   recordedAnims.length = 0;
   layoutEvents.length = 0;
   tickScrollDelta = 110; // real lyric scroll coinciding with bg open
   fakeView.tick(24.55, baseTick());
-  assert.equal(culledSeenDuringRelayout, false, "culled lines un-culled before relayout measures scroll padding");
+  assert.equal(relayoutCount, fullRelayoutsBeforeBg4, "live toggle uses incremental relayout instead of full relayout");
+  assert.deepEqual(incrementalRelayoutCalls, [[4]], "incremental relayout receives exact changed line index");
+  assert.equal(
+    fakeLines[0].lyricElement.style.contentVisibility,
+    "auto",
+    "offscreen culled line stays culled across live incremental relayout"
+  );
   assert.equal(bgRow4.classList.contains(REVEAL_COLLAPSED_CLASS), false, "near-start bg aligns to lineStart - 0.5s");
   assert.equal(layoutEvents.length, 1);
   assert.equal(layoutEvents[0].mode, "sync-scroll", "coinciding lyric scroll uses sync-scroll even if active did not change");

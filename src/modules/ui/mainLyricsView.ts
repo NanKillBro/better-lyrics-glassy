@@ -1,8 +1,8 @@
 import { AppState } from "@core/appState";
 import { invalidateScrollHostMetrics, ytmHost } from "@modules/ui/lyricsHost";
-import type { LyricsRenderer, LyricsRendererHost, TickOptions } from "@braccato/core";
+import type { LyricsRendererHost, TickOptions } from "@braccato/core";
 import { requestAnimationLoopSync } from "@modules/ui/idleTickSuspension";
-import { createLyricsView } from "@modules/ui/lyricsRenderer";
+import { createLyricsView, type LyricsView } from "@modules/ui/lyricsRenderer";
 import { readRendererMode } from "@modules/ui/rendererMode";
 
 function invalidateAfter<Args extends unknown[], Result>(
@@ -80,7 +80,7 @@ const mainViewHost: LyricsRendererHost = {
   debug: ytmHost.debug,
 };
 
-export const mainView: Omit<LyricsRenderer, "destroy"> = createLyricsView({ document, window, host: mainViewHost });
+export const mainView: Omit<LyricsView, "destroy"> = createLyricsView({ document, window, host: mainViewHost });
 const baseMainTick = mainView.tick;
 mainView.tick = (currentTimeS, options) => baseMainTick(currentTimeS, resolveMainViewTickOptions(options));
 const baseMainRetick = mainView.retickFromPlaybackClock;
@@ -90,6 +90,9 @@ mainView.setLyrics = invalidateAfter(mainView.setLyrics);
 mainView.setLanguage = invalidateAfter(mainView.setLanguage);
 mainView.setTheme = invalidateAfter(mainView.setTheme);
 mainView.relayout = invalidateAfter(mainView.relayout);
+if (mainView.relayoutChangedLines) {
+  mainView.relayoutChangedLines = invalidateAfter(mainView.relayoutChangedLines);
+}
 mainView.clear = invalidateAfter(mainView.clear);
 mainView.clearOnScreenLyrics = invalidateAfter(mainView.clearOnScreenLyrics);
 

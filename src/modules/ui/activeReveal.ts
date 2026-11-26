@@ -63,6 +63,7 @@ export interface ActiveRevealView {
   tick: LyricsRenderer["tick"];
   retickFromPlaybackClock: LyricsRenderer["retickFromPlaybackClock"];
   relayout: (measureLines?: boolean) => void;
+  relayoutChangedLines?: (changedIndices: readonly number[]) => void;
   clear?: () => void;
 }
 
@@ -352,20 +353,6 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
   const originalRetick = view.retickFromPlaybackClock;
   const originalClear = view.clear;
 
-  // @braccato/core-legacy's relayout runs applyScrollPadding and caches engine.lyricHeight before
-  // clearOffscreenLineCulling; un-cull first so padding and cached height match the un-culled DOM.
-  function relayoutUnculled(measureLines = true): void {
-    if (measureLines) {
-      for (const line of view.lines) {
-        const style = line.lyricElement.style;
-        if (style?.contentVisibility && typeof style.removeProperty === "function") {
-          style.removeProperty("content-visibility");
-        }
-      }
-    }
-    view.relayout(measureLines);
-  }
-
   let trackedContainer: HTMLElement | null = null;
   let trackedLines: readonly ActiveRevealLineLike[] = [];
   let managedItems: ManagedItem[] = [];
@@ -433,7 +420,7 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       item.state = "expanded";
     }
     if (changed && relayoutAfter) {
-      relayoutUnculled(true);
+      view.relayout(true);
     }
   }
 
@@ -693,7 +680,7 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       }
     }
     if (changed && relayoutAfter) {
-      relayoutUnculled(true);
+      view.relayout(true);
     }
     // Keep container reference read for type completeness.
     void container;
@@ -828,9 +815,18 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       item.state = "exiting";
     }
 
-    // Single synchronous relayout updates line.position/height, scroll padding, and engine.lyricHeight
-    // so @braccato/core-legacy's ResizeObserver sees no pending delta.
-    relayoutUnculled(true);
+    const changedLineIndices: number[] = [];
+    for (const item of toExpand) {
+      if (!changedLineIndices.includes(item.lineIndex)) changedLineIndices.push(item.lineIndex);
+    }
+    for (const item of toCollapse) {
+      if (!changedLineIndices.includes(item.lineIndex)) changedLineIndices.push(item.lineIndex);
+    }
+    if (typeof view.relayoutChangedLines === "function") {
+      view.relayoutChangedLines(changedLineIndices);
+    } else {
+      view.relayout(true);
+    }
 
     // Read post-relayout metrics & computed filters while layout is clean (before invokeTick mutates classes).
     const newTops = lines.map(readRawLineTop);

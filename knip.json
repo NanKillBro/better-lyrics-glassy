@@ -18,6 +18,7 @@
   ],
   "project": ["src/**/*.ts", "public/**/*.js", "tooling/**/*.ts"],
   "ignoreDependencies": [
+    "@braccato/core-legacy",
     "@codemirror/language",
     "@typescript/lib-dom"
   ],
