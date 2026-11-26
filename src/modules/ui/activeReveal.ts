@@ -9,8 +9,10 @@ export const LAYOUT_SHIFT_EVENT = "blyrics-layout-shift" as const;
 export const REVEAL_COLLAPSED_CLASS = "blyrics--reveal-collapsed" as const;
 export const REVEAL_EXITING_CLASS = "blyrics--reveal-exiting" as const;
 export const BACKGROUND_ONLY_ATTR = "data-background-only" as const;
+const BACKGROUND_ABOVE_CLASS = "blyrics-background-line--above" as const;
 
 const BG_OPEN_LEAD_S = 0.4;
+const BG_ALIGN_BEFORE_LINE_WINDOW_S = 0.15;
 const BG_ALIGN_TO_LINE_WINDOW_S = 0.25;
 const DEFAULT_SCROLL_LEAD_S = 0.5;
 const SEEK_SNAP_THRESHOLD_S = 0.75;
@@ -21,6 +23,7 @@ const INST_EXIT_DURATION_MS = 320;
 const FLIP_SYNC_DURATION_MS = 460;
 const FLIP_IMMEDIATE_DURATION_MS = 620;
 const GF_ENTER_DELAY_MS = 180;
+const GF_INNER_FLIP_SYNC_DELAY_MS = 240;
 const GF_BG_SYNC_DELAY_MS = 260;
 const GF_EXIT_DELAY_MS = 140;
 const BG_ENTER_SCALE_FROM = 0.78;
@@ -118,12 +121,16 @@ export function isAutoHideInstrumentalBgEnabled(doc: Document | null | undefined
   return doc?.documentElement?.hasAttribute?.(AUTO_HIDE_INSTRUMENTAL_BG_ATTR) === true && !readRendererMode(doc);
 }
 
+function isHtmlElement(node: unknown): node is HTMLElement {
+  return Boolean(node && typeof node === "object" && (node as Element).nodeType === 1 && "style" in node);
+}
+
 export function isBackgroundOnlyLine(lyricElement: HTMLElement): boolean {
   if (lyricElement.dataset.instrumental === "true") return false;
   let hasBgRow = false;
   let mainEl: HTMLElement | null = null;
   for (const child of Array.from(lyricElement.children)) {
-    if (!(child instanceof HTMLElement)) continue;
+    if (!isHtmlElement(child)) continue;
     if (child.classList.contains("blyrics-background-line")) {
       hasBgRow = true;
     } else if (child.classList.contains("blyrics-line-main")) {
@@ -311,7 +318,7 @@ function collectInnerSiblingsAfter(bgRow: HTMLElement): HTMLElement[] {
   const siblings: HTMLElement[] = [];
   let cursor = bgRow.nextElementSibling;
   while (cursor) {
-    if (cursor instanceof HTMLElement) {
+    if (isHtmlElement(cursor)) {
       siblings.push(cursor);
     }
     cursor = cursor.nextElementSibling;
@@ -377,14 +384,21 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
     }
   }
 
-  function runStandaloneFlip(el: HTMLElement, dy: number, useAddComposite: boolean, durationMs: number): void {
+  function runStandaloneFlip(
+    el: HTMLElement,
+    dy: number,
+    useAddComposite: boolean,
+    durationMs: number,
+    delayMs = 0
+  ): void {
     if (typeof el.animate !== "function") return;
     cancelElementFlip(el);
     const anim = el.animate([{ translate: `0px ${dy.toFixed(2)}px` }, { translate: "0px 0px" }], {
       duration: durationMs,
+      delay: delayMs,
       easing: FLIP_EASING,
       composite: useAddComposite ? "add" : "replace",
-      fill: "none",
+      fill: delayMs > 0 ? "backwards" : "none",
     });
     standaloneFlipAnims.set(el, anim);
     anim.finished
@@ -477,8 +491,7 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       }
 
       const bgRows = Array.from(lineEl.children).filter(
-        (child): child is HTMLElement =>
-          child instanceof HTMLElement && child.classList.contains("blyrics-background-line")
+        (child): child is HTMLElement => isHtmlElement(child) && child.classList.contains("blyrics-background-line")
       );
       if (bgRows.length === 0) {
         if (lineEl.hasAttribute(BACKGROUND_ONLY_ATTR)) {
@@ -518,8 +531,11 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
         const { startS } = extractBackgroundRowWindow(row, lineStartS, lineDurationS);
         // Align background rows starting right with their parent line to the line's scroll tick
         // so both layout and scroll resolve in one combined GlassyFlow wave without mid-scroll jitter.
+        const deltaFromLineStartS = startS - lineStartS;
         const openAtS =
-          startS - lineStartS <= BG_ALIGN_TO_LINE_WINDOW_S ? lineStartS - scrollLeadS : startS - BG_OPEN_LEAD_S;
+          deltaFromLineStartS >= -BG_ALIGN_BEFORE_LINE_WINDOW_S && deltaFromLineStartS <= BG_ALIGN_TO_LINE_WINDOW_S
+            ? lineStartS - scrollLeadS
+            : startS - BG_OPEN_LEAD_S;
         nextItems.push({
           kind: "background-row",
           lineIndex: i,
@@ -571,8 +587,10 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
     const el = item.visualElement as HTMLElement;
     if (typeof el.animate !== "function") return;
     const isInst = item.kind === "instrumental";
+    const isAboveBg =
+      item.kind === "background-row" && item.targetElement.classList.contains(BACKGROUND_ABOVE_CLASS);
     const scaleFrom = isInst ? INST_ENTER_SCALE_FROM : BG_ENTER_SCALE_FROM;
-    const offsetY = isInst ? 0 : -10;
+    const offsetY = isInst ? 0 : isAboveBg ? 10 : -10;
     const blurPx = isInst ? INST_BLUR_PX : BG_ENTER_BLUR_PX;
     const duration = isInst ? INST_ENTER_DURATION_MS : BG_ENTER_DURATION_MS;
     const baseFilter = precomputedBaseFilter ?? readComputedFilter(el);
@@ -910,10 +928,6 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       }
     }
 
-    for (const [sibling, dySibling] of innerSiblingDeltas) {
-      runStandaloneFlip(sibling, dySibling, false, FLIP_IMMEDIATE_DURATION_MS);
-    }
-
     const nowMs = Date.now();
     if (shiftMode === "sync-scroll" && scrollDeltaPx > 25) {
       lastLyricScrollAtMs = nowMs;
@@ -921,6 +935,10 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
     }
 
     const useSyncDelay = isGlassyFlowManaged && shiftMode === "sync-scroll" && didScroll;
+    const innerSiblingDelayMs = useSyncDelay ? GF_INNER_FLIP_SYNC_DELAY_MS : 0;
+    for (const [sibling, dySibling] of innerSiblingDeltas) {
+      runStandaloneFlip(sibling, dySibling, false, flipDurationMs, innerSiblingDelayMs);
+    }
     const withinRecentScrollWindow =
       isGlassyFlowManaged &&
       lastLyricScrollAtMs > 0 &&

@@ -69,6 +69,11 @@
 	transition: opacity 0.7s ease;
 }
 
+.blyrics-background-line.blyrics-background-line--above {
+	margin-top: 0;
+	margin-bottom: 0.1em;
+}
+
 /* Bypass host GlassyFlow --blyrics-animate-scroll: 0 on :root when WebGL2 mode is active. */
 :root[blyrics-webgl-lyrics] .blyrics-container.brs-layout {
 	--blyrics-animate-scroll: 1 !important;

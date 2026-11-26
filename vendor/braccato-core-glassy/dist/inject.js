@@ -391,16 +391,50 @@ export function createLyricsLine(doc, parts, line, lyricElement, options = { spl
             }
         }
     }
-    const usedBackgroundRows = [...backgroundRows]
+    let mainStartMs = Infinity;
+    for (const part of parts) {
+        if (part.isBackground !== true && part.words.trim().length > 0 && Number.isFinite(part.startTimeMs)) {
+            if (part.startTimeMs < mainStartMs)
+                mainStartMs = part.startTimeMs;
+        }
+    }
+    const backgroundStartOf = (group) => {
+        let minStart = Infinity;
+        for (const part of parts) {
+            if (part.isBackground === true &&
+                (part.backgroundGroup ?? 0) === group &&
+                part.words.trim().length > 0 &&
+                Number.isFinite(part.startTimeMs)) {
+                if (part.startTimeMs < minStart)
+                    minStart = part.startTimeMs;
+            }
+        }
+        return minStart;
+    };
+    const usedBackgroundEntries = [...backgroundRows]
         .filter(([, row]) => row.used)
-        .sort(([a], [b]) => a - b)
-        .map(([, row]) => row);
+        .map(([group, row]) => ({ group, row, startMs: backgroundStartOf(group) }))
+        .sort((a, b) => a.group - b.group);
+    const leadingBackgroundRows = [];
+    const trailingBackgroundRows = [];
+    for (const entry of usedBackgroundEntries) {
+        if (Number.isFinite(mainStartMs) && Number.isFinite(entry.startMs) && entry.startMs < mainStartMs) {
+            entry.row.line.classList.add("blyrics-background-line--above");
+            leadingBackgroundRows.push(entry);
+        }
+        else {
+            trailingBackgroundRows.push(entry);
+        }
+    }
+    leadingBackgroundRows.sort((a, b) => a.startMs - b.startMs || a.group - b.group);
     alignImageGlowRun(mainHighlightRun, line.parts);
-    for (const row of usedBackgroundRows)
-        alignImageGlowRun(row.highlightRun, line.parts);
+    for (const entry of usedBackgroundEntries)
+        alignImageGlowRun(entry.row.highlightRun, line.parts);
+    for (const entry of leadingBackgroundRows)
+        lyricElement.appendChild(entry.row.line);
     lyricElement.appendChild(main);
-    for (const row of usedBackgroundRows)
-        lyricElement.appendChild(row.line);
+    for (const entry of trailingBackgroundRows)
+        lyricElement.appendChild(entry.row.line);
     return main;
 }
 export function buildLineSyncedParts(item) {

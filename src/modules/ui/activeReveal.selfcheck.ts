@@ -624,4 +624,172 @@ const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMark
   assert.equal(fakeLines[4].lyricElement.classList.contains("blyrics--gf-below-2"), true);
 }
 
+// 4. braccato-core-glassy leading background row ordering + activeReveal upward bloom & early openAtS
+{
+  const { createLyricsRenderer } = await import("@braccato/core-legacy");
+  const testDom = new JSDOM("<!doctype html><html><body><div id='scroll'><div id='mount'></div></div></body></html>", {
+    pretendToBeVisual: true,
+  });
+  const tWin = testDom.window as unknown as Window & typeof globalThis;
+  const tDoc = tWin.document;
+  if (typeof (globalThis as Record<string, unknown>).DOMRect !== "function") {
+    (globalThis as Record<string, unknown>).DOMRect = class {
+      constructor(
+        public x = 0,
+        public y = 0,
+        public width = 0,
+        public height = 0
+      ) {}
+    };
+  }
+  tDoc.documentElement.setAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, "");
+  Object.defineProperty(tWin, "matchMedia", { configurable: true, value: stubMatchMedia });
+  Object.defineProperty(tWin, "ResizeObserver", {
+    configurable: true,
+    value: class {
+      observe() {}
+      disconnect() {}
+    },
+  });
+  Object.defineProperty(tDoc, "fonts", { configurable: true, value: { ready: Promise.resolve() } });
+  const leadingAnims: RecordedAnim[] = [];
+  Object.defineProperty(tWin.Element.prototype, "animate", {
+    configurable: true,
+    value(this: Element, keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: KeyframeAnimationOptions | number) {
+      let resolveFinish = () => {};
+      const finished = new Promise<void>(resolve => {
+        resolveFinish = resolve;
+      });
+      const rec: RecordedAnim = { target: this, keyframes, options, cancelled: false, resolveFinish };
+      leadingAnims.push(rec);
+      return {
+        finished,
+        cancel() {
+          rec.cancelled = true;
+        },
+        pause() {},
+        play() {},
+      } as unknown as Animation;
+    },
+  });
+
+  const mount = tDoc.getElementById("mount")!;
+  const scroller = tDoc.getElementById("scroll")!;
+  const renderer = createLyricsRenderer({
+    document: tDoc,
+    window: tWin,
+    mount,
+    host: { getScrollElement: () => scroller },
+  });
+
+  renderer.setLyrics([
+    {
+      startTimeMs: 10000,
+      durationMs: 4000,
+      words: "(hey) Main after lead",
+      parts: [
+        { startTimeMs: 9000, durationMs: 800, words: "(hey)", isBackground: true, backgroundGroup: 0 },
+        { startTimeMs: 10000, durationMs: 4000, words: "Main after lead" },
+      ],
+    },
+    {
+      startTimeMs: 15000,
+      durationMs: 4000,
+      words: "Main same (same)",
+      parts: [
+        { startTimeMs: 15000, durationMs: 2000, words: "Main same" },
+        { startTimeMs: 15000, durationMs: 2000, words: "(same)", isBackground: true, backgroundGroup: 0 },
+      ],
+    },
+    {
+      startTimeMs: 20000,
+      durationMs: 4000,
+      words: "Main first (echo)",
+      parts: [
+        { startTimeMs: 20000, durationMs: 2000, words: "Main first" },
+        { startTimeMs: 22000, durationMs: 1500, words: "(echo)", isBackground: true, backgroundGroup: 0 },
+      ],
+    },
+    {
+      startTimeMs: 29000,
+      durationMs: 5000,
+      words: "(pre) Center (post)",
+      parts: [
+        { startTimeMs: 29000, durationMs: 800, words: "(pre)", isBackground: true, backgroundGroup: 0 },
+        { startTimeMs: 30000, durationMs: 2000, words: "Center" },
+        { startTimeMs: 32000, durationMs: 1500, words: "(post)", isBackground: true, backgroundGroup: 1 },
+      ],
+    },
+    {
+      startTimeMs: 36000,
+      durationMs: 3000,
+      words: "(bg only)",
+      parts: [{ startTimeMs: 36000, durationMs: 2500, words: "(bg only)", isBackground: true, backgroundGroup: 0 }],
+    },
+  ]);
+
+  // Line 0: leading bg (9000 < 10000) placed ABOVE .blyrics-line-main
+  const l0Children = Array.from(renderer.lines[0].lyricElement.children);
+  assert.equal(l0Children[0].classList.contains("blyrics-background-line"), true, "leading bg is first child");
+  assert.equal(l0Children[0].classList.contains("blyrics-background-line--above"), true, "leading bg carries --above class");
+  assert.equal(l0Children[1].classList.contains("blyrics-line-main"), true, "main follows leading bg");
+
+  // Line 1: simultaneous bg (15000 === 15000) stays BELOW .blyrics-line-main
+  const l1Children = Array.from(renderer.lines[1].lyricElement.children);
+  assert.equal(l1Children[0].classList.contains("blyrics-line-main"), true, "simultaneous main stays first");
+  assert.equal(l1Children[1].classList.contains("blyrics-background-line"), true, "simultaneous bg stays below");
+  assert.equal(l1Children[1].classList.contains("blyrics-background-line--above"), false);
+
+  // Line 2: trailing bg (22000 > 20000) stays BELOW .blyrics-line-main
+  const l2Children = Array.from(renderer.lines[2].lyricElement.children);
+  assert.equal(l2Children[0].classList.contains("blyrics-line-main"), true, "trailing main stays first");
+  assert.equal(l2Children[1].classList.contains("blyrics-background-line"), true, "trailing bg stays below");
+  assert.equal(l2Children[1].classList.contains("blyrics-background-line--above"), false);
+
+  // Line 3: mixed leading (group 0) + trailing (group 1) wraps around .blyrics-line-main
+  const l3Children = Array.from(renderer.lines[3].lyricElement.children);
+  assert.equal(l3Children.length, 3);
+  assert.equal(l3Children[0].classList.contains("blyrics-background-line--above"), true, "group 0 above main");
+  assert.equal(l3Children[1].classList.contains("blyrics-line-main"), true, "main in middle");
+  assert.equal(l3Children[2].classList.contains("blyrics-background-line"), true, "group 1 below main");
+  assert.equal(l3Children[2].classList.contains("blyrics-background-line--above"), false);
+
+  // Line 4: background-only line stays standard (no --above)
+  const l4Children = Array.from(renderer.lines[4].lyricElement.children);
+  assert.equal(l4Children[0].classList.contains("blyrics-line-main"), true);
+  assert.equal(l4Children[1].classList.contains("blyrics-background-line"), true);
+  assert.equal(l4Children[1].classList.contains("blyrics-background-line--above"), false);
+
+  // Verify activeReveal opens early leading bg (startS=9.0 < lineStartS=10.0) at 8.6s (not late at 9.5s)
+  // and blooms upward (+10px) while FLIPing .blyrics-line-main smoothly.
+  const leadBgEl = l0Children[0] as HTMLElement;
+  const mainEl = l0Children[1] as HTMLElement;
+  Object.defineProperty(mainEl, "offsetTop", {
+    configurable: true,
+    get: () => (leadBgEl.classList.contains(REVEAL_COLLAPSED_CLASS) ? 0 : 34),
+  });
+  initActiveReveal(renderer, { document: tDoc, isViewVisible: () => true, getScrollElement: () => scroller });
+  syncActiveReveal(renderer);
+  assert.equal(leadBgEl.classList.contains(REVEAL_COLLAPSED_CLASS), true, "leading bg collapsed initially");
+
+  const tickOpts: TickOptions = { eventCreationTime: -1, isPlaying: true, smoothScroll: false };
+  renderer.tick(8.2, tickOpts); // snap before openAtS=8.6s
+  assert.equal(leadBgEl.classList.contains(REVEAL_COLLAPSED_CLASS), true, "leading bg still collapsed at 8.2s");
+
+  leadingAnims.length = 0;
+  renderer.tick(8.65, tickOpts); // crosses bgStartS - 0.4s (8.6s), before lineStartS - 0.5s (9.5s)!
+  assert.equal(leadBgEl.classList.contains(REVEAL_COLLAPSED_CLASS), false, "early leading bg opens at bgStartS - 0.4s");
+  const aboveEnter = leadingAnims.find(a => a.target === leadBgEl);
+  assert.ok(aboveEnter, "leading bg plays enter WAAPI");
+  assert.ok(
+    String((aboveEnter.keyframes as Keyframe[])[0].transform).includes("translateY(10px)"),
+    "leading bg blooms upward from +10px"
+  );
+  const mainFlip = leadingAnims.find(a => a.target === mainEl);
+  assert.ok(mainFlip, ".blyrics-line-main gets inner sibling FLIP when leading bg expands");
+  assert.equal((mainFlip.keyframes as Keyframe[])[0].translate, "0px -34.00px");
+
+  renderer.destroy();
+}
+
 console.log("activeReveal self-checks passed");

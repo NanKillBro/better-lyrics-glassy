@@ -67,6 +67,11 @@
 	white-space: normal;
 }
 
+.blyrics-background-line.blyrics-background-line--above {
+	margin-top: 0;
+	margin-bottom: 0.1em;
+}
+
 .blyrics-bidi-run {
 	display: block;
 	max-width: 100%;

@@ -154,3 +154,24 @@
 	> .blyrics-background-line {
 	transform-origin: center top;
 }
+
+:root[blyrics-auto-hide-instrumental-bg]:not([blyrics-webgl-lyrics])
+	.blyrics-container:not(.brs-layout)
+	> .blyrics--line
+	> .blyrics-background-line.blyrics-background-line--above {
+	transform-origin: left bottom;
+}
+
+:root[blyrics-auto-hide-instrumental-bg]:not([blyrics-webgl-lyrics])
+	.blyrics-container:not(.brs-layout)
+	> .blyrics--line:is([data-agent="v2"], [data-agent="v3"], [data-direction="rtl"])
+	> .blyrics-background-line.blyrics-background-line--above {
+	transform-origin: right bottom;
+}
+
+:root[blyrics-auto-hide-instrumental-bg]:not([blyrics-webgl-lyrics])
+	.blyrics-container:not(.brs-layout)
+	> .blyrics--line[data-agent="v1000"]
+	> .blyrics-background-line.blyrics-background-line--above {
+	transform-origin: center bottom;
+}
