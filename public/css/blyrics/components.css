@@ -240,6 +240,19 @@
 	flex-wrap: wrap;
 }
 
+:root[blyrics-hide-footer] .blyrics-footer,
+.blyrics-footer[data-footer-empty="true"] {
+	display: none !important;
+}
+
+:root[blyrics-hide-footer-genius] .blyrics-footer > [data-blyrics-footer-item="genius"],
+:root[blyrics-hide-footer-submit-unison] .blyrics-footer > [data-blyrics-footer-item="submit-unison"],
+:root[blyrics-hide-footer-request-synced] .blyrics-footer > [data-blyrics-footer-item="request-synced"],
+:root[blyrics-hide-footer-discord] .blyrics-footer > .blyrics-footer__discord,
+:root[blyrics-hide-footer-unison-credit] .blyrics-footer > .blyrics-footer__unison {
+	display: none !important;
+}
+
 .blyrics-footer img {
 	user-select: none;
 }

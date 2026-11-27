@@ -43,8 +43,14 @@ import type { ThumbnailElement } from "@modules/lyrics/requestSniffer/NextRespon
 import { getArtworkMetadata } from "@modules/lyrics/requestSniffer/requestSniffer";
 import { measureWidth, type ObserverHandle, observeLayoutWidth, observeResize } from "@modules/ui/layout/layoutWidth";
 import { syncRendererModeFromStorage } from "@modules/settings/rendererModeSettings";
+import {
+  FOOTER_ITEM_ATTR,
+  FOOTER_ITEM_KEYS,
+  syncEmptyFooterAttribute,
+  syncFooterVisibilityAttributes,
+} from "@modules/settings/footerSettings";
 import { createDockProximityTracker, type DockProximityTracker } from "@modules/ui/dockProximity";
-import { lyricsElementAdded, mainView } from "@modules/ui/mainLyricsView";
+import { lyricsElementAdded, mainView, retickMainView } from "@modules/ui/mainLyricsView";
 import { publishSecondaryViews } from "@modules/ui/secondaryViews";
 import { syncKaraoke } from "@modules/karaoke/karaokeView";
 import {
@@ -435,6 +441,7 @@ export function addFooter(
     AppState.currentUnisonData = null;
   }
 
+  syncEmptyFooterAttribute(document, AppState.footerSettings);
   updateNoLyricsSuppression();
 }
 
@@ -628,6 +635,7 @@ function buildUnisonVoteButton(unisonData: UnisonData, voteValue: 1 | -1): HTMLB
 function createUnisonFooterCard(unisonData: UnisonData): HTMLElement {
   const unisonContainer = document.createElement("div");
   unisonContainer.className = `${FOOTER_CLASS}__unison`;
+  unisonContainer.setAttribute(FOOTER_ITEM_ATTR, FOOTER_ITEM_KEYS.unisonCredit);
 
   const unisonCard = document.createElement("div");
   unisonCard.className = `${FOOTER_CLASS}__container ${FOOTER_CLASS}__unison-card`;
@@ -909,18 +917,51 @@ export function mountVotingSegment(unisonData: UnisonData): void {
   segment.appendChild(createReportButton(unisonData.lyricsId));
   inner.appendChild(segment);
   animateDockEnter(segment);
+  syncFooterUnisonDockObserver();
+}
 
+function isFooterUnisonCreditShown(): boolean {
+  return AppState.footerSettings.isFooterEnabled && AppState.footerSettings.isFooterUnisonCreditEnabled;
+}
+
+function syncFooterUnisonDockObserver(): void {
+  if (unisonDockObserver) {
+    unisonDockObserver.disconnect();
+    unisonDockObserver = null;
+  }
+
+  if (!isFooterUnisonCreditShown()) {
+    setVotingSegmentHidden(false);
+    return;
+  }
+
+  if (!AppState.currentUnisonData || !AppState.isControlsDockEnabled) return;
+  const votingSegment = document.querySelector(`.${DOCK_CLASS}__voting`);
   const card = document.querySelector<HTMLElement>(`.${FOOTER_CLASS}__unison-card`);
-  if (card) {
-    unisonDockObserver = new IntersectionObserver(
-      entries => {
-        for (const entry of entries) {
-          setVotingSegmentHidden(entry.isIntersecting);
-        }
-      },
-      { threshold: 0.4 }
-    );
-    unisonDockObserver.observe(card);
+  if (!votingSegment || !card) {
+    setVotingSegmentHidden(false);
+    return;
+  }
+
+  unisonDockObserver = new IntersectionObserver(
+    entries => {
+      for (const entry of entries) {
+        setVotingSegmentHidden(entry.isIntersecting);
+      }
+    },
+    { threshold: 0.4 }
+  );
+  unisonDockObserver.observe(card);
+}
+
+/** Syncs footer visibility attributes, collapsed state, and dock vote observer. */
+export function syncFooterDisplay(): void {
+  const attrsChanged = syncFooterVisibilityAttributes(document, AppState.footerSettings);
+  const emptyChanged = syncEmptyFooterAttribute(document, AppState.footerSettings);
+  syncFooterUnisonDockObserver();
+  if (attrsChanged || emptyChanged) {
+    mainView.relayout();
+    retickMainView();
   }
 }
 
@@ -1082,6 +1123,7 @@ function createFooter(
 
     const footerContainer = document.createElement("div");
     footerContainer.className = `${FOOTER_CLASS}__container`;
+    footerContainer.setAttribute(FOOTER_ITEM_ATTR, FOOTER_ITEM_KEYS.source);
 
     const footerImage = document.createElement("img");
     footerImage.src = HOMEPAGE_ICON_URL;
@@ -1108,6 +1150,7 @@ function createFooter(
     discordLink.className = `${FOOTER_CLASS}__discord`;
     discordLink.href = DISCORD_INVITE_URL;
     discordLink.target = "_blank";
+    discordLink.setAttribute(FOOTER_ITEM_ATTR, FOOTER_ITEM_KEYS.discord);
 
     discordLink.appendChild(discordImage);
 
@@ -1119,19 +1162,22 @@ function createFooter(
       logoSrc: GENIUS_LOGO_SRC,
       logoAlt: "Genius",
     });
+    geniusContainer.setAttribute(FOOTER_ITEM_ATTR, FOOTER_ITEM_KEYS.genius);
 
     footer.appendChild(footerContainer);
     footer.appendChild(geniusContainer);
     if (videoId) {
-      footer.appendChild(
-        createActionButton({
-          text: t("lyrics_submitToUnison"),
-          href: buildUnisonSubmitUrl(song, artist, album, duration, videoId).toString(),
-        })
-      );
+      const submitToUnison = createActionButton({
+        text: t("lyrics_submitToUnison"),
+        href: buildUnisonSubmitUrl(song, artist, album, duration, videoId).toString(),
+      });
+      submitToUnison.setAttribute(FOOTER_ITEM_ATTR, FOOTER_ITEM_KEYS.submitUnison);
+      footer.appendChild(submitToUnison);
     }
     if (videoId && showRequestButton) {
-      footer.appendChild(createRequestSyncedButton({ videoId, song, artist }));
+      const requestSynced = createRequestSyncedButton({ videoId, song, artist });
+      requestSynced.setAttribute(FOOTER_ITEM_ATTR, FOOTER_ITEM_KEYS.requestSynced);
+      footer.appendChild(requestSynced);
     }
     chrome.storage.local.get({ isShadersPromoEnabled: true }, settings => {
       if (!discordLink.isConnected) return;
@@ -1140,6 +1186,7 @@ function createFooter(
 
       const shadersButton = document.createElement("a");
       shadersButton.className = `${FOOTER_CLASS}__container ${FOOTER_CLASS}__shaders`;
+      shadersButton.setAttribute(FOOTER_ITEM_ATTR, FOOTER_ITEM_KEYS.shaders);
       shadersButton.href = getShadersStoreUrl();
       shadersButton.target = "_blank";
       shadersButton.rel = "noreferrer noopener";
@@ -1156,6 +1203,7 @@ function createFooter(
       shadersButton.appendChild(shadersLabel);
 
       footer.insertBefore(shadersButton, discordLink);
+      syncEmptyFooterAttribute(document, AppState.footerSettings);
       observeShimmerVisibility(shadersButton);
     });
     footer.appendChild(discordLink);

@@ -129,6 +129,10 @@
 								<span class="ui-row__label">__MSG_options_display_unisonActions__</span>
 								<span data-icon="chevron"></span>
 							</button>
+							<button class="ui-row" id="footer-settings-btn" type="button">
+								<span class="ui-row__label">__MSG_options_display_footer__</span>
+								<span data-icon="chevron"></span>
+							</button>
 							<button class="ui-row" id="pip-settings-btn" type="button">
 								<span class="ui-row__label">__MSG_options_display_pipWindow__</span>
 								<span data-icon="chevron"></span>
@@ -652,6 +656,69 @@
 				</div>
 				<div class="ui-modal__foot">
 					<button id="dock-settings-reset" type="button" class="ui-button ui-button--header">__MSG_options_reset__</button>
+				</div>
+			</div>
+		</div>
+
+		<div id="footer-modal-overlay" class="ui-modal" hidden="">
+			<div class="ui-modal__surface">
+				<div class="ui-modal__head">
+					<h3 class="ui-modal__title">__MSG_options_footerModal_title__</h3>
+					<button id="footer-modal-close" type="button" class="ui-button ui-button--header ui-button--icon ui-modal__close" data-modal-close="" aria-label="__MSG_ui_close__">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+							<path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"></path>
+						</svg>
+					</button>
+				</div>
+				<div class="ui-modal__body" id="footer-modal-body" data-scroll-fade="">
+					<div class="container unison-modal-row">
+						<div class="unison-modal-row__text">
+							<span id="isFooterEnabled-label">__MSG_options_footerModal_showFooter__</span>
+							<p class="unison-modal-row__hint">__MSG_options_footerModal_showFooter_hint__</p>
+						</div>
+						<label class="ui-switch">
+							<input type="checkbox" role="switch" class="ui-switch__input" id="isFooterEnabled" aria-labelledby="isFooterEnabled-label">
+							<span class="ui-switch__track" aria-hidden="true"></span>
+						</label>
+					</div>
+					<div class="container footer-modal-row--dependent">
+						<span id="isFooterGeniusEnabled-label">__MSG_options_footerModal_genius__</span>
+						<label class="ui-switch">
+							<input type="checkbox" role="switch" class="ui-switch__input" id="isFooterGeniusEnabled" aria-labelledby="isFooterGeniusEnabled-label">
+							<span class="ui-switch__track" aria-hidden="true"></span>
+						</label>
+					</div>
+					<div class="container footer-modal-row--dependent">
+						<span id="isFooterSubmitToUnisonEnabled-label">__MSG_options_footerModal_submitToUnison__</span>
+						<label class="ui-switch">
+							<input type="checkbox" role="switch" class="ui-switch__input" id="isFooterSubmitToUnisonEnabled" aria-labelledby="isFooterSubmitToUnisonEnabled-label">
+							<span class="ui-switch__track" aria-hidden="true"></span>
+						</label>
+					</div>
+					<div class="container footer-modal-row--dependent">
+						<span id="isFooterRequestSyncedEnabled-label">__MSG_options_footerModal_requestSynced__</span>
+						<label class="ui-switch">
+							<input type="checkbox" role="switch" class="ui-switch__input" id="isFooterRequestSyncedEnabled" aria-labelledby="isFooterRequestSyncedEnabled-label">
+							<span class="ui-switch__track" aria-hidden="true"></span>
+						</label>
+					</div>
+					<div class="container footer-modal-row--dependent">
+						<span id="isFooterDiscordEnabled-label">__MSG_options_footerModal_discord__</span>
+						<label class="ui-switch">
+							<input type="checkbox" role="switch" class="ui-switch__input" id="isFooterDiscordEnabled" aria-labelledby="isFooterDiscordEnabled-label">
+							<span class="ui-switch__track" aria-hidden="true"></span>
+						</label>
+					</div>
+					<div class="container footer-modal-row--dependent">
+						<span id="isFooterUnisonCreditEnabled-label">__MSG_options_footerModal_unisonCredit__</span>
+						<label class="ui-switch">
+							<input type="checkbox" role="switch" class="ui-switch__input" id="isFooterUnisonCreditEnabled" aria-labelledby="isFooterUnisonCreditEnabled-label">
+							<span class="ui-switch__track" aria-hidden="true"></span>
+						</label>
+					</div>
+				</div>
+				<div class="ui-modal__foot">
+					<button id="footer-settings-reset" type="button" class="ui-button ui-button--header">__MSG_options_reset__</button>
 				</div>
 			</div>
 		</div>

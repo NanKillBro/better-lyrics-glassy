@@ -1,4 +1,5 @@
 import { DISABLE_EFFECTS_STYLE_ID, FOOTER_CLASS, PLAYER_TIME_EVENT } from "@constants";
+import { FOOTER_EMPTY_ATTR } from "@modules/settings/footerSettings";
 import { AUTO_HIDE_INSTRUMENTAL_BG_ATTR, initActiveReveal, syncActiveReveal } from "@modules/ui/activeReveal";
 import { registerPipBaseProperties, syncPipRendererMode } from "@modules/ui/rendererMode";
 import { translateContributorCreditLabels } from "@modules/lyrics/contributorCredit";
@@ -99,6 +100,7 @@ function importSourceFooter(source: Element, targetDocument: Document): HTMLElem
   const sourceContainer = footer.querySelector(`#${FOOTER_SOURCE_LINK_ID}`)?.closest(`.${FOOTER_CLASS}__container`);
   if (!sourceContainer) return null;
 
+  footer.removeAttribute(FOOTER_EMPTY_ATTR);
   footer.replaceChildren(sourceContainer);
   for (const focusable of footer.querySelectorAll("a, button, [tabindex]")) {
     focusable.setAttribute("tabindex", "-1");

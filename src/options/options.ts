@@ -40,6 +40,12 @@ import {
 import { KARAOKE_DEFAULTS } from "@modules/karaoke/defaults";
 import { syncTypeColors } from "@modules/ui/lyricsDock/icons";
 import { type FullscreenControlsPref, migrateFullscreenControlsPref } from "@modules/settings/fullscreenControls";
+import {
+  FOOTER_SETTING_KEYS,
+  FOOTER_SETTINGS_DEFAULTS,
+  type FooterSettings,
+  normalizeFooterSettings,
+} from "@modules/settings/footerSettings";
 import { migrateLetterWavePref, type LetterWavePref } from "@modules/settings/letterWave";
 import { mergePreferredProviders } from "@modules/lyrics/providers/providerList";
 import { fetchOwnGamification, renderIdentityStats } from "@modules/unison/gamificationRender";
@@ -92,7 +98,7 @@ import {
   writeRendererModeForm,
 } from "@/options/rendererModeControls";
 
-interface Options extends VideoQualitySettings, RendererModeOptions {
+interface Options extends VideoQualitySettings, RendererModeOptions, FooterSettings {
   isLogsEnabled: boolean;
   isAutoSwitchEnabled: boolean;
   isAlbumArtEnabled: boolean;
@@ -205,6 +211,7 @@ const getOptionsFromForm = (): Options => {
     isFastDockProximityEnabled: (document.getElementById("isFastDockProximityEnabled") as HTMLInputElement).checked,
     isFastPipArtworkEnabled: (document.getElementById("isFastPipArtworkEnabled") as HTMLInputElement).checked,
     ...readRendererModeForm(),
+    ...readFooterSettingsForm(),
     isPictureInPictureEnabled: (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked,
     isPictureInPictureAutoRestoreEnabled: (
       document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement
@@ -412,6 +419,7 @@ const restoreOptions = (): void => {
     isFastDockProximityEnabled: false,
     isFastPipArtworkEnabled: false,
     ...RENDERER_MODE_DEFAULTS,
+    ...FOOTER_SETTINGS_DEFAULTS,
     isPictureInPictureEnabled: true,
     isPictureInPictureAutoRestoreEnabled: false,
     pipWindowLayout: "horizontal",
@@ -486,6 +494,7 @@ const restoreOptions = (): void => {
 
   document.getElementById("clear-cache")!.addEventListener("click", () => clearTransientLyrics());
   setupUnisonActionsModal();
+  initFooterModal();
   initPictureInPictureModal();
   initOffsetModal();
 };
@@ -530,6 +539,7 @@ const setOptionsInForm = (items: Options): void => {
     items.isFastDockProximityEnabled;
   (document.getElementById("isFastPipArtworkEnabled") as HTMLInputElement).checked = items.isFastPipArtworkEnabled;
   writeRendererModeForm(items);
+  writeFooterSettingsForm(items);
   (document.getElementById("isPictureInPictureEnabled") as HTMLInputElement).checked = items.isPictureInPictureEnabled;
   (document.getElementById("isPictureInPictureAutoRestoreEnabled") as HTMLInputElement).checked =
     items.isPictureInPictureAutoRestoreEnabled;
@@ -1721,6 +1731,55 @@ function setOffsetDisplay(id: string, value: number): void {
 
 // The controls live outside #options, so the blanket change listener over that
 // subtree does not reach them and each one is bound here instead.
+function readFooterSettingsForm(): FooterSettings {
+  const raw: Partial<Record<keyof FooterSettings, boolean>> = {};
+  for (const key of FOOTER_SETTING_KEYS) {
+    raw[key] = (document.getElementById(key) as HTMLInputElement | null)?.checked ?? FOOTER_SETTINGS_DEFAULTS[key];
+  }
+  return normalizeFooterSettings(raw);
+}
+
+function writeFooterSettingsForm(items: FooterSettings): void {
+  const normalized = normalizeFooterSettings(items);
+  for (const key of FOOTER_SETTING_KEYS) {
+    const input = document.getElementById(key) as HTMLInputElement | null;
+    if (input) input.checked = normalized[key];
+  }
+  syncFooterModalDependentState(normalized.isFooterEnabled);
+}
+
+function syncFooterModalDependentState(enabled: boolean): void {
+  const body = document.getElementById("footer-modal-body");
+  if (!body) return;
+  body.dataset.footerDisabled = enabled ? "false" : "true";
+  for (const row of body.querySelectorAll<HTMLElement>(".footer-modal-row--dependent")) {
+    row.inert = !enabled;
+  }
+}
+
+function initFooterModal(): void {
+  const openBtn = document.getElementById("footer-settings-btn");
+  const overlay = document.getElementById("footer-modal-overlay");
+  if (!openBtn || !overlay) return;
+
+  const modal = createModal(overlay);
+  openBtn.addEventListener("click", () => modal.open());
+
+  for (const control of overlay.querySelectorAll<HTMLInputElement>("input")) {
+    control.addEventListener("change", () => {
+      if (control.id === "isFooterEnabled") {
+        syncFooterModalDependentState(control.checked);
+      }
+      saveOptions();
+    });
+  }
+
+  document.getElementById("footer-settings-reset")?.addEventListener("click", () => {
+    writeFooterSettingsForm(FOOTER_SETTINGS_DEFAULTS);
+    saveOptions();
+  });
+}
+
 function initPictureInPictureModal(): void {
   const openBtn = document.getElementById("pip-settings-btn");
   const overlay = document.getElementById("pip-modal-overlay");

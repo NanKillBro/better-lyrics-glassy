@@ -290,6 +290,42 @@
     "message": "Lyrics controls dock",
     "description": "Display-section row label for the lyrics controls dock modal trigger"
   },
+  "options_display_footer": {
+    "message": "Lyrics footer",
+    "description": "Display-section row label for the lyrics footer modal trigger"
+  },
+  "options_footerModal_title": {
+    "message": "Lyrics footer",
+    "description": "Title of the lyrics footer settings modal"
+  },
+  "options_footerModal_showFooter": {
+    "message": "Show lyrics footer",
+    "description": "Master toggle inside the lyrics footer modal for showing the footer below the lyrics"
+  },
+  "options_footerModal_showFooter_hint": {
+    "message": "Action buttons and Unison contributor card below the lyrics",
+    "description": "Hint text under the Show lyrics footer toggle"
+  },
+  "options_footerModal_genius": {
+    "message": "Search on Genius",
+    "description": "Toggle label inside the lyrics footer modal for showing the Search on Genius button"
+  },
+  "options_footerModal_submitToUnison": {
+    "message": "Submit lyrics with Unison",
+    "description": "Toggle label inside the lyrics footer modal for showing the Submit lyrics with Unison button"
+  },
+  "options_footerModal_requestSynced": {
+    "message": "Request a synced version",
+    "description": "Toggle label inside the lyrics footer modal for showing the Request a synced version button on unsynced lyrics"
+  },
+  "options_footerModal_discord": {
+    "message": "Discord",
+    "description": "Toggle label inside the lyrics footer modal for showing the Discord link button"
+  },
+  "options_footerModal_unisonCredit": {
+    "message": "Unison credit",
+    "description": "Toggle label inside the lyrics footer modal for showing the Unison contributor and voting card"
+  },
   "options_unisonModal_title": {
     "message": "Lyrics controls dock",
     "description": "Title of the lyrics controls dock settings modal"

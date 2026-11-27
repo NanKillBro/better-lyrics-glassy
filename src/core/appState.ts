@@ -8,6 +8,7 @@ import { flushLoader } from "@modules/ui/dom";
 import { clearSongCache } from "@core/storage";
 import { logError } from "@core/logger";
 import { KARAOKE_DEFAULTS } from "@modules/karaoke/defaults";
+import { FOOTER_SETTINGS_DEFAULTS, type FooterSettings } from "@modules/settings/footerSettings";
 
 export interface PlayerDetails {
   currentTime: number;
@@ -88,6 +89,7 @@ interface AppStateType {
   isIdleTickSuspensionEnabled: boolean;
   isFastDockProximityEnabled: boolean;
   isWebglLyricsEnabled: boolean;
+  footerSettings: FooterSettings;
 }
 
 export const AppState: AppStateType = {
@@ -147,6 +149,7 @@ export const AppState: AppStateType = {
   isIdleTickSuspensionEnabled: false,
   isFastDockProximityEnabled: false,
   isWebglLyricsEnabled: false,
+  footerSettings: { ...FOOTER_SETTINGS_DEFAULTS },
 };
 
 export function reloadLyrics(): void {

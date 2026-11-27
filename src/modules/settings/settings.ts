@@ -13,6 +13,12 @@ import { configureLogging, logContent } from "@core/logger";
 import { syncKaraoke } from "@modules/karaoke/karaokeView";
 import { loadKaraokeSettings } from "@modules/karaoke/settings";
 import { migrateFullscreenControlsPref } from "@modules/settings/fullscreenControls";
+import {
+  FOOTER_SETTING_KEYS,
+  FOOTER_SETTINGS_DEFAULTS,
+  type FooterSettings,
+  normalizeFooterSettings,
+} from "@modules/settings/footerSettings";
 import { applyRendererModeSettings } from "@modules/settings/rendererModeSettings";
 import { readRendererMode, RENDERER_MODE_DEFAULTS } from "@modules/ui/rendererMode";
 import { clearCache as clearTranslationCache } from "@modules/lyrics/translation";
@@ -22,6 +28,7 @@ import {
   reloadAlbumArt,
   syncAdCheckState,
   syncDockProximityMode,
+  syncFooterDisplay,
   unmountDock,
   updateDockPosition,
 } from "@modules/ui/dom";
@@ -87,6 +94,7 @@ export function handleSettings(): void {
   loadLyricsBlurSetting();
   loadUnblurUpcomingLyricsSetting();
   loadAutoHideInstrumentalBgSetting();
+  loadFooterSettings();
   loadPerformanceSettings();
 }
 
@@ -170,6 +178,17 @@ function applyAutoHideInstrumentalBgSetting(enabled: boolean): void {
 function loadAutoHideInstrumentalBgSetting(): void {
   getStorage(AUTO_HIDE_INSTRUMENTAL_BG_DEFAULTS, items => {
     applyAutoHideInstrumentalBgSetting(items.isAutoHideInstrumentalBackgroundEnabled !== false);
+  });
+}
+
+function applyFooterSettings(settings: FooterSettings): void {
+  AppState.footerSettings = settings;
+  syncFooterDisplay();
+}
+
+function loadFooterSettings(): void {
+  getStorage({ ...FOOTER_SETTINGS_DEFAULTS }, items => {
+    applyFooterSettings(normalizeFooterSettings(items));
   });
 }
 
@@ -313,6 +332,13 @@ export function initPerformanceSettingsListener(): () => void {
     }
     if ("isAutoHideInstrumentalBackgroundEnabled" in changes) {
       applyAutoHideInstrumentalBgSetting(changes.isAutoHideInstrumentalBackgroundEnabled.newValue !== false);
+    }
+    if (FOOTER_SETTING_KEYS.some(key => key in changes)) {
+      const next = { ...AppState.footerSettings } as Record<keyof FooterSettings, unknown>;
+      for (const key of FOOTER_SETTING_KEYS) {
+        if (key in changes) next[key] = changes[key].newValue;
+      }
+      applyFooterSettings(normalizeFooterSettings(next));
     }
     if ("isWebglLyricsEnabled" in changes) {
       void applyRendererModeSettings({ isWebglLyricsEnabled: changes.isWebglLyricsEnabled.newValue }).then(() => {
@@ -461,6 +487,9 @@ export function listenForPopupMessages(): void {
         }
       );
       getAndApplyCustomStyles();
+      if (request.settings && FOOTER_SETTING_KEYS.some(key => key in request.settings)) {
+        applyFooterSettings(normalizeFooterSettings({ ...AppState.footerSettings, ...request.settings }));
+      }
       if (request.settings && "isWebglLyricsEnabled" in request.settings) {
         void applyRendererModeSettings(request.settings).then(() => {
           syncActiveReveal(mainView);
