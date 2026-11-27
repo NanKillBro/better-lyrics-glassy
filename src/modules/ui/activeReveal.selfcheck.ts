@@ -418,7 +418,7 @@ const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMark
   assert.deepEqual(layoutEvents[0].shifts[1], [1, 60]);
   const introExitAnim = recordedAnims.find(a => a.target.classList.contains("blyrics--instrumental-icon"));
   assert.ok(introExitAnim, "exit WAAPI runs on instrumental icon");
-  assert.equal((introExitAnim.options as KeyframeAnimationOptions).delay, 140, "sync-scroll exit waits 140ms");
+  assert.equal((introExitAnim.options as KeyframeAnimationOptions).delay, 0, "sync-scroll exit starts immediately without pause");
   assert.equal((introExitAnim.options as KeyframeAnimationOptions).duration, 320, "exit duration is 320ms");
   const introExitFrames = introExitAnim.keyframes as Keyframe[];
   assert.ok(String(introExitFrames[0].filter).includes("blur(0px)"), "exit starts unblurred");

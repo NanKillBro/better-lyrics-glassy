@@ -25,7 +25,6 @@ const FLIP_IMMEDIATE_DURATION_MS = 620;
 const GF_ENTER_DELAY_MS = 180;
 const GF_INNER_FLIP_SYNC_DELAY_MS = 240;
 const GF_BG_SYNC_DELAY_MS = 260;
-const GF_EXIT_DELAY_MS = 140;
 const BG_ENTER_SCALE_FROM = 0.78;
 const INST_ENTER_SCALE_FROM = 0.72;
 const INST_EXIT_SCALE_TO = 0.72;
@@ -629,7 +628,6 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
   function startExitAnimation(
     item: ManagedItem,
     anchorOffsetPx: number,
-    delayMs: number,
     precomputedBaseFilter?: string
   ): void {
     clearItemAnimations(item);
@@ -661,7 +659,7 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       ],
       {
         duration: INST_EXIT_DURATION_MS,
-        delay: delayMs,
+        delay: 0,
         easing: EXIT_EASING,
         fill: "both",
       }
@@ -943,10 +941,6 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
     const recentScrollHoldMs = withinRecentScrollWindow
       ? Math.max(0, GF_BG_SYNC_DELAY_MS - (nowMs - lastLyricScrollAtMs))
       : 0;
-    // Only delay exit when scrolling forward (GlassyFlow applies its 240ms hold); if scroll is
-    // zero or negative, incoming lines move immediately so the exiting note must dissolve right away.
-    const exitDelayMs = isGlassyFlowManaged && shiftMode === "sync-scroll" && signedScrollDelta > 2 ? GF_EXIT_DELAY_MS : 0;
-
     for (const item of toExpand) {
       let itemEnterDelayMs = useSyncDelay ? GF_ENTER_DELAY_MS : 0;
       if (item.kind !== "instrumental" && isGlassyFlowManaged) {
@@ -954,6 +948,7 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       }
       startEnterAnimation(item, itemEnterDelayMs, expandBaseFilters.get(item));
     }
+    // Start exiting immediately even on forward GlassyFlow scrolls so the note dissolves instead of pausing during the 240ms hold.
     for (const item of toCollapse) {
       const snapshot = exitSnapshots.get(item);
       let anchorOffsetPx = snapshot?.fallbackOffsetPx ?? 0;
@@ -961,7 +956,7 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
         anchorOffsetPx =
           snapshot.beforeVisualTop - snapshot.midRestingTop + (isGlassyFlowManaged ? signedScrollDelta : 0);
       }
-      startExitAnimation(item, anchorOffsetPx, exitDelayMs, snapshot?.baseFilter);
+      startExitAnimation(item, anchorOffsetPx, snapshot?.baseFilter);
     }
 
     return result;
