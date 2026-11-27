@@ -72,7 +72,7 @@ ytmusic-app {
 /* 2. TINH CHỈNH GIAO DIỆN CHUNG (GLOBAL FIXES)   */
 /* ============================================== */
 /* Xóa thanh cuộn cho gọn mắt */
-html, #items, #tab-renderer, #chips, ytmusic-menu-popup-renderer, .ytmusicMultiPageMenuHost, .scrollable-content, .scroller, .dropdown-content, .ytmusic-settings-page {
+html, #items, #tab-renderer, .blyrics-container, #chips, ytmusic-menu-popup-renderer, .ytmusicMultiPageMenuHost, .scrollable-content, .scroller, .dropdown-content, .ytmusic-settings-page {
   scrollbar-width: none !important;
 }
 body::-webkit-scrollbar {
@@ -99,11 +99,6 @@ ytmusic-player-page[player-fullscreened] * {
    [player-fullscreened] có sẵn, giữ nguyên predicate và declaration. */
 body.nankill-body-fullscreen {
   overflow: hidden !important;
-}
-
-/* Đảm bảo khung lyric vẫn cuộn được (nhưng không hiện thanh) */
-ytmusic-player-page[player-fullscreened] .blyrics-container {
-  overflow-y: auto !important;
 }
 
 /* ============================================== */
@@ -1171,8 +1166,9 @@ ytmusic-player-page[player-fullscreened]:is([blyrics-video-mode], [video-mode]):
   position: relative;
   z-index: 2;
   text-align: left;
-  overflow-y: auto; 
-  overflow-x: hidden;
+  /* #tab-renderer owns scrolling; clip horizontally without coercing overflow-y into a scroll container. */
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .blyrics-container > div {

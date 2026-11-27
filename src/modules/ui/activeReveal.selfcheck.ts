@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import type { Lyric, TickOptions } from "@braccato/core";
+import type { ActiveRevealView, LayoutShiftPayload } from "@modules/ui/activeReveal";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true });
 const { window } = dom;
@@ -887,6 +888,115 @@ const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMark
   );
 
   renderer.destroy();
+}
+
+// 8. Offscreen .blyrics-credits/.blyrics-footer are omitted from layout-shift payloads, while near-viewport ones are kept
+{
+  const testDom = new JSDOM("<!doctype html><html><body><div id='scroll'><div class='blyrics-container blyrics--gf-managed'></div></div></body></html>", {
+    pretendToBeVisual: true,
+  });
+  const tWin = testDom.window as unknown as Window & typeof globalThis;
+  const tDoc = tWin.document;
+  tDoc.documentElement.setAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, "");
+  Object.defineProperty(tWin, "matchMedia", { configurable: true, value: stubMatchMedia });
+
+  const scroller = tDoc.getElementById("scroll")!;
+  let mockScrollTop = 0;
+  Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => 500 });
+  Object.defineProperty(scroller, "scrollTop", {
+    configurable: true,
+    get: () => mockScrollTop,
+    set: (v: number) => {
+      mockScrollTop = v;
+    },
+  });
+
+  const container = scroller.querySelector<HTMLElement>(".blyrics-container")!;
+  const instEl = tDoc.createElement("div");
+  instEl.className = "blyrics--line blyrics--instrumental";
+  instEl.dataset.instrumental = "true";
+  const iconEl = tDoc.createElement("span");
+  iconEl.className = "blyrics--instrumental-icon";
+  instEl.appendChild(iconEl);
+  container.appendChild(instEl);
+
+  const mainEl = tDoc.createElement("div");
+  mainEl.className = "blyrics--line";
+  mainEl.innerHTML = `<div class="blyrics-line-main"><span class="blyrics--word" data-time="5" data-duration="2">Hello</span></div>`;
+  container.appendChild(mainEl);
+
+  const footerEl = tDoc.createElement("div");
+  footerEl.className = "blyrics-footer";
+  let footerBaseTop = 3000;
+  let instExpanded = true;
+  Object.defineProperty(footerEl, "offsetTop", {
+    configurable: true,
+    get: () => footerBaseTop + (instExpanded ? 80 : 0),
+  });
+  container.appendChild(footerEl);
+
+  const lines: Array<{ time: number; duration: number; position: number; height: number; lyricElement: HTMLElement }> = [
+    { time: 0, duration: 5, position: 0, height: 80, lyricElement: instEl },
+    { time: 5, duration: 4, position: 80, height: 60, lyricElement: mainEl },
+  ];
+
+  const shiftsReceived: LayoutShiftPayload[] = [];
+  container.addEventListener(LAYOUT_SHIFT_EVENT, ev => {
+    const detail = (ev as CustomEvent<string>).detail;
+    shiftsReceived.push(JSON.parse(detail));
+  });
+
+  const fakeView: ActiveRevealView = {
+    get container() {
+      return container;
+    },
+    get lines() {
+      return lines;
+    },
+    syncType: "richsync",
+    setLyrics() {},
+    tick() {
+      return "ok";
+    },
+    retickFromPlaybackClock() {
+      return "ok";
+    },
+    relayout() {
+      instExpanded = !instEl.classList.contains(REVEAL_COLLAPSED_CLASS) && !instEl.classList.contains(REVEAL_EXITING_CLASS);
+      lines[0].height = instExpanded ? 80 : 0;
+      lines[1].position = instExpanded ? 80 : 0;
+    },
+    relayoutChangedLines() {
+      this.relayout(true);
+    },
+  };
+
+  initActiveReveal(fakeView, { document: tDoc, isViewVisible: () => true, getScrollElement: () => scroller });
+  const tickOpts: TickOptions = { eventCreationTime: -1, isPlaying: true, smoothScroll: false };
+
+  // Snap at t=4.2 (intro expanded), then exit intro at t=4.6 (< 0.75s step) while footer is far offscreen (3080 > 1000).
+  fakeView.tick(4.2, tickOpts);
+  shiftsReceived.length = 0;
+  fakeView.tick(4.6, tickOpts);
+  assert.equal(shiftsReceived.length, 1, "line shift dispatched for line 1");
+  assert.equal(
+    shiftsReceived[0].shifts.some(([idx]) => idx === 2),
+    false,
+    "offscreen footer (> scrollTop + 2*viewportH) omitted from layout-shift payload"
+  );
+
+  // Move footer into near-viewport range (600 <= 1000) and repeat collapse: footer shift IS emitted.
+  footerBaseTop = 600;
+  fakeView.tick(1.0, tickOpts); // seek > 0.75s back to re-expand intro
+  fakeView.tick(4.2, tickOpts); // snap just before closeAtS=4.5
+  shiftsReceived.length = 0;
+  fakeView.tick(4.6, tickOpts);
+  assert.equal(shiftsReceived.length, 1);
+  assert.deepEqual(
+    shiftsReceived[0].shifts.find(([idx]) => idx === 2),
+    [2, 80],
+    "near-viewport footer shift is preserved"
+  );
 }
 
 console.log("activeReveal self-checks passed");

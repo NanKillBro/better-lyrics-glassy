@@ -846,9 +846,13 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
     const newTops = lines.map(readRawLineTop);
     const visibleRange = resolveVisibleIndexRange(lines, newTops, scrollEl);
     const lineShifts = computeLineLayoutShifts(oldTops, newTops, visibleRange.start, visibleRange.end);
+    const viewportH = scrollEl?.clientHeight || 0;
+    const trailingMaxY = viewportH > 0 ? (scrollEl?.scrollTop || 0) + viewportH * 2 : Number.POSITIVE_INFINITY;
     const trailingShifts: [number, number][] = [];
     for (let t = 0; t < trailingEls.length; t += 1) {
-      const dy = Math.round((oldTrailingTops[t] - trailingEls[t].offsetTop) * 100) / 100;
+      const newTrailingTop = trailingEls[t].offsetTop;
+      if (oldTrailingTops[t] > trailingMaxY && newTrailingTop > trailingMaxY) continue;
+      const dy = Math.round((oldTrailingTops[t] - newTrailingTop) * 100) / 100;
       if (Math.abs(dy) >= MIN_SHIFT_PX) {
         trailingShifts.push([lines.length + t, dy]);
       }
