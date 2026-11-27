@@ -1092,7 +1092,7 @@
             const layoutDy = layoutMap ? (layoutMap.get(line) || 0) : 0;
             if (layoutMap && layoutDy !== 0) layoutMap.delete(line);
             const effectiveDelta = delta + layoutDy;
-            if (Math.abs(effectiveDelta) < CFG.arriveEpsilon && !activeLines.has(line)) continue;
+            if (Math.abs(effectiveDelta) < CFG.arriveEpsilon && (!activeLines.has(line) || !collapsePending)) continue;
             const staggerMs = staggerByIndex.get(i) || 0;
             const totalDelayMs = baseDelayMs + staggerMs;
             const data = getOrCreateLineState(line);
@@ -1125,6 +1125,7 @@
             const layoutDy = layoutMap ? (layoutMap.get(line) || 0) : 0;
             if (layoutMap && layoutDy !== 0) layoutMap.delete(line);
             const effectiveDelta = delta + layoutDy;
+            if (Math.abs(effectiveDelta) < CFG.arriveEpsilon && !collapsePending) continue;
             const data = getOrCreateLineState(line);
             const allowOppositeCollapse = !isImmediateReveal && layoutDy === 0;
             applyLineWave(

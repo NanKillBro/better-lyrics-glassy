@@ -811,13 +811,6 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       exitSnapshots.set(item, captureExitSnapshot(item));
     }
 
-    const activeBefore = new Set<HTMLElement>();
-    for (const line of lines) {
-      if (line.lyricElement.classList.contains("blyrics--active")) {
-        activeBefore.add(line.lyricElement);
-      }
-    }
-
     // One-shot discrete class switches before synchronous relayout.
     let hasLineLevelToggle = false;
     for (const item of toExpand) {
@@ -882,18 +875,16 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
     const scrollDeltaPx = Math.abs(signedScrollDelta);
     const didScroll = scrollDeltaPx > 2;
 
-    let activeChanged = false;
-    let activeAfterCount = 0;
-    for (const line of lines) {
-      if (line.lyricElement.classList.contains("blyrics--active")) {
-        activeAfterCount += 1;
-        if (!activeBefore.has(line.lyricElement)) {
-          activeChanged = true;
-        }
+    let firstActiveLineIdx = -1;
+    const lineShiftByIdx = new Map<number, number>(lineShifts);
+    let maxActiveNetMovePx = 0;
+    for (let i = 0; i < lines.length; i += 1) {
+      if (lines[i].lyricElement.classList.contains("blyrics--active")) {
+        if (firstActiveLineIdx < 0) firstActiveLineIdx = i;
+        const dy = lineShiftByIdx.get(i) ?? 0;
+        const netMove = Math.abs(signedScrollDelta + dy);
+        if (netMove > maxActiveNetMovePx) maxActiveNetMovePx = netMove;
       }
-    }
-    if (activeAfterCount !== activeBefore.size) {
-      activeChanged = true;
     }
 
     let maxLayoutShiftPx = 0;
@@ -901,13 +892,17 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       const absDy = Math.abs(dy);
       if (absDy > maxLayoutShiftPx) maxLayoutShiftPx = absDy;
     }
-    // Engine stamps .blyrics--active up to 0.54s before committing the scroll, so a real lyric scroll
-    // coinciding with a background reveal can have activeChanged=false; detect it by scroll magnitude.
-    const isScrollTransition = scrollDeltaPx > maxLayoutShiftPx * 0.75 + 12;
+    // Engine stamps .blyrics--active up to 0.54s before committing the scroll, so compare net active-line motion
+    // rather than .blyrics--active transitions to avoid holding mid-line bg reveals on lookahead stamps.
+    const anyChangeOnOrAfterActive =
+      firstActiveLineIdx < 0 || changedLineIndices.some(idx => idx >= firstActiveLineIdx);
+    const isScrollTransition = anyChangeOnOrAfterActive
+      ? Math.max(scrollDeltaPx, maxActiveNetMovePx) > maxLayoutShiftPx * 0.75 + 12
+      : maxActiveNetMovePx > 12;
 
     const isGlassyFlowManaged = container.classList.contains("blyrics--gf-managed");
     const shiftMode: LayoutShiftPayload["mode"] =
-      hasLineLevelToggle || activeChanged || isScrollTransition ? "sync-scroll" : "immediate";
+      hasLineLevelToggle || isScrollTransition ? "sync-scroll" : "immediate";
     const flipDurationMs = shiftMode === "immediate" ? FLIP_IMMEDIATE_DURATION_MS : FLIP_SYNC_DURATION_MS;
     const allShifts = trailingShifts.length > 0 ? [...lineShifts, ...trailingShifts] : lineShifts;
 

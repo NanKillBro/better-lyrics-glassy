@@ -127,6 +127,7 @@ export function createAnimationEngineInstance(engineDocument, engineWindow, host
         scrollPos: -1,
         selectedElementIndex: 0,
         wasUserScrolling: false,
+        layoutScrollDirty: false,
         lastScrollElements: [],
         pinnedScrollLine: null,
         lastScrollDebugContext: {
@@ -317,6 +318,7 @@ export function clearLyrics(engine) {
         line.isSelected = false;
     }
     engine.skipScrollsDecayTimes = [];
+    engine.layoutScrollDirty = false;
     engine.lastScrollElements = [];
     engine.pinnedScrollLine = null;
     engine.lastScrollDebugContext.activeElms = [];
@@ -3004,21 +3006,37 @@ export function tickView(engine, currentTime, options) {
             }
             // Offset so lyrics appear towards the center of the screen.
             const scrollPosOffset = tabRendererHeight * getTargetScrollRatio(engine, lyricsElement);
+            const endingThresholdS = LYRIC_ENDING_THRESHOLD_S.getNumberValue();
             let lastActiveLyric = activeElems[activeElems.length - 1];
-            // Ignore lyrics close to finishing unless it is the last active lyric.
-            const sungLines = activeElems.filter((lineData, index) => lyricScrollTime < lineData.time + lineData.duration - LYRIC_ENDING_THRESHOLD_S.getNumberValue() ||
+            // Ignore lyrics whose main vocal is finished/ending unless it is the last active lyric,
+            // so a past line's trailing background vocal never pulls the incoming active line off focal.
+            const sungLines = activeElems.filter((lineData, index) => lyricScrollTime < (lineData.mainEndTime ?? (lineData.time + lineData.duration)) - endingThresholdS ||
                 index == activeElems.length - 1);
-            const lyricPositions = sungLines.map(lineData => lineData.position + lineData.height / 2);
-            const scrollInsets = engine.cachedScrollInsets;
-            const scrollAnchor = findScrollAnchor(sungLines, lyricScrollTime);
-            const scrollTarget = computeActiveLinesScrollTop(sungLines, scrollAnchor, tabRendererHeight, scrollInsets, scrollPosOffset);
-            let scrollPos = scrollTarget.scrollTop;
             const pinned = engine.pinnedScrollLine;
             if (pinned &&
-                pinned !== scrollAnchor &&
+                pinned !== findScrollAnchor(sungLines, lyricScrollTime) &&
                 (!sungLines.includes(pinned) || lyricScrollTime >= pinned.time + pinned.duration)) {
                 newLyricSelected = true;
             }
+            const isLayoutOnlyScroll = !newLyricSelected && !engine.wasUserScrolling && engine.layoutScrollDirty;
+            let effectiveActiveElems = activeElems;
+            let effectiveSungLines = sungLines;
+            if (isLayoutOnlyScroll) {
+                // Exclude uncommitted lookahead lines when scrolling only for an incremental layout shift,
+                // so revealing a background row never steals or prematurely commits the upcoming line's scroll.
+                const committedActiveElems = activeElems.filter(lineData => lyricScrollTime >= lineData.time || engine.lastScrollElements.includes(lineData));
+                if (committedActiveElems.length > 0 && committedActiveElems.length < activeElems.length) {
+                    effectiveActiveElems = committedActiveElems;
+                    effectiveSungLines = committedActiveElems.filter((lineData, index) => lyricScrollTime < (lineData.mainEndTime ?? (lineData.time + lineData.duration)) - endingThresholdS ||
+                        index === committedActiveElems.length - 1);
+                }
+            }
+            const effectiveLastActive = effectiveActiveElems[effectiveActiveElems.length - 1];
+            const lyricPositions = effectiveSungLines.map(lineData => lineData.position + lineData.height / 2);
+            const scrollInsets = engine.cachedScrollInsets;
+            const scrollAnchor = findScrollAnchor(effectiveSungLines, lyricScrollTime);
+            const scrollTarget = computeActiveLinesScrollTop(effectiveSungLines, scrollAnchor, tabRendererHeight, scrollInsets, scrollPosOffset);
+            let scrollPos = scrollTarget.scrollTop;
             const credits = engine.cachedCreditsItem;
             if (engine.creditsFocused && credits && lastSungLine) {
                 // Tall credits would otherwise carry the last line out of view while it is still being sung.
@@ -3099,10 +3117,10 @@ export function tickView(engine, currentTime, options) {
             const timeUntilUpcomingScrollMs = (lastActiveLyric.time - lyricScrollTime) * 1000;
             // Only a scroll from where the engine itself left the view keeps the theme's full stagger.
             const naturalAdvance = !timeJumped && !engine.wasUserScrolling && engine.scrollPos >= 0 && Math.abs(scrollTop - engine.scrollPos) <= 2;
+            const shouldCommitScroll = engine.wasUserScrolling || newLyricSelected || engine.layoutScrollDirty;
             if (smoothScroll &&
                 animationConfig.enabled.scroll &&
-                !newLyricSelected &&
-                !engine.wasUserScrolling &&
+                !shouldCommitScroll &&
                 timeUntilUpcomingScrollMs > 0 &&
                 timeUntilUpcomingScrollMs <= SCROLL_PREPARE_LEAD_MS &&
                 !engine.lastScrollElements.includes(lastActiveLyric) &&
@@ -3110,20 +3128,23 @@ export function tickView(engine, currentTime, options) {
                 updateVisibleLyricWillChange(engine, lines, scrollTop, scrollPos, tabRendererHeight);
                 prepareUpcomingLineScroll(engine, getLineScrollItems(engine, lines), lastActiveLyric, scrollPos - scrollTop, scrollTop, scrollPos, tabRendererHeight, animationConfig, naturalAdvance);
             }
-            if (engine.wasUserScrolling || newLyricSelected) {
+            if (shouldCommitScroll) {
+                engine.layoutScrollDirty = false;
                 // Remember future lines only when their group is committed, so they cannot scroll
-                // again at their start. Entering the lookahead window alone does not commit a group.
-                engine.lastScrollElements = activeElems;
+                // again at their start. Layout-only adjustments must not lock uncommitted lookahead lines.
+                if (!isLayoutOnlyScroll) {
+                    engine.lastScrollElements = effectiveActiveElems;
+                }
                 engine.pinnedScrollLine = scrollTarget.overflowsBand ? scrollAnchor : null;
                 engine.lastScrollDebugContext.lyricScrollTime = lyricScrollTime;
                 engine.lastScrollDebugContext.centers = lyricPositions;
-                engine.lastScrollDebugContext.activeElms = activeElems;
+                engine.lastScrollDebugContext.activeElms = effectiveActiveElems;
                 if (smoothScroll && Math.abs(scrollTop - scrollPos) > 2) {
                     const scrollDeltaPx = scrollPos - scrollTop;
                     if (animationConfig.enabled.scroll) {
                         updateVisibleLyricWillChange(engine, lines, scrollTop, scrollPos, tabRendererHeight);
                         const lineScrollItems = getLineScrollItems(engine, lines);
-                        commitOrPrepareLineScroll(engine, lineScrollItems, lastActiveLyric, scrollDeltaPx, scrollTop, scrollPos, tabRendererHeight, animationConfig, naturalAdvance);
+                        commitOrPrepareLineScroll(engine, lineScrollItems, effectiveLastActive, scrollDeltaPx, scrollTop, scrollPos, tabRendererHeight, animationConfig, naturalAdvance);
                     }
                 }
                 else {
@@ -3140,6 +3161,9 @@ export function tickView(engine, currentTime, options) {
                     }
                 }
             }
+        }
+        else {
+            engine.layoutScrollDirty = false;
         }
         if (engine.wasUserScrolling && engine.scrollResumeTime < Date.now()) {
             engine.host.setResumeAffordanceVisible(false);
@@ -3282,6 +3306,7 @@ export function relayout(engine, measureLines) {
     engine.cachedFooterItem = measureTrailingItem(lyricsElement, FOOTER_CLASS);
     // Re-arm from the fresh measurements, so a line skipped after this holds its new placeholder height.
     setupLineCullObserver(engine);
+    engine.layoutScrollDirty = false;
     engine.wasUserScrolling = true; // trigger rescrolls
     engine.host.debug?.resize();
 }
@@ -3437,7 +3462,7 @@ export function relayoutChangedLines(engine, changedIndices) {
     }
     engine.lyricWidth = currentWidth;
     engine.lyricHeight = currentHeight;
-    engine.wasUserScrolling = true;
+    engine.layoutScrollDirty = true;
     engine.host.debug?.resize();
 }
 // -- Decoration slide --------------------------
