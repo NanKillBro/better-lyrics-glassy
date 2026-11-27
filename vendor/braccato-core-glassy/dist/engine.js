@@ -17,7 +17,8 @@
 // module is bundled into the isolated world and the page world separately, so those are two clocks
 // that never meet. `themeSettings.ts` holds the third thing under that rule.
 import { ANIMATING_CLASS, CREDITS_CLASS, CURRENT_LYRICS_CLASS, FOOTER_CLASS, LINE_CLASS, PAUSED_CLASS, ROMANIZED_LYRICS_CLASS, RTL_CLASS, TRANSLATED_LYRICS_CLASS, USER_SCROLLING_CLASS, WORD_STATE_ACTIVE, WORD_STATE_ATTR, WORD_STATE_PAST, WORD_STATE_UPCOMING, } from "./constants.js";
-import { INSTRUMENTAL_WAVE_PATH_HIGH, INSTRUMENTAL_WAVE_PATH_LOW } from "./instrumental.js";
+import { refreshInstrumentalImages } from "./imageHighlights.js";
+import { INSTRUMENTAL_DOTS_CLASS, INSTRUMENTAL_DOT_CLASS, INSTRUMENTAL_DOT_LIT_CLASS, INSTRUMENTAL_WAVE_PATH_HIGH, INSTRUMENTAL_WAVE_PATH_LOW, readInstrumentalStyle, replaceInstrumentalIcon, } from "./instrumental.js";
 import { layoutStage, planStage, queuedStageY, stageTextSpan, } from "./stage.js";
 import { registerThemeSetting } from "./themeSettings.js";
 import { clamp, getRelativeLayoutBounds, isGecko, positiveModulo, roundedMs, toMs } from "./util.js";
@@ -140,6 +141,8 @@ export function createAnimationEngineInstance(engineDocument, engineWindow, host
         cachedScrollInsets: NO_SCROLL_INSETS,
         cachedFooterItem: null,
         cachedCreditsItem: null,
+        cachedLastSungLineRef: null,
+        cachedLastSungLine: undefined,
         creditsFocused: false,
         cachedLineScrollTiming: new Map(),
         tabRendererResizeObserver: null,
@@ -325,6 +328,8 @@ export function clearLyrics(engine) {
     engine.lines = [];
     engine.cachedFooterItem = null;
     engine.cachedCreditsItem = null;
+    engine.cachedLastSungLineRef = null;
+    engine.cachedLastSungLine = undefined;
     engine.creditsFocused = false;
     engine.lyricsContainer = null;
     engine.waveAnimationPool.length = 0;
@@ -551,12 +556,27 @@ function resetPartAnimations(part) {
     }
     part.animations = [];
 }
+const linesMayHaveAnimations = new WeakSet();
 function resetLineAnimations(lineData) {
-    const children = [lineData, ...lineData.parts];
-    children.forEach(resetPartAnimations);
+    resetPartAnimations(lineData);
+    const parts = lineData.parts;
+    for (let i = 0; i < parts.length; i++) {
+        resetPartAnimations(parts[i]);
+    }
+    linesMayHaveAnimations.delete(lineData);
 }
 function hasLineAnimations(lineData) {
-    return [lineData, ...lineData.parts].some(part => part.animations.length > 0);
+    if (!linesMayHaveAnimations.has(lineData))
+        return false;
+    if (lineData.animations.length > 0)
+        return true;
+    const parts = lineData.parts;
+    for (let i = 0; i < parts.length; i++) {
+        if (parts[i].animations.length > 0)
+            return true;
+    }
+    linesMayHaveAnimations.delete(lineData);
+    return false;
 }
 function markLineAnimationsStopped(lineData) {
     lineData.isAnimating = false;
@@ -574,24 +594,30 @@ function togglePartClass(part, className, force) {
         part.imageLayers?.highlight?.classList.toggle(className, force);
     }
 }
-function setAnimationsPlayState(lineData, isPlaying) {
-    const children = [lineData, ...lineData.parts];
-    for (const part of children) {
-        togglePartClass(part, PAUSED_CLASS, !isPlaying);
-        for (const animation of part.animations) {
-            if (isPlaying) {
-                animation.play();
-            }
-            else {
-                animation.pause();
-            }
+function setPartAnimationsPlayState(part, isPlaying) {
+    togglePartClass(part, PAUSED_CLASS, !isPlaying);
+    for (const animation of part.animations) {
+        if (isPlaying) {
+            animation.play();
         }
+        else {
+            animation.pause();
+        }
+    }
+}
+function setAnimationsPlayState(lineData, isPlaying) {
+    setPartAnimationsPlayState(lineData, isPlaying);
+    const parts = lineData.parts;
+    for (let i = 0; i < parts.length; i++) {
+        setPartAnimationsPlayState(parts[i], isPlaying);
     }
 }
 function clearLineStateClasses(lineData) {
     lineData.lyricElement.classList.remove(ANIMATING_CLASS);
-    for (const part of [lineData, ...lineData.parts]) {
-        togglePartClass(part, PAUSED_CLASS, false);
+    togglePartClass(lineData, PAUSED_CLASS, false);
+    const parts = lineData.parts;
+    for (let i = 0; i < parts.length; i++) {
+        togglePartClass(parts[i], PAUSED_CLASS, false);
     }
 }
 export function updateWordStates(lineData, currentTime) {
@@ -619,6 +645,18 @@ const LINE_SYNCED_WORD_CLASS = "blyrics-line-synced-word";
 const INSTRUMENTAL_FILL_SELECTOR = ".blyrics--instrumental-fill";
 const INSTRUMENTAL_WAVE_CLIP_SELECTOR = ".blyrics--wave-clip";
 const INSTRUMENTAL_WAVE_PATH_SELECTOR = ".blyrics--wave-path";
+const INSTRUMENTAL_DOTS_SELECTOR = `.${INSTRUMENTAL_DOTS_CLASS}`;
+const INSTRUMENTAL_DOT_SELECTOR = `.${INSTRUMENTAL_DOT_CLASS}`;
+const INSTRUMENTAL_DOT_LIT_SELECTOR = `.${INSTRUMENTAL_DOT_LIT_CLASS}`;
+const DOTS_WAVE_PERIOD_MS = 2600;
+const DOTS_WAVE_STAGGER_MS = 350;
+const DOTS_WAVE_KEYFRAMES = [
+    { transform: "translateY(0px) scale(1)", easing: "ease-out" },
+    { transform: "translateY(-0.06em) scale(1.12)", offset: 0.25, easing: "ease-in" },
+    { transform: "translateY(0px) scale(1)", offset: 0.5, easing: "ease-out" },
+    { transform: "translateY(0.06em) scale(0.92)", offset: 0.75, easing: "ease-in" },
+    { transform: "translateY(0px) scale(1)" },
+];
 const INSTRUMENTAL_WAVE_PATH_HIGH_FALLBACK = `path("${INSTRUMENTAL_WAVE_PATH_HIGH}")`;
 const INSTRUMENTAL_WAVE_PATH_LOW_FALLBACK = `path("${INSTRUMENTAL_WAVE_PATH_LOW}")`;
 const LINE_SCROLL_INDEX_PROPERTY = "--blyrics-line-scroll-index";
@@ -640,6 +678,20 @@ const LINE_SCROLL_INLINE_PROPERTIES = [
     ...LINE_SCROLL_STYLE_SETTINGS.map(([property]) => property),
 ];
 const animationTimingTracks = new WeakMap();
+// A document's timeline counts from its own window's time origin, which differs in another window or frame.
+function timelineNow(animation) {
+    const target = animation.effect?.target;
+    return target?.ownerDocument?.defaultView?.performance?.now?.() ?? performance.now();
+}
+// A current time set before an animation starts holds until its first frame, which a long setup frame delays.
+function seekAnimation(engine, animation, timeMs) {
+    const rate = animation.playbackRate;
+    if (!engine.lastTickOptions?.isPlaying || typeof animation.timeline?.currentTime !== "number" || rate === 0) {
+        animation.currentTime = timeMs;
+        return;
+    }
+    animation.startTime = timelineNow(animation) - timeMs / rate;
+}
 function mirrorImageHighlightAnimations(part, animations) {
     const target = part.imageLayers?.highlight;
     if (!target)
@@ -651,7 +703,12 @@ function mirrorImageHighlightAnimations(part, animations) {
             continue;
         const mirror = target.animate(effect.getKeyframes(), effect.getTiming());
         mirror.playbackRate = animation.playbackRate;
-        mirror.currentTime = animation.currentTime;
+        if (animation.playState === "running" && animation.startTime !== null) {
+            mirror.startTime = animation.startTime;
+        }
+        else {
+            mirror.currentTime = animation.currentTime;
+        }
         const timing = animationTimingTracks.get(animation);
         if (timing)
             animationTimingTracks.set(mirror, { ...timing, skipDriftSample: true });
@@ -744,7 +801,13 @@ function timingValueToMs(value) {
         return null;
     }
 }
-function animationCurrentTimeMs(animation) {
+// The timeline's time is held per task and per frame, so a running animation is read against now, the clock it was placed on.
+function animationCurrentTimeMs(animation, nowMs) {
+    const startTimeMs = animation.startTime;
+    if (animation.playState === "running" && typeof startTimeMs === "number") {
+        const liveNowMs = nowMs !== undefined ? nowMs : timelineNow(animation);
+        return (liveNowMs - startTimeMs) * animation.playbackRate;
+    }
     return timingValueToMs(animation.currentTime);
 }
 // A finished animation's currentTime stops at its end time, which counts the delay, so that is where
@@ -769,7 +832,7 @@ function normalizeAnimationTimeMs(animation, timeMs, timing) {
     }
     return timeMs;
 }
-function animationTimingSample(part, animation, currentTime) {
+function animationTimingSample(part, animation, currentTime, nowMs) {
     const timing = animationTimingTracks.get(animation);
     if (!timing || timing.skipDriftSample) {
         return null;
@@ -777,7 +840,7 @@ function animationTimingSample(part, animation, currentTime) {
     if (animation.playState === "idle") {
         return null;
     }
-    const actualTimeMs = animationCurrentTimeMs(animation);
+    const actualTimeMs = animationCurrentTimeMs(animation, nowMs);
     if (actualTimeMs === null) {
         return null;
     }
@@ -800,31 +863,30 @@ function animationTimingSample(part, animation, currentTime) {
         playState: animation.playState,
     };
 }
-function largestNativeTimingSample(part, currentTime) {
-    let largestSample = null;
+function accumulateLargestNativeTimingSample(part, currentTime, largestSample, nowMs) {
     for (const animation of part.animations) {
-        const sample = animationTimingSample(part, animation, currentTime);
-        if (sample === null) {
-            continue;
-        }
-        if (largestSample === null || Math.abs(sample.offsetMs) > Math.abs(largestSample.offsetMs)) {
+        const sample = animationTimingSample(part, animation, currentTime, nowMs);
+        if (sample !== null && (largestSample === null || Math.abs(sample.offsetMs) > Math.abs(largestSample.offsetMs))) {
             largestSample = sample;
         }
     }
     return largestSample;
 }
-function lineNativeTimingSample(lineData, currentTime) {
-    let largestSample = null;
-    for (const part of [lineData, ...lineData.parts]) {
-        const sample = largestNativeTimingSample(part, currentTime);
-        if (sample === null) {
-            continue;
-        }
-        if (largestSample === null || Math.abs(sample.offsetMs) > Math.abs(largestSample.offsetMs)) {
-            largestSample = sample;
-        }
+function lineNativeTimingSample(lineData, currentTime, nowMs) {
+    let largestSample = accumulateLargestNativeTimingSample(lineData, currentTime, null, nowMs);
+    const parts = lineData.parts;
+    for (let i = 0; i < parts.length; i++) {
+        largestSample = accumulateLargestNativeTimingSample(parts[i], currentTime, largestSample, nowMs);
     }
     return largestSample;
+}
+function countLineAnimations(lineData) {
+    let count = lineData.animations.length;
+    const parts = lineData.parts;
+    for (let i = 0; i < parts.length; i++) {
+        count += parts[i].animations.length;
+    }
+    return count;
 }
 function linePreview(lineData) {
     return lineData.lyricElement.textContent?.trim().replace(/\s+/g, " ").slice(0, 80) ?? "";
@@ -889,7 +951,7 @@ function logAnimationCleanup(engine, reason, lineData, lineIndex, currentTime, s
         lineTimeS: roundedMs(lineData.time * 1000) / 1000,
         mediaTimeS: roundedMs(currentTime * 1000) / 1000,
         staleAnimationEndTimeS: roundedMs(staleAnimationEndTime * 1000) / 1000,
-        runningAnimationCount: [lineData, ...lineData.parts].reduce((count, part) => count + part.animations.length, 0),
+        runningAnimationCount: countLineAnimations(lineData),
         text: linePreview(lineData),
     });
 }
@@ -899,7 +961,7 @@ export function noteVisibilityChange(engine) {
     }
     if (!engine.lyricsContainer)
         return;
-    const runningAnimationCount = engine.lines.reduce((count, line) => count + [line, ...line.parts].reduce((lineCount, part) => lineCount + part.animations.length, 0), 0);
+    const runningAnimationCount = engine.lines.reduce((count, line) => count + countLineAnimations(line), 0);
     if (engine.document.visibilityState === "visible") {
         engine.animationTimingVisibilityLogUntil = Date.now() + ANIMATION_TIMING_LOG_WINDOW_MS;
         engine.host.log("Visibility changed; keeping WAAPI animations for timing verification", {
@@ -968,16 +1030,21 @@ function lineSyncedTextKeyframes(config) {
     ];
 }
 function fadeOutTextKeyframes(config, part) {
+    const glowFilter = part.imageLayers
+        ? { filter: "none" }
+        : config.enabled.highlightGlow && !part.glowSuppressed && !config.highlight.glowRestingInvisible
+            ? { filter: config.highlight.glowTo }
+            : {};
     return [
         {
             opacity: 1,
-            filter: part.imageLayers ? "none" : config.highlight.glowTo,
+            ...glowFilter,
             "--lyric-transition-amount-start": config.highlight.swipeStartTo,
             "--lyric-transition-amount-end": config.highlight.swipeEndTo,
         },
         {
             opacity: 0,
-            filter: part.imageLayers ? "none" : config.highlight.glowTo,
+            ...glowFilter,
             "--lyric-transition-amount-start": config.highlight.swipeStartTo,
             "--lyric-transition-amount-end": config.highlight.swipeEndTo,
         },
@@ -1118,7 +1185,7 @@ function startRichSyncedHighlightAnimations(engine, part, config, swipeTimeMs, w
                     index === sweeps.length - 1 && target === highlightLetters[index]
                         ? swipeTiming
                         : { ...swipeTiming, skipDriftSample: true });
-                    animation.currentTime = swipeCurrentTimeMs;
+                    seekAnimation(engine, animation, swipeCurrentTimeMs);
                     if (index === 0)
                         swipeAnimation = animation;
                     animations.push(animation);
@@ -1131,7 +1198,7 @@ function startRichSyncedHighlightAnimations(engine, part, config, swipeTimeMs, w
                 easing: config.highlight.swipeEasing,
                 fill: "forwards",
             }), swipeTiming);
-            swipeAnimation.currentTime = swipeCurrentTimeMs;
+            seekAnimation(engine, swipeAnimation, swipeCurrentTimeMs);
             animations.push(swipeAnimation);
         }
     }
@@ -1140,7 +1207,7 @@ function startRichSyncedHighlightAnimations(engine, part, config, swipeTimeMs, w
         easing: "linear",
         fill: "forwards",
     }), { appliedTimingOffsetMs, offsetMs: 0 });
-    opacityAnimation.currentTime = correctedAnimationTimeMs(wordTimeMs, appliedTimingOffsetMs, 1);
+    seekAnimation(engine, opacityAnimation, correctedAnimationTimeMs(wordTimeMs, appliedTimingOffsetMs, 1));
     animations.push(opacityAnimation);
     let glowAnimation;
     if (config.enabled.highlightGlow && !part.glowSuppressed) {
@@ -1149,7 +1216,7 @@ function startRichSyncedHighlightAnimations(engine, part, config, swipeTimeMs, w
             easing: config.highlight.glowEasing,
             fill: part.imageLayers ? "forwards" : config.highlight.glowRestingInvisible ? "none" : "forwards",
         }), { appliedTimingOffsetMs, offsetMs: 0 });
-        glowAnimation.currentTime = correctedAnimationTimeMs(wordTimeMs, appliedTimingOffsetMs, glowDurationMs);
+        seekAnimation(engine, glowAnimation, correctedAnimationTimeMs(wordTimeMs, appliedTimingOffsetMs, glowDurationMs));
         animations.push(glowAnimation);
     }
     return { animations, swipe: swipeAnimation, fade: opacityAnimation, glow: glowAnimation };
@@ -1163,7 +1230,7 @@ function startLineSyncedHighlightAnimations(engine, part, config, wordTimeMs, gl
         easing: config.enabled.highlightFade ? config.highlight.fadeInEasing : "linear",
         fill: "forwards",
     }), { appliedTimingOffsetMs, offsetMs: 0 });
-    opacityAnimation.currentTime = correctedAnimationTimeMs(wordTimeMs, appliedTimingOffsetMs, fadeInDuration);
+    seekAnimation(engine, opacityAnimation, correctedAnimationTimeMs(wordTimeMs, appliedTimingOffsetMs, fadeInDuration));
     animations.push(opacityAnimation);
     let glowAnimation;
     if (config.enabled.highlightGlow && !part.glowSuppressed) {
@@ -1172,7 +1239,7 @@ function startLineSyncedHighlightAnimations(engine, part, config, wordTimeMs, gl
             easing: config.highlight.glowEasing,
             fill: part.imageLayers ? "forwards" : config.highlight.glowRestingInvisible ? "none" : "forwards",
         }), { appliedTimingOffsetMs, offsetMs: 0 });
-        glowAnimation.currentTime = correctedAnimationTimeMs(wordTimeMs, appliedTimingOffsetMs, glowDurationMs);
+        seekAnimation(engine, glowAnimation, correctedAnimationTimeMs(wordTimeMs, appliedTimingOffsetMs, glowDurationMs));
         animations.push(glowAnimation);
     }
     return { animations, fade: opacityAnimation, glow: glowAnimation };
@@ -1189,7 +1256,7 @@ function startLineAnimation(engine, lineData, config, currentTime, appliedTiming
         easing: config.line.enterEasing,
         fill: "forwards",
     }), { appliedTimingOffsetMs, offsetMs: 0 });
-    animation.currentTime = correctedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, config.line.durationMs);
+    seekAnimation(engine, animation, correctedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, config.line.durationMs));
     lineData.animations = [animation];
 }
 function startLineExitAnimation(lineData, config) {
@@ -1249,7 +1316,7 @@ function startWordAnimations(engine, part, config, currentTime, appliedTimingOff
                 appliedTimingOffsetMs,
                 offsetMs: 0,
             });
-            animation.currentTime = wobbleStartMs;
+            seekAnimation(engine, animation, wobbleStartMs);
             wobbleAnimations.push(animation);
         }
         const letters = part.letterElements;
@@ -1299,7 +1366,7 @@ function startWordAnimations(engine, part, config, currentTime, appliedTimingOff
                         // The wave that ends last covers the whole word. A theme's swipe ramp can make that an early letter.
                         skipDriftSample: !sampled || index !== lastEndingWaveIndex,
                     });
-                    animation.currentTime = floatStartMs;
+                    seekAnimation(engine, animation, floatStartMs);
                     wobbleAnimations.push(animation);
                     if (!GECKO_REDRAW || !sampled)
                         return;
@@ -1309,7 +1376,7 @@ function startWordAnimations(engine, part, config, currentTime, appliedTimingOff
                         delay: delayMs,
                         composite: "add",
                     }), { appliedTimingOffsetMs, offsetMs: waveLeadMs, skipDriftSample: true });
-                    redraw.currentTime = floatStartMs;
+                    seekAnimation(engine, redraw, floatStartMs);
                     wobbleAnimations.push(redraw);
                 });
             };
@@ -1325,6 +1392,7 @@ function startWordAnimations(engine, part, config, currentTime, appliedTimingOff
     ];
 }
 function startLineAnimations(engine, lineData, config, currentTime) {
+    linesMayHaveAnimations.add(lineData);
     const appliedTimingOffsetMs = engine.learnedAnimationTimingOffsetMs;
     startLineAnimation(engine, lineData, config, currentTime, appliedTimingOffsetMs);
     if (lineData.lyricElement.dataset.instrumental === "true") {
@@ -1354,6 +1422,7 @@ function startWordExitAnimation(part, config, imagePaint = []) {
     }, { once: true });
 }
 function startLineExitAnimations(engine, lineData, config, currentTime) {
+    linesMayHaveAnimations.add(lineData);
     // Read the entire line before cancelling any effects, so this does not alternate
     // per-word style reads with writes. There are no extra reads during normal ticks.
     const imagePaint = new Map();
@@ -1397,7 +1466,89 @@ function animateInstrumentalChild(engine, lineData, selector, keyframes, options
     lineData.animations.push(animation);
     return animation;
 }
+function resolveDotsFillDurationMs(engine, lineData, durationMs) {
+    const docEl = engine.document.documentElement;
+    const autoHide = engine.layout !== "stage" &&
+        docEl?.hasAttribute("blyrics-auto-hide-instrumental-bg") === true &&
+        !docEl?.hasAttribute("blyrics-webgl-lyrics");
+    if (!autoHide || durationMs <= 1) {
+        return durationMs;
+    }
+    const lineIdx = engine.lines.indexOf(lineData);
+    if (lineIdx < 0 || lineIdx + 1 >= engine.lines.length) {
+        return durationMs;
+    }
+    const scrollLeadMs = engine.lyricsContainer
+        ? getCSSDurationInMs(engine, engine.lyricsContainer, "--blyrics-scroll-timing-offset") || 500
+        : 500;
+    return Math.max(durationMs - scrollLeadMs - 80, Math.round(durationMs * 0.55), 1);
+}
+function startDotsInstrumentalAnimations(engine, lineData, dotsEl, config, currentTime, appliedTimingOffsetMs) {
+    if (config.enabled.highlightGlow) {
+        delete dotsEl.dataset.noGlow;
+    }
+    else {
+        dotsEl.dataset.noGlow = "true";
+    }
+    const rawElapsedMs = (currentTime - lineData.time) * 1000;
+    const durationMs = Math.max(lineData.duration * 1000, 1);
+    const dots = dotsEl.querySelectorAll(INSTRUMENTAL_DOT_SELECTOR);
+    const litDots = dotsEl.querySelectorAll(INSTRUMENTAL_DOT_LIT_SELECTOR);
+    if (litDots.length === 0) {
+        return;
+    }
+    if (!config.enabled.instrumental) {
+        const fadeMs = config.instrumental.fillFadeDurationMs;
+        const fadeEasing = config.instrumental.fillFadeEasing;
+        for (let i = 0; i < litDots.length; i++) {
+            const anim = trackLyricAnimationTiming(engine, litDots[i].animate([{ opacity: 0 }, { opacity: 1 }], {
+                duration: fadeMs,
+                easing: fadeEasing,
+                fill: "both",
+            }), { appliedTimingOffsetMs, offsetMs: 0, skipDriftSample: i !== 0 });
+            lineData.animations.push(anim);
+            seekAnimation(engine, anim, correctedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, fadeMs));
+        }
+        return;
+    }
+    const fillDurationMs = resolveDotsFillDurationMs(engine, lineData, durationMs);
+    const sliceDurationMs = Math.max(fillDurationMs / litDots.length, 1);
+    for (let i = 0; i < litDots.length; i++) {
+        const sliceDelayMs = (i * fillDurationMs) / litDots.length;
+        const totalEndMs = sliceDelayMs + sliceDurationMs;
+        const fillAnim = trackLyricAnimationTiming(engine, litDots[i].animate([{ opacity: 0 }, { opacity: 1 }], {
+            delay: sliceDelayMs,
+            duration: sliceDurationMs,
+            easing: "ease-in-out",
+            fill: "both",
+        }), {
+            appliedTimingOffsetMs,
+            offsetMs: 0,
+            skipDriftSample: i !== litDots.length - 1,
+        });
+        lineData.animations.push(fillAnim);
+        seekAnimation(engine, fillAnim, correctedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, totalEndMs));
+    }
+    for (let i = 0; i < dots.length; i++) {
+        const waveAnim = trackLyricAnimationTiming(engine, dots[i].animate(DOTS_WAVE_KEYFRAMES, {
+            duration: DOTS_WAVE_PERIOD_MS,
+            iterations: Infinity,
+        }), {
+            appliedTimingOffsetMs,
+            offsetMs: -i * DOTS_WAVE_STAGGER_MS,
+            wrapDurationMs: DOTS_WAVE_PERIOD_MS,
+            skipDriftSample: true,
+        });
+        lineData.animations.push(waveAnim);
+        seekAnimation(engine, waveAnim, correctedWrappedAnimationTimeMs(rawElapsedMs - i * DOTS_WAVE_STAGGER_MS, appliedTimingOffsetMs, DOTS_WAVE_PERIOD_MS));
+    }
+}
 function startInstrumentalAnimations(engine, lineData, config, currentTime, appliedTimingOffsetMs) {
+    const dotsEl = lineData.lyricElement.querySelector(INSTRUMENTAL_DOTS_SELECTOR);
+    if (dotsEl) {
+        startDotsInstrumentalAnimations(engine, lineData, dotsEl, config, currentTime, appliedTimingOffsetMs);
+        return;
+    }
     const rawElapsedMs = (currentTime - lineData.time) * 1000;
     const durationMs = Math.max(lineData.duration * 1000, 1);
     const fillFadeDuration = config.enabled.instrumental ? config.instrumental.fillFadeDurationMs : 1;
@@ -1435,26 +1586,94 @@ function startInstrumentalAnimations(engine, lineData, config, currentTime, appl
         });
     }
     if (fillAnimation) {
-        fillAnimation.currentTime = correctedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, fillFadeDuration);
+        seekAnimation(engine, fillAnimation, correctedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, fillFadeDuration));
     }
-    for (const animation of [fillTravelAnimation, waveFlattenAnimation]) {
-        if (animation) {
-            animation.currentTime = correctedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, durationMs);
-        }
+    if (fillTravelAnimation) {
+        seekAnimation(engine, fillTravelAnimation, correctedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, durationMs));
+    }
+    if (waveFlattenAnimation) {
+        seekAnimation(engine, waveFlattenAnimation, correctedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, durationMs));
     }
     if (waveOscillationAnimation) {
-        waveOscillationAnimation.currentTime = correctedWrappedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, Math.max(config.instrumental.waveOscillationDurationMs, 1));
+        seekAnimation(engine, waveOscillationAnimation, correctedWrappedAnimationTimeMs(rawElapsedMs, appliedTimingOffsetMs, Math.max(config.instrumental.waveOscillationDurationMs, 1)));
     }
 }
 function startInstrumentalExitAnimations(engine, lineData, config, currentTime) {
     if (currentTime < lineData.time)
         return;
+    const dotsEl = lineData.lyricElement.querySelector(INSTRUMENTAL_DOTS_SELECTOR);
+    if (dotsEl) {
+        const fadeDuration = config.enabled.instrumental && config.enabled.highlightFade ? config.highlight.fadeOutDurationMs : 1;
+        const fadeEasing = config.enabled.instrumental && config.enabled.highlightFade ? config.highlight.fadeOutEasing : "linear";
+        const litDots = dotsEl.querySelectorAll(INSTRUMENTAL_DOT_LIT_SELECTOR);
+        if (litDots.length === 0)
+            return;
+        const durationMs = Math.max(lineData.duration * 1000, 1);
+        const rawElapsedMs = (currentTime - lineData.time) * 1000;
+        const fillDurationMs = resolveDotsFillDurationMs(engine, lineData, durationMs);
+        const sliceDurationMs = Math.max(fillDurationMs / litDots.length, 1);
+        for (let i = 0; i < litDots.length; i++) {
+            const sliceDelayMs = (i * fillDurationMs) / litDots.length;
+            const startOpacity = config.enabled.instrumental
+                ? clamp((rawElapsedMs - sliceDelayMs) / sliceDurationMs, 0, 1)
+                : 1;
+            if (startOpacity <= 0)
+                continue;
+            const anim = litDots[i].animate([{ opacity: startOpacity }, { opacity: 0 }], {
+                duration: fadeDuration,
+                easing: fadeEasing,
+                fill: "none",
+            });
+            lineData.animations.push(anim);
+        }
+        return;
+    }
     const fadeDuration = config.enabled.instrumental && config.enabled.highlightFade ? config.highlight.fadeOutDurationMs : 1;
     animateInstrumentalChild(engine, lineData, INSTRUMENTAL_FILL_SELECTOR, [{ opacity: 1 }, { opacity: 0 }], {
         duration: fadeDuration,
         easing: config.enabled.instrumental ? config.highlight.fadeOutEasing : "linear",
         fill: "none",
     });
+}
+export function refreshInstrumentalStyle(engine, measureLines = true) {
+    const lyricsElement = engine.lyricsContainer;
+    const lines = engine.lines;
+    if (!lyricsElement || lines.length === 0) {
+        return [];
+    }
+    const wantDots = readInstrumentalStyle(engine.document) === "dots";
+    const changedIndices = [];
+    const changedLines = [];
+    for (let i = 0; i < lines.length; i++) {
+        const lineData = lines[i];
+        if (lineData.lyricElement.dataset.instrumental !== "true") {
+            continue;
+        }
+        const hasDots = lineData.lyricElement.querySelector(INSTRUMENTAL_DOTS_SELECTOR) !== null;
+        if (hasDots === wantDots) {
+            continue;
+        }
+        resetLineAnimationState(lineData);
+        replaceInstrumentalIcon(engine.document, lineData.lyricElement, Math.max(0, Math.round(lineData.duration * 1000)));
+        changedIndices.push(i);
+        changedLines.push(lineData);
+    }
+    if (changedLines.length === 0) {
+        return [];
+    }
+    if (!wantDots) {
+        refreshInstrumentalImages(lyricsElement, engine.window);
+    }
+    if (!measureLines) {
+        relayout(engine, false);
+    }
+    else if (engine.layout === "stage") {
+        relayout(engine, true);
+    }
+    else {
+        relayoutChangedLines(engine, changedIndices);
+    }
+    return changedLines;
 }
 export function clearStyleCaches(engine) {
     dropPendingLineScroll(engine);
@@ -2627,6 +2846,7 @@ export function tickView(engine, currentTime, options) {
             clearVisibleLyricWillChange(engine);
             clearLineScrollAnimations(engine);
         }
+        const tickTimelineNowMs = (engine.document.defaultView ?? engine.window).performance?.now?.() ?? performance.now();
         let activeElems = [];
         const linesToAnimate = [];
         let newLyricSelected = timeJumped;
@@ -2682,7 +2902,7 @@ export function tickView(engine, currentTime, options) {
                 if (((timeJumped && isPlaying) || mediaSteppedBack || pausedSeek) && lineData.isAnimating)
                     resetLineAnimationState(lineData);
                 updateWordStates(lineData, currentTime);
-                const nativeTimingSample = lineNativeTimingSample(lineData, currentTime);
+                const nativeTimingSample = lineNativeTimingSample(lineData, currentTime, tickTimelineNowMs);
                 let usedNativeTimingSampleForDrift = false;
                 lineData.accumulatedOffsetMs = lineData.accumulatedOffsetMs / ANIMATION_TIMING_ACCUMULATION_DECAY;
                 if (nativeTimingSample !== null && canUseTimingSampleForDrift(nativeTimingSample, isPlaying)) {
@@ -2732,7 +2952,7 @@ export function tickView(engine, currentTime, options) {
                     clearLineStateClasses(lineData);
                     updateWordStates(lineData, currentTime);
                 }
-                else if (hasLineAnimations(lineData) && (timeJumped || currentTime > staleAnimationEndTime)) {
+                else if ((timeJumped || currentTime > staleAnimationEndTime) && hasLineAnimations(lineData)) {
                     logAnimationCleanup(engine, timeJumped ? "time-jump-reset" : "stale-reset", lineData, index, currentTime, staleAnimationEndTime);
                     resetLineAnimationState(lineData);
                 }
@@ -2753,7 +2973,15 @@ export function tickView(engine, currentTime, options) {
                     setAnimationsPlayState(lineData, false);
             }
         }
-        const lastSungLine = lines.findLast(lineData => lineData.lyricElement.dataset.instrumental !== "true");
+        let lastSungLine;
+        if (engine.cachedLastSungLineRef === lines) {
+            lastSungLine = engine.cachedLastSungLine;
+        }
+        else {
+            lastSungLine = lines.findLast(lineData => lineData.lyricElement.dataset.instrumental !== "true");
+            engine.cachedLastSungLineRef = lines;
+            engine.cachedLastSungLine = lastSungLine;
+        }
         const creditsFocused = lastSungLine !== undefined &&
             (engine.cachedCreditsItem?.height ?? 0) > 0 &&
             lyricScrollTime >= lastSungLine.time + lastSungLine.duration;
@@ -2901,13 +3129,15 @@ export function tickView(engine, currentTime, options) {
                 else {
                     dropPendingLineScroll(engine);
                 }
+                const scrollTopBeforeWrite = scrollTop;
                 scrollTop = scrollPos;
                 engine.scrollPos = scrollTop;
-                const scrollTopBeforeWrite = tabRenderer.scrollTop;
-                tabRenderer.scrollTop = scrollTop;
-                if (tabRenderer.scrollTop !== scrollTopBeforeWrite) {
-                    engine.skipScrolls += 1;
-                    engine.skipScrollsDecayTimes.push(Date.now() + 2000);
+                if (scrollTop !== scrollTopBeforeWrite && !(scrollTop <= 0 && scrollTopBeforeWrite <= 0)) {
+                    tabRenderer.scrollTop = scrollTop;
+                    if (tabRenderer.scrollTop !== scrollTopBeforeWrite) {
+                        engine.skipScrolls += 1;
+                        engine.skipScrollsDecayTimes.push(Date.now() + 2000);
+                    }
                 }
             }
         }

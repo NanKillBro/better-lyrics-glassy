@@ -1,0 +1,67 @@
+/* Three-dot instrumental style (Apple Music inspired) */
+
+:root:not([blyrics-instrumental-style="note"]) .blyrics-container {
+	--blyrics-instrumental-icon: dots;
+	--blyrics-instrumental-pulse-scale: 1.14;
+	--blyrics-instrumental-pulse-duration: 3s;
+}
+
+.blyrics--line.blyrics--instrumental > .blyrics--instrumental-icon.blyrics--instrumental-dots {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.28em;
+	width: auto;
+	height: var(--blyrics-font-size);
+	margin-left: 0;
+	margin-right: 0;
+	overflow: visible;
+	vertical-align: baseline;
+}
+
+.blyrics--instrumental-dot {
+	position: relative;
+	display: block;
+	flex-shrink: 0;
+	width: 0.36em;
+	height: 0.36em;
+	transform-origin: center center;
+}
+
+.blyrics--instrumental.blyrics--animating .blyrics--instrumental-dot {
+	will-change: transform;
+}
+
+.blyrics--instrumental-dot-base,
+.blyrics--instrumental-dot-lit {
+	position: absolute;
+	inset: 0;
+	border-radius: 9999px;
+}
+
+.blyrics--instrumental-dot-base {
+	background-color: var(--blyrics-lyric-inactive-color);
+}
+
+.blyrics--instrumental-dot-lit {
+	background-color: var(--blyrics-lyric-active-color);
+	opacity: 0;
+	box-shadow: 0 0 0.35em var(--blyrics-glow-color, rgba(255, 255, 255, 0.5));
+}
+
+.blyrics--instrumental.blyrics--animating .blyrics--instrumental-dot-lit {
+	will-change: opacity;
+}
+
+.blyrics--instrumental-dots[data-no-glow="true"] .blyrics--instrumental-dot-lit {
+	box-shadow: none;
+}
+
+@media (forced-colors: active) {
+	.blyrics--instrumental-dot-base {
+		background-color: GrayText;
+	}
+	.blyrics--instrumental-dot-lit {
+		background-color: CanvasText;
+		box-shadow: none;
+	}
+}

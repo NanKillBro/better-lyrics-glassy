@@ -81,6 +81,7 @@ const {
   initActiveReveal,
   isAutoHideInstrumentalBgEnabled,
   isBackgroundOnlyLine,
+  refreshActiveRevealInstrumental,
   shouldItemBeVisible,
   syncActiveReveal,
 } = await import("@modules/ui/activeReveal");
@@ -790,6 +791,91 @@ const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMark
   const mainFlip = leadingAnims.find(a => a.target === mainEl);
   assert.ok(mainFlip, ".blyrics-line-main gets inner sibling FLIP when leading bg expands");
   assert.equal((mainFlip.keyframes as Keyframe[])[0].translate, "0px -34.00px");
+
+  renderer.destroy();
+}
+
+// 7. refreshActiveRevealInstrumental rebinds .blyrics--instrumental-icon and collapses exiting items
+{
+  const { createLyricsRenderer } = await import("@braccato/core-legacy");
+  const { INSTRUMENTAL_STYLE_ATTR } = await import("@modules/settings/instrumentalStyle");
+  const testDom = new JSDOM("<!doctype html><html><body><div id='scroll'><div id='mount'></div></div></body></html>", {
+    pretendToBeVisual: true,
+  });
+  const tWin = testDom.window as unknown as Window & typeof globalThis;
+  const tDoc = tWin.document;
+  tDoc.documentElement.setAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, "");
+  tDoc.documentElement.setAttribute(INSTRUMENTAL_STYLE_ATTR, "note");
+  Object.defineProperty(tWin, "matchMedia", { configurable: true, value: stubMatchMedia });
+  Object.defineProperty(tWin, "ResizeObserver", {
+    configurable: true,
+    value: class {
+      observe() {}
+      disconnect() {}
+    },
+  });
+  Object.defineProperty(tDoc, "fonts", { configurable: true, value: { ready: Promise.resolve() } });
+  const refreshAnims: RecordedAnim[] = [];
+  Object.defineProperty(tWin.Element.prototype, "animate", {
+    configurable: true,
+    value(this: Element, keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: KeyframeAnimationOptions | number) {
+      let resolveFinish = () => {};
+      const finished = new Promise<void>(resolve => {
+        resolveFinish = resolve;
+      });
+      const rec: RecordedAnim = { target: this, keyframes, options, cancelled: false, resolveFinish };
+      refreshAnims.push(rec);
+      return {
+        finished,
+        cancel() {
+          rec.cancelled = true;
+        },
+        pause() {},
+        play() {},
+      } as unknown as Animation;
+    },
+  });
+
+  const mount = tDoc.getElementById("mount")!;
+  const scroller = tDoc.getElementById("scroll")!;
+  const renderer = createLyricsRenderer({
+    document: tDoc,
+    window: tWin,
+    mount,
+    host: { getScrollElement: () => scroller },
+  });
+  initActiveReveal(renderer, { document: tDoc, isViewVisible: () => true, getScrollElement: () => scroller });
+  renderer.setLyrics([
+    { startTimeMs: 10000, durationMs: 6000, words: "", isInstrumental: true },
+    { startTimeMs: 17000, durationMs: 2000, words: "After", parts: [{ startTimeMs: 17000, durationMs: 2000, words: "After" }] },
+  ]);
+  syncActiveReveal(renderer);
+
+  const instLineEl = renderer.lines[0].lyricElement;
+  const tickOpts: TickOptions = { eventCreationTime: -1, isPlaying: true, smoothScroll: false };
+  renderer.tick(16.2, tickOpts);
+  assert.equal(instLineEl.classList.contains(REVEAL_COLLAPSED_CLASS), false, "instrumental active and expanded");
+  renderer.tick(16.6, tickOpts);
+  assert.equal(instLineEl.classList.contains(REVEAL_EXITING_CLASS), true, "instrumental in exiting state while WAAPI exit pending");
+
+  tDoc.documentElement.removeAttribute(INSTRUMENTAL_STYLE_ATTR);
+  (renderer as unknown as { refreshInstrumentalStyle: () => void }).refreshInstrumentalStyle();
+  refreshActiveRevealInstrumental(renderer);
+
+  assert.equal(instLineEl.classList.contains(REVEAL_EXITING_CLASS), false, "exiting class cleared after instrumental refresh");
+  assert.equal(instLineEl.classList.contains(REVEAL_COLLAPSED_CLASS), true, "exiting item finalized as collapsed after refresh");
+  const newDotsIcon = instLineEl.querySelector(".blyrics--instrumental-icon.blyrics--instrumental-dots");
+  assert.ok(newDotsIcon, "dots icon mounted in place of SVG");
+
+  renderer.tick(9.2, tickOpts);
+  assert.equal(instLineEl.classList.contains(REVEAL_COLLAPSED_CLASS), true, "instrumental stays collapsed before open boundary");
+  refreshAnims.length = 0;
+  renderer.tick(9.6, tickOpts);
+  assert.equal(
+    refreshAnims.some(a => a.target === newDotsIcon),
+    true,
+    "subsequent instrumental reveal targets rebound .blyrics--instrumental-dots visualElement"
+  );
 
   renderer.destroy();
 }

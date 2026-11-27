@@ -164,6 +164,8 @@ export interface LyricsRenderer {
      * following suffix without un-culling offscreen lines or rebuilding the cull observer.
      */
     relayoutChangedLines(changedIndices: readonly number[]): void;
+    /** Rebuilds instrumental icons when `blyrics-instrumental-style` changes and relayouts changed lines. */
+    refreshInstrumentalStyle(): void;
     /**
      * Drops the song and the DOM built for it. The renderer built that DOM, so it takes it away again.
      */

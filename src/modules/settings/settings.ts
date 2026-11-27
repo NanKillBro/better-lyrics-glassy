@@ -10,8 +10,15 @@ import {
 import { AppState, refreshCurrentSong, reloadLyrics } from "@core/appState";
 import { compileRicsToStyles, getStorage } from "@core/storage";
 import { configureLogging, logContent } from "@core/logger";
-import { syncKaraoke } from "@modules/karaoke/karaokeView";
+import { syncKaraoke, refreshKaraokeInstrumentalStyle } from "@modules/karaoke/karaokeView";
 import { loadKaraokeSettings } from "@modules/karaoke/settings";
+import {
+  applyInstrumentalStyleAttribute,
+  INSTRUMENTAL_STYLE_ATTR,
+  INSTRUMENTAL_STYLE_DEFAULT,
+  type InstrumentalStyle,
+  normalizeInstrumentalStyle,
+} from "@modules/settings/instrumentalStyle";
 import { migrateFullscreenControlsPref } from "@modules/settings/fullscreenControls";
 import {
   FOOTER_SETTING_KEYS,
@@ -35,6 +42,7 @@ import {
 import {
   AUTO_HIDE_INSTRUMENTAL_BG_ATTR,
   AUTO_HIDE_INSTRUMENTAL_BG_DEFAULTS,
+  refreshActiveRevealInstrumental,
   syncActiveReveal,
 } from "@modules/ui/activeReveal";
 import { applyGlobalOffsets } from "@modules/ui/lyricsDock/offset";
@@ -94,6 +102,7 @@ export function handleSettings(): void {
   loadLyricsBlurSetting();
   loadUnblurUpcomingLyricsSetting();
   loadAutoHideInstrumentalBgSetting();
+  loadInstrumentalStyleSetting();
   loadFooterSettings();
   loadPerformanceSettings();
 }
@@ -178,6 +187,25 @@ function applyAutoHideInstrumentalBgSetting(enabled: boolean): void {
 function loadAutoHideInstrumentalBgSetting(): void {
   getStorage(AUTO_HIDE_INSTRUMENTAL_BG_DEFAULTS, items => {
     applyAutoHideInstrumentalBgSetting(items.isAutoHideInstrumentalBackgroundEnabled !== false);
+  });
+}
+
+function applyInstrumentalStyleSetting(style: InstrumentalStyle): void {
+  const prev = document.documentElement.getAttribute(INSTRUMENTAL_STYLE_ATTR);
+  applyInstrumentalStyleAttribute(document, style);
+  const next = document.documentElement.getAttribute(INSTRUMENTAL_STYLE_ATTR);
+  if (prev === next) return;
+  mainView.refreshInstrumentalStyle?.();
+  if (!readRendererMode(document)) {
+    refreshActiveRevealInstrumental(mainView);
+    retickMainView();
+  }
+  refreshKaraokeInstrumentalStyle();
+}
+
+function loadInstrumentalStyleSetting(): void {
+  getStorage({ instrumentalStyle: INSTRUMENTAL_STYLE_DEFAULT }, items => {
+    applyInstrumentalStyleSetting(normalizeInstrumentalStyle(items.instrumentalStyle));
   });
 }
 
@@ -332,6 +360,9 @@ export function initPerformanceSettingsListener(): () => void {
     }
     if ("isAutoHideInstrumentalBackgroundEnabled" in changes) {
       applyAutoHideInstrumentalBgSetting(changes.isAutoHideInstrumentalBackgroundEnabled.newValue !== false);
+    }
+    if ("instrumentalStyle" in changes) {
+      applyInstrumentalStyleSetting(normalizeInstrumentalStyle(changes.instrumentalStyle.newValue));
     }
     if (FOOTER_SETTING_KEYS.some(key => key in changes)) {
       const next = { ...AppState.footerSettings } as Record<keyof FooterSettings, unknown>;
@@ -489,6 +520,9 @@ export function listenForPopupMessages(): void {
       getAndApplyCustomStyles();
       if (request.settings && FOOTER_SETTING_KEYS.some(key => key in request.settings)) {
         applyFooterSettings(normalizeFooterSettings({ ...AppState.footerSettings, ...request.settings }));
+      }
+      if (request.settings && "instrumentalStyle" in request.settings) {
+        applyInstrumentalStyleSetting(normalizeInstrumentalStyle(request.settings.instrumentalStyle));
       }
       if (request.settings && "isWebglLyricsEnabled" in request.settings) {
         void applyRendererModeSettings(request.settings).then(() => {

@@ -1,13 +1,23 @@
 import { DISABLE_EFFECTS_STYLE_ID, FOOTER_CLASS, PLAYER_TIME_EVENT } from "@constants";
 import { FOOTER_EMPTY_ATTR } from "@modules/settings/footerSettings";
-import { AUTO_HIDE_INSTRUMENTAL_BG_ATTR, initActiveReveal, syncActiveReveal } from "@modules/ui/activeReveal";
+import {
+  applyInstrumentalStyleAttribute,
+  INSTRUMENTAL_STYLE_ATTR,
+  readInstrumentalStyle,
+} from "@modules/settings/instrumentalStyle";
+import {
+  AUTO_HIDE_INSTRUMENTAL_BG_ATTR,
+  initActiveReveal,
+  refreshActiveRevealInstrumental,
+  syncActiveReveal,
+} from "@modules/ui/activeReveal";
 import { registerPipBaseProperties, syncPipRendererMode } from "@modules/ui/rendererMode";
 import { translateContributorCreditLabels } from "@modules/lyrics/contributorCredit";
 import type { PlayerDetails } from "@core/appState";
 import { CUSTOM_THEME_STYLE_ID } from "@braccato/core/constants";
 import { applyLyricDecorations } from "@modules/lyrics/lyricDecorations";
-import type { Lyric, LyricsRenderer } from "@braccato/core";
-import { createLyricsView, lyricBuildSettingsKey } from "@modules/ui/lyricsRenderer";
+import type { Lyric } from "@braccato/core";
+import { createLyricsView, lyricBuildSettingsKey, type LyricsView } from "@modules/ui/lyricsRenderer";
 import { ensureLetterWaveSetting } from "@modules/settings/letterWave";
 import { setVideoQualityBoost } from "@modules/settings/videoQuality";
 import { shouldShowWindowStage } from "@modules/karaoke/gate";
@@ -115,7 +125,7 @@ export function createPictureInPictureHost(
   environment: PictureInPictureHostEnvironment
 ): PictureInPictureController<Window> {
   let activeView: PictureInPictureLyricsView | null = null;
-  let activeRenderer: LyricsRenderer | null = null;
+  let activeRenderer: LyricsView | null = null;
   let activeStage: KaraokeStage | null = null;
   let isStageShown = false;
   let isRescrollPending = false;
@@ -247,7 +257,7 @@ export function createPictureInPictureHost(
    * The sheet that switches stylized animations off is the extension's own, so it is still an
    * element copy.
    */
-  function mirrorOpenerStyles(pipWindow: Window, renderer: LyricsRenderer): void {
+  function mirrorOpenerStyles(pipWindow: Window, renderer: LyricsView): void {
     stopStyleMirror();
 
     // Every head mutation lands here, and the page rewrites <title> on each play, pause and track
@@ -308,20 +318,31 @@ export function createPictureInPictureHost(
     });
     styleObserver.observe(document.head, { childList: true, subtree: true, characterData: true });
 
-    const syncAutoHideAttr = (): void => {
+    const syncRootAttrs = (): void => {
       const enabled = document.documentElement.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR);
-      const changed = pipWindow.document.documentElement.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR) !== enabled;
+      const autoHideChanged = pipWindow.document.documentElement.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR) !== enabled;
       pipWindow.document.documentElement.toggleAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, enabled);
-      if (changed) {
+      const nextStyle = readInstrumentalStyle(document);
+      const styleChanged = readInstrumentalStyle(pipWindow.document) !== nextStyle;
+      applyInstrumentalStyleAttribute(pipWindow.document, nextStyle);
+      if (styleChanged) {
+        renderer.refreshInstrumentalStyle?.();
+        activeStage?.refreshInstrumentalStyle?.();
+      }
+      if (autoHideChanged) {
         syncActiveReveal(renderer);
+      } else if (styleChanged) {
+        refreshActiveRevealInstrumental(renderer);
+      }
+      if (autoHideChanged || styleChanged) {
         tickLyrics(false);
       }
     };
-    syncAutoHideAttr();
-    rootAttrObserver = new MutationObserver(syncAutoHideAttr);
+    syncRootAttrs();
+    rootAttrObserver = new MutationObserver(syncRootAttrs);
     rootAttrObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: [AUTO_HIDE_INSTRUMENTAL_BG_ATTR],
+      attributeFilter: [AUTO_HIDE_INSTRUMENTAL_BG_ATTR, INSTRUMENTAL_STYLE_ATTR],
     });
   }
 

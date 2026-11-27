@@ -87,7 +87,7 @@ interface ExitAnchorSnapshot {
 interface ManagedItem extends RevealTimingItem {
   readonly lineElement: HTMLElement;
   readonly targetElement: HTMLElement;
-  readonly visualElement: Element;
+  visualElement: Element;
   state: "expanded" | "exiting" | "collapsed";
   generation: number;
   visualAnim: Animation | null;
@@ -102,6 +102,7 @@ interface CachedOffsets {
 
 interface ViewController {
   syncFromSettingChange: () => void;
+  refreshInstrumentalVisuals: () => void;
 }
 
 const controllers = new WeakMap<ActiveRevealView, ViewController>();
@@ -1058,9 +1059,25 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       }
       snapAllToTime(container, timeS, true);
     },
+    refreshInstrumentalVisuals() {
+      for (const item of managedItems) {
+        if (item.kind !== "instrumental") continue;
+        clearItemAnimations(item);
+        item.visualElement = item.lineElement.querySelector(".blyrics--instrumental-icon") ?? item.lineElement;
+        if (item.state === "exiting") {
+          item.targetElement.classList.remove(REVEAL_EXITING_CLASS);
+          item.targetElement.classList.add(REVEAL_COLLAPSED_CLASS);
+          item.state = "collapsed";
+        }
+      }
+    },
   });
 }
 
 export function syncActiveReveal(view: ActiveRevealView): void {
   controllers.get(view)?.syncFromSettingChange();
+}
+
+export function refreshActiveRevealInstrumental(view: ActiveRevealView): void {
+  controllers.get(view)?.refreshInstrumentalVisuals();
 }

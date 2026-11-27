@@ -93,6 +93,9 @@ mainView.relayout = invalidateAfter(mainView.relayout);
 if (mainView.relayoutChangedLines) {
   mainView.relayoutChangedLines = invalidateAfter(mainView.relayoutChangedLines);
 }
+if (mainView.refreshInstrumentalStyle) {
+  mainView.refreshInstrumentalStyle = invalidateAfter(mainView.refreshInstrumentalStyle);
+}
 mainView.clear = invalidateAfter(mainView.clear);
 mainView.clearOnScreenLyrics = invalidateAfter(mainView.clearOnScreenLyrics);
 

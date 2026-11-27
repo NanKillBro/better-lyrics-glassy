@@ -46,6 +46,11 @@ import {
   type FooterSettings,
   normalizeFooterSettings,
 } from "@modules/settings/footerSettings";
+import {
+  INSTRUMENTAL_STYLE_DEFAULT,
+  type InstrumentalStyle,
+  normalizeInstrumentalStyle,
+} from "@modules/settings/instrumentalStyle";
 import { migrateLetterWavePref, type LetterWavePref } from "@modules/settings/letterWave";
 import { mergePreferredProviders } from "@modules/lyrics/providers/providerList";
 import { fetchOwnGamification, renderIdentityStats } from "@modules/unison/gamificationRender";
@@ -110,6 +115,7 @@ interface Options extends VideoQualitySettings, RendererModeOptions, FooterSetti
   isPassiveScrollEnabled: boolean;
   isUnblurUpcomingLyricsEnabled: boolean;
   isAutoHideInstrumentalBackgroundEnabled: boolean;
+  instrumentalStyle: InstrumentalStyle;
   isLyricsBlurDisabled: boolean;
   isVisibilityCacheEnabled: boolean;
   isIdleTickSuspensionEnabled: boolean;
@@ -201,6 +207,7 @@ const getOptionsFromForm = (): Options => {
     isAutoHideInstrumentalBackgroundEnabled: (
       document.getElementById("isAutoHideInstrumentalBackgroundEnabled") as HTMLInputElement
     ).checked,
+    instrumentalStyle: normalizeInstrumentalStyle((document.getElementById("instrumentalStyle") as HTMLInputElement).value),
     isLyricsBlurDisabled: (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked,
     isVisibilityCacheEnabled: (document.getElementById("isVisibilityCacheEnabled") as HTMLInputElement).checked,
     isIdleTickSuspensionEnabled: (document.getElementById("isIdleTickSuspensionEnabled") as HTMLInputElement).checked,
@@ -410,6 +417,7 @@ const restoreOptions = (): void => {
     isPassiveScrollEnabled: true,
     isUnblurUpcomingLyricsEnabled: false,
     isAutoHideInstrumentalBackgroundEnabled: true,
+    instrumentalStyle: INSTRUMENTAL_STYLE_DEFAULT,
     isLyricsBlurDisabled: false,
     isVisibilityCacheEnabled: false,
     isIdleTickSuspensionEnabled: false,
@@ -480,6 +488,7 @@ const restoreOptions = (): void => {
     setOptionsInForm({
       ...defaultOptions,
       ...(raw as Options),
+      instrumentalStyle: normalizeInstrumentalStyle(raw.instrumentalStyle),
       letterWavePref: migrateLetterWavePref(raw),
       fullscreenControlsPref: migrateFullscreenControlsPref(raw),
       isControlsDockEnabled:
@@ -526,6 +535,7 @@ const setOptionsInForm = (items: Options): void => {
     items.isUnblurUpcomingLyricsEnabled;
   (document.getElementById("isAutoHideInstrumentalBackgroundEnabled") as HTMLInputElement).checked =
     items.isAutoHideInstrumentalBackgroundEnabled;
+  setDropdownFieldValue("instrumentalStyle", normalizeInstrumentalStyle(items.instrumentalStyle));
   (document.getElementById("isLyricsBlurDisabled") as HTMLInputElement).checked = items.isLyricsBlurDisabled;
   (document.getElementById("isVisibilityCacheEnabled") as HTMLInputElement).checked = items.isVisibilityCacheEnabled;
   (document.getElementById("isIdleTickSuspensionEnabled") as HTMLInputElement).checked =
@@ -784,6 +794,10 @@ function initTriSwitch(id: string): void {
 
 function mountDropdownFields(): void {
   mountDropdownField("preferredVideoQuality", t("options_display_preferredVideoQuality"), videoQualityOptions());
+  mountDropdownField("instrumentalStyle", t("options_display_instrumentalStyle"), [
+    { value: "dots", label: t("options_display_instrumentalStyle_dots") },
+    { value: "note", label: t("options_display_instrumentalStyle_note") },
+  ]);
   mountDropdownField("translationLanguage", t("options_language_translationLanguage"), [...TRANSLATION_LANGUAGES]);
   mountDropdownField("uiLanguage", t("options_language_displayLanguage"), [
     { value: "auto", label: `${t("options_language_displayLanguageAuto")} (${chrome.i18n.getUILanguage()})` },

@@ -448,6 +448,7 @@ export declare function computeScrollPadding(measurements: ScrollPaddingMeasurem
  */
 export declare function relayout(engine: AnimationEngineInstance, measureLines: boolean): void;
 export declare function relayoutChangedLines(engine: AnimationEngineInstance, changedIndices: readonly number[]): void;
+export declare function refreshInstrumentalStyle(engine: AnimationEngineInstance, measureLines?: boolean): LineData[];
 /**
  * Renders this view again against the last player snapshot, without moving the clock on. The
  * options are built now rather than handed in, so a caller that reads settings at tick time still

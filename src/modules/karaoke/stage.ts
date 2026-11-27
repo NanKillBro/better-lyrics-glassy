@@ -35,6 +35,7 @@ export interface KaraokeStage {
   tick(timeS: number, options: TickOptions): void;
   retick(read: Parameters<LyricsRenderer["retickFromPlaybackClock"]>[0]): void;
   relayout(): void;
+  refreshInstrumentalStyle(): void;
   setTheme(css: string): void;
   setVisible(visible: boolean, onResize: () => void): void;
   clear(): void;
@@ -96,6 +97,10 @@ export function createKaraokeStage(options: KaraokeStageOptions): KaraokeStage {
 
     relayout(): void {
       renderer.relayout();
+    },
+
+    refreshInstrumentalStyle(): void {
+      renderer.refreshInstrumentalStyle?.();
     },
 
     setTheme(css: string): void {

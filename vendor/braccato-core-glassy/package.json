@@ -1,6 +1,6 @@
 {
   "name": "braccato-core-glassy",
-  "version": "1.20.0-glassy.2",
+  "version": "1.20.0-glassy.3",
   "description": "Synchronized lyrics renderer with word-by-word animations (local vendored @braccato/core 1.20.0 fork for Better Lyrics Glassy)",
   "type": "module",
   "license": "GPL-3.0",

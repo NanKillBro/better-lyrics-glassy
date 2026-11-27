@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
+import { createLyricsRenderer as createLegacyCoreRenderer } from "@braccato/core-legacy";
 import {
   BIDI_SENSITIVE_CLASS,
   LONG_WORD_GROUP_CLASS,
   ROMANIZED_LYRICS_CLASS,
+  RTL_CLASS,
   SWEEP_CELL_CLASS,
   TRANSLATED_LYRICS_CLASS,
   WORD_CLASS,
@@ -28,6 +31,7 @@ import {
   type WobbleLineData,
 } from "@modules/ui/lyricsRenderer";
 import { readRendererMode, WEBGL_LYRICS_ATTR } from "@modules/ui/rendererMode";
+import { INSTRUMENTAL_STYLE_ATTR } from "@modules/settings/instrumentalStyle";
 
 function makeTargetWithClass(className: string | null) {
   return {
@@ -306,6 +310,488 @@ function makeFakeElement(
   assert.ok((lyricEl.querySelector as (s: string) => unknown)(`.${TRANSLATED_LYRICS_CLASS}`));
   assert.equal((lyricEl.querySelector as (s: string) => unknown)(`.${SWEEP_CELL_CLASS}`), null);
   assert.equal(line.parts.length, 1);
+}
+
+// 7. braccato-core-glassy@1.20.0-glassy.3: seekAnimation, glow-off/resting-invisible fade-out, scrollTop pre-read reuse, stale cleanup & cached lastSungLine
+{
+  const testDom = new JSDOM("<!doctype html><html><body><div id='scroll'><div id='mount'></div></div></body></html>", {
+    pretendToBeVisual: true,
+  });
+  const tWin = testDom.window as unknown as Window & typeof globalThis;
+  const tDoc = tWin.document;
+  if (typeof (globalThis as Record<string, unknown>).DOMRect !== "function") {
+    (globalThis as Record<string, unknown>).DOMRect = class {
+      constructor(
+        public x = 0,
+        public y = 0,
+        public width = 0,
+        public height = 0
+      ) {}
+    };
+  }
+  let fakeNowMs = 50_000;
+  Object.defineProperty(tWin, "performance", {
+    configurable: true,
+    value: { now: () => fakeNowMs },
+  });
+  Object.defineProperty(tWin, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent: () => false,
+    }),
+  });
+  Object.defineProperty(tWin, "ResizeObserver", {
+    configurable: true,
+    value: class {
+      observe() {}
+      disconnect() {}
+    },
+  });
+  Object.defineProperty(tDoc, "fonts", { configurable: true, value: { ready: Promise.resolve() } });
+
+  interface MockAnim {
+    target: Element;
+    keyframes: Keyframe[];
+    options: KeyframeAnimationOptions;
+    playbackRate: number;
+    currentTime: number | null;
+    startTime: number | null;
+    playState: AnimationPlayState;
+    timeline: { currentTime: number };
+    effect: { target: Element; getComputedTiming: () => { endTime: number }; getKeyframes: () => Keyframe[]; getTiming: () => KeyframeAnimationOptions };
+    cancelled: boolean;
+    cancel: () => void;
+    pause: () => void;
+    play: () => void;
+    addEventListener: () => void;
+  }
+
+  const createdAnims: MockAnim[] = [];
+  Object.defineProperty(tWin.Element.prototype, "animate", {
+    configurable: true,
+    value(this: Element, keyframes: Keyframe[], options: KeyframeAnimationOptions = {}) {
+      let currentTime: number | null = null;
+      let startTime: number | null = null;
+      let playState: AnimationPlayState = "running";
+      const anim: MockAnim = {
+        target: this,
+        keyframes,
+        options,
+        playbackRate: 1,
+        get currentTime() {
+          return currentTime;
+        },
+        set currentTime(v: number | null) {
+          currentTime = v;
+        },
+        get startTime() {
+          return startTime;
+        },
+        set startTime(v: number | null) {
+          startTime = v;
+          if (v !== null) playState = "running";
+        },
+        get playState() {
+          return playState;
+        },
+        set playState(v: AnimationPlayState) {
+          playState = v;
+        },
+        timeline: { currentTime: 49_990 },
+        effect: {
+          target: this,
+          getComputedTiming: () => ({ endTime: Number(options.duration ?? 0) }),
+          getKeyframes: () => keyframes,
+          getTiming: () => options,
+        },
+        cancelled: false,
+        cancel() {
+          anim.cancelled = true;
+          playState = "idle";
+        },
+        pause() {
+          playState = "paused";
+        },
+        play() {
+          playState = "running";
+        },
+        addEventListener() {},
+      };
+      createdAnims.push(anim);
+      return anim as unknown as Animation;
+    },
+  });
+
+  const scroller = tDoc.getElementById("scroll")!;
+  const mount = tDoc.getElementById("mount")!;
+  let scrollTopVal = 0;
+  let scrollTopReads = 0;
+  let scrollTopWrites = 0;
+  Object.defineProperty(scroller, "scrollTop", {
+    configurable: true,
+    get: () => {
+      scrollTopReads++;
+      return scrollTopVal;
+    },
+    set: (v: number) => {
+      scrollTopWrites++;
+      scrollTopVal = Math.max(0, Math.min(2000, v));
+    },
+  });
+  Object.defineProperty(scroller, "scrollHeight", { configurable: true, get: () => 2600 });
+  Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => 600 });
+  scroller.getBoundingClientRect = () => ({ height: 600, top: 0, left: 0, bottom: 600, right: 400, width: 400, x: 0, y: 0, toJSON: () => ({}) });
+
+  const makeRenderer = () =>
+    createLegacyCoreRenderer({
+      document: tDoc,
+      window: tWin,
+      mount,
+      host: { getScrollElement: () => scroller },
+    });
+
+  // 7a. Playing seekAnimation pins startTime from ownerDocument.defaultView.performance.now() at 1x and 1.5x; paused writes currentTime
+  {
+    const renderer = makeRenderer();
+    renderer.setLyrics(
+      [
+        { startTimeMs: 1000, durationMs: 800, words: "Hello", parts: [{ startTimeMs: 1000, durationMs: 800, words: "Hello" }] },
+        { startTimeMs: 5000, durationMs: 800, words: "World", parts: [{ startTimeMs: 5000, durationMs: 800, words: "World" }] },
+        { startTimeMs: 8000, durationMs: 3000, words: "", isInstrumental: true },
+      ],
+      { songwriters: ["Writer A"] }
+    );
+    const credits = renderer.container!.querySelector<HTMLElement>(".blyrics-credits");
+    assert.ok(credits, "credits element created");
+    for (const [idx, y] of [
+      [0, 100],
+      [1, 900],
+      [2, 1100],
+    ] as const) {
+      const el = renderer.lines[idx].lyricElement;
+      el.getClientRects = () => [{ height: 60, width: 400, top: y, left: 0, bottom: y + 60, right: 400, x: 0, y }] as unknown as DOMRectList;
+      el.getBoundingClientRect = () => ({ height: 60, top: y, left: 0, bottom: y + 60, right: 400, width: 400, x: 0, y, toJSON: () => ({}) });
+    }
+    credits.getBoundingClientRect = () => ({ height: 40, top: 1200, left: 0, bottom: 1240, right: 400, width: 400, x: 0, y: 1200, toJSON: () => ({}) });
+    renderer.container!.getBoundingClientRect = () => ({ height: 1400, top: 0, left: 0, bottom: 1400, right: 400, width: 400, x: 0, y: 0, toJSON: () => ({}) });
+    renderer.relayout(true);
+
+    // No-op scroll at line 0 (scrollPos clamped to 0, scrollTop === 0): 1 read, 0 writes
+    createdAnims.length = 0;
+    scrollTopReads = 0;
+    scrollTopWrites = 0;
+    fakeNowMs = 50_000;
+    renderer.tick(1.4, { eventCreationTime: -1, isPlaying: true, smoothScroll: false, playbackRate: 1 });
+    assert.equal(scrollTopReads, 1, "no-op scroll reads scrollTop once (no mid-tick read-after-write)");
+    assert.equal(scrollTopWrites, 0, "no-op scroll skips redundant scrollTop write");
+
+    // Playing at 1x: word swipe/opacity/glow animations pin startTime using tWin.performance.now()
+    const line0Opacity = createdAnims.find(
+      a => a.target === renderer.lines[0].parts[0].highlightElement && a.options.duration === 1
+    );
+    assert.ok(line0Opacity, "word opacity animation created");
+    assert.equal(line0Opacity.startTime, 50_000 - 1, "playing animation pins startTime to window performance.now() - timeMs / rate");
+    assert.equal(line0Opacity.currentTime, null, "playing animation leaves currentTime unset when startTime is pinned");
+
+    // Advancing to line 1 (scrollPos > 0) at 1.5x rate: 2 reads (pre-read + post-write clamp check), 1 write
+    createdAnims.length = 0;
+    scrollTopReads = 0;
+    scrollTopWrites = 0;
+    fakeNowMs = 60_000;
+    renderer.tick(5.3, { eventCreationTime: -1, isPlaying: true, smoothScroll: false, playbackRate: 1.5 });
+    assert.equal(scrollTopWrites, 1, "real scroll writes scrollTop once");
+    assert.equal(scrollTopReads, 2, "real scroll reads scrollTop twice (pre-read + post-write clamp check, no mid-tick read before write)");
+    assert.ok(scrollTopVal > 0, "scrollTop advanced to line 1");
+
+    const line1Part = renderer.lines[1].parts[0] as unknown as {
+      highlightElement: Element;
+      highlightLetterElements?: Element[];
+    };
+    const line1SwipeTarget = line1Part.highlightLetterElements?.[0] ?? line1Part.highlightElement;
+    const line1Swipe = createdAnims.find(
+      a =>
+        a.target === line1SwipeTarget &&
+        a.keyframes.some(k => "--lyric-transition-amount-start" in k || "maskPosition" in k)
+    );
+    assert.ok(line1Swipe, "line 1 swipe animation created");
+    assert.equal(line1Swipe.playbackRate, 1.5);
+    // wordTimeMs = 300ms, swipeLeadMs = 80ms -> swipeTimeMs = 380ms -> startTime = 60_000 - 380 / 1.5
+    assert.ok(
+      Math.abs((line1Swipe.startTime ?? 0) - (60_000 - 380 / 1.5)) < 1e-6,
+      "1.5x playing animation divides seekMs by playbackRate"
+    );
+
+    // Line 0 exited via fade-out: with default glowRestingInvisible (0 radius), fade-out omits filter
+    const line0Exit = createdAnims.find(
+      a => a.target === renderer.lines[0].parts[0].highlightElement && a.keyframes[0]?.opacity === 1 && a.keyframes[1]?.opacity === 0
+    );
+    assert.ok(line0Exit, "line 0 fade-out animation created");
+    assert.equal(
+      line0Exit.keyframes.every(k => k.filter === undefined),
+      true,
+      "default 0-radius resting glow omits filter during word fade-out"
+    );
+
+    // Stale animation cleanup cancels lingering animations past staleAnimationEndTime
+    // and cached lastSungLine ignores trailing instrumental (line 2) so credits focus at t >= line 1 end (7.0s)
+    assert.equal(renderer.container!.dataset.creditsFocused, undefined, "credits not focused before last sung line ends");
+    renderer.tick(9.5, { eventCreationTime: -1, isPlaying: true, smoothScroll: false, playbackRate: 1.5 });
+    assert.equal(line1Swipe.cancelled, true, "stale line 1 animation cancelled after staleAnimationEndTime");
+    assert.equal(renderer.lines[1].parts[0].animations.length, 0);
+    assert.equal(renderer.container!.dataset.creditsFocused, "true", "cached lastSungLine focuses credits after last sung line");
+
+    // Switching to a new song invalidates cachedLastSungLine
+    renderer.setLyrics(
+      [
+        { startTimeMs: 1000, durationMs: 2000, words: "Song 2", parts: [{ startTimeMs: 1000, durationMs: 2000, words: "Song 2" }] },
+        { startTimeMs: 12000, durationMs: 3000, words: "Song 2 End", parts: [{ startTimeMs: 12000, durationMs: 3000, words: "Song 2 End" }] },
+      ],
+      { songwriters: ["Writer B"] }
+    );
+    const credits2 = renderer.container!.querySelector<HTMLElement>(".blyrics-credits");
+    assert.ok(credits2);
+    for (const [idx, y] of [
+      [0, 100],
+      [1, 300],
+    ] as const) {
+      const el = renderer.lines[idx].lyricElement;
+      el.getClientRects = () => [{ height: 60, width: 400, top: y, left: 0, bottom: y + 60, right: 400, x: 0, y }] as unknown as DOMRectList;
+      el.getBoundingClientRect = () => ({ height: 60, top: y, left: 0, bottom: y + 60, right: 400, width: 400, x: 0, y, toJSON: () => ({}) });
+    }
+    credits2.getBoundingClientRect = () => ({ height: 40, top: 400, left: 0, bottom: 440, right: 400, width: 400, x: 0, y: 400, toJSON: () => ({}) });
+    renderer.container!.getBoundingClientRect = () => ({ height: 600, top: 0, left: 0, bottom: 600, right: 400, width: 400, x: 0, y: 0, toJSON: () => ({}) });
+    renderer.relayout(true);
+    renderer.tick(9.5, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    assert.equal(renderer.container!.dataset.creditsFocused, undefined, "new song invalidates cachedLastSungLine (not focused at 9.5s)");
+    renderer.tick(15.5, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    assert.equal(renderer.container!.dataset.creditsFocused, "true", "new song focuses credits at 15.5s");
+    renderer.destroy();
+  }
+
+  // 7b. Paused seek writes currentTime (not startTime), and glow-off with 4px resting radius still omits filter on exit
+  {
+    const renderer = makeRenderer();
+    renderer.setLyrics([
+      { startTimeMs: 2000, durationMs: 800, words: "GlowOff", parts: [{ startTimeMs: 2000, durationMs: 800, words: "GlowOff" }] },
+      { startTimeMs: 6000, durationMs: 800, words: "Next", parts: [{ startTimeMs: 6000, durationMs: 800, words: "Next" }] },
+    ]);
+    renderer.container!.style.setProperty("--blyrics-animate-highlight-glow", "false");
+    renderer.container!.style.setProperty("--blyrics-highlight-glow-radius-to", "4px");
+
+    createdAnims.length = 0;
+    renderer.tick(2.4, { eventCreationTime: -1, isPlaying: false, smoothScroll: false });
+    const pausedPart = renderer.lines[0].parts[0] as unknown as {
+      highlightElement: Element;
+      highlightLetterElements?: Element[];
+    };
+    const pausedSwipeTarget = pausedPart.highlightLetterElements?.[0] ?? pausedPart.highlightElement;
+    const pausedSwipe = createdAnims.find(
+      a =>
+        a.target === pausedSwipeTarget &&
+        a.keyframes.some(k => "--lyric-transition-amount-start" in k || "maskPosition" in k)
+    );
+    assert.ok(pausedSwipe, "paused swipe animation created");
+    assert.equal(pausedSwipe.startTime, null, "paused animation does not pin startTime");
+    // wordTimeMs = 400ms, swipeLeadMs = 80ms -> swipeTimeMs = 480ms
+    assert.ok(Math.abs((pausedSwipe.currentTime ?? 0) - 480) < 1e-6, "paused animation holds seek on currentTime");
+
+    // Advance while playing past line 0 end -> triggers fade-out without filter even with 4px resting radius
+    createdAnims.length = 0;
+    renderer.tick(6.1, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    const exitAnim = createdAnims.find(
+      a => a.target === renderer.lines[0].parts[0].highlightElement && a.keyframes[0]?.opacity === 1 && a.keyframes[1]?.opacity === 0
+    );
+    assert.ok(exitAnim, "glow-off fade-out created");
+    assert.equal(
+      exitAnim.keyframes.every(k => k.filter === undefined),
+      true,
+      "glow-off theme omits drop-shadow filter during word fade-out even when resting radius is non-zero"
+    );
+    renderer.destroy();
+  }
+
+  // 7c. Glow-on with non-zero resting radius (4px) preserves drop-shadow filter during word fade-out
+  {
+    const renderer = makeRenderer();
+    renderer.setLyrics([
+      { startTimeMs: 2000, durationMs: 800, words: "GlowOn", parts: [{ startTimeMs: 2000, durationMs: 800, words: "GlowOn" }] },
+      { startTimeMs: 6000, durationMs: 800, words: "After", parts: [{ startTimeMs: 6000, durationMs: 800, words: "After" }] },
+    ]);
+    renderer.container!.style.setProperty("--blyrics-animate-highlight-glow", "true");
+    renderer.container!.style.setProperty("--blyrics-highlight-glow-radius-to", "4px");
+
+    renderer.tick(2.4, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    createdAnims.length = 0;
+    renderer.tick(6.1, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    const exitAnim = createdAnims.find(
+      a => a.target === renderer.lines[0].parts[0].highlightElement && a.keyframes[0]?.opacity === 1 && a.keyframes[1]?.opacity === 0
+    );
+    assert.ok(exitAnim, "glow-on fade-out created");
+    assert.equal(
+      exitAnim.keyframes[0].filter,
+      "drop-shadow(0 0 4px var(--blyrics-glow-color))",
+      "glow-on theme with non-zero resting radius preserves filter during word fade-out"
+    );
+    renderer.destroy();
+  }
+
+  // 8. Three dots instrumental indicator: DOM, fill timing, Apple Wave, exit fade, live refresh & swapLyrics signature sync
+  {
+    const dotsLyrics = [
+      { startTimeMs: 0, durationMs: 6000, words: "", isInstrumental: true },
+      {
+        startTimeMs: 7000,
+        durationMs: 2000,
+        words: "\u05e9\u05dc\u05d5\u05dd",
+        agent: "v2",
+        parts: [{ startTimeMs: 7000, durationMs: 2000, words: "\u05e9\u05dc\u05d5\u05dd" }],
+      },
+      { startTimeMs: 10000, durationMs: 4000, words: "", isInstrumental: true },
+      {
+        startTimeMs: 15000,
+        durationMs: 2000,
+        words: "\u05d1\u05d5\u05e7\u05e8",
+        agent: "v2",
+        parts: [{ startTimeMs: 15000, durationMs: 2000, words: "\u05d1\u05d5\u05e7\u05e8" }],
+      },
+    ];
+    tDoc.documentElement.removeAttribute(INSTRUMENTAL_STYLE_ATTR);
+    tDoc.documentElement.removeAttribute("blyrics-auto-hide-instrumental-bg");
+
+    const renderer = makeRenderer();
+    renderer.setLyrics(dotsLyrics, { songKey: "dots-song" });
+    for (const [idx, y] of [
+      [0, 100],
+      [1, 300],
+      [2, 500],
+      [3, 700],
+    ] as const) {
+      const el = renderer.lines[idx].lyricElement;
+      el.getClientRects = () =>
+        [{ height: 60, width: 400, top: y, left: 0, bottom: y + 60, right: 400, x: 0, y }] as unknown as DOMRectList;
+      el.getBoundingClientRect = () => ({
+        height: 60,
+        top: y,
+        left: 0,
+        bottom: y + 60,
+        right: 400,
+        width: 400,
+        x: 0,
+        y,
+        toJSON: () => ({}),
+      });
+    }
+    renderer.container!.getBoundingClientRect = () => ({
+      height: 1000,
+      top: 0,
+      left: 0,
+      bottom: 1000,
+      right: 400,
+      width: 400,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    renderer.relayout(true);
+
+    const line0El = renderer.lines[0].lyricElement;
+    const line2El = renderer.lines[2].lyricElement;
+    const dotsIcon0 = line0El.querySelector(".blyrics--instrumental-icon.blyrics--instrumental-dots");
+    assert.ok(dotsIcon0, "three dots wrapper created when attribute is dots");
+    assert.equal(dotsIcon0.tagName.toLowerCase(), "span");
+    assert.equal(line0El.querySelectorAll("span").length, 10, "three dots icon contains exact 10-span structure");
+    assert.equal(line0El.querySelectorAll(".blyrics--instrumental-dot").length, 3);
+    assert.equal(line0El.querySelectorAll(".blyrics--instrumental-dot-lit").length, 3);
+    assert.equal(line2El.classList.contains(RTL_CLASS), true, "dots instrumental line inherits neighbour RTL class");
+    assert.equal(line2El.dataset.direction, "rtl");
+    assert.equal(line2El.dataset.agent, "v2", "dots instrumental line inherits neighbour duet agent");
+
+    // Sequential 1->2->3 fill + staggered Apple Wave WAAPI animations (2600ms period, 1.5x rate, pause)
+    createdAnims.length = 0;
+    fakeNowMs = 70_000;
+    renderer.tick(1.5, { eventCreationTime: -1, isPlaying: true, smoothScroll: false, playbackRate: 1.5 });
+    const dots0 = Array.from(line0El.querySelectorAll(".blyrics--instrumental-dot"));
+    const litDots0 = Array.from(line0El.querySelectorAll(".blyrics--instrumental-dot-lit"));
+    const fillAnims = litDots0.map(lit =>
+      createdAnims.find(a => a.target === lit && a.keyframes[0]?.opacity === 0 && a.keyframes[1]?.opacity === 1)
+    );
+    assert.equal(fillAnims.every(Boolean), true, "all 3 lit dots receive sequential opacity fill animations");
+    assert.deepEqual(
+      fillAnims.map(a => a!.options.delay),
+      [0, 2000, 4000],
+      "without auto-hide, 6000ms instrumental divides into 0/2000/4000ms sequential delays"
+    );
+    assert.equal(fillAnims[0]!.options.duration, 2000);
+    const waveAnims = dots0.map(dot =>
+      createdAnims.find(a => a.target === dot && a.options.iterations === Infinity)
+    );
+    assert.equal(waveAnims.every(Boolean), true, "all 3 dot wrappers receive infinite Apple Wave animations");
+    assert.equal(waveAnims[0]!.options.duration, 2600);
+    assert.equal(waveAnims[0]!.keyframes.length, 5);
+    assert.equal(waveAnims[0]!.playbackRate, 1.5);
+    const staggerDeltaMs =
+      ((((((waveAnims[1]!.startTime ?? 0) - (waveAnims[0]!.startTime ?? 0)) * 1.5) % 2600) + 2600) % 2600);
+    assert.ok(Math.abs(staggerDeltaMs - 350) < 1e-6, "Apple Wave staggers adjacent dots by 350ms modulo 2600ms");
+
+    // Pausing freezes dots wave & fill animations; fresh paused start holds currentTime instead of startTime
+    renderer.tick(2.0, { eventCreationTime: -1, isPlaying: false, smoothScroll: false, playbackRate: 1.5 });
+    assert.equal(waveAnims.every(a => a!.playState === "paused"), true, "paused tick pauses dot wave animations");
+    assert.equal(fillAnims.every(a => a!.playState === "paused"), true, "paused tick pauses dot fill animations");
+
+    // Advancing past instrumental line triggers lit-dot fade-out
+    createdAnims.length = 0;
+    renderer.tick(7.2, { eventCreationTime: -1, isPlaying: true, smoothScroll: false, playbackRate: 1 });
+    const dotExitAnims = litDots0.map(lit =>
+      createdAnims.find(a => a.target === lit && a.keyframes[1]?.opacity === 0)
+    );
+    assert.equal(dotExitAnims.every(Boolean), true, "exiting active dots line triggers lit-dot fade-out");
+
+    // Active Reveal resolveDotsFillDurationMs shortens fill window ahead of scroll lead (5420ms for 6000ms line)
+    tDoc.documentElement.setAttribute("blyrics-auto-hide-instrumental-bg", "");
+    renderer.setLyrics(dotsLyrics, { songKey: "dots-autohide-song" });
+    const autohideLit0 = Array.from(renderer.lines[0].lyricElement.querySelectorAll(".blyrics--instrumental-dot-lit"));
+    createdAnims.length = 0;
+    renderer.tick(0.5, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    const autohideFills = autohideLit0.map(lit =>
+      createdAnims.find(a => a.target === lit && a.keyframes[0]?.opacity === 0 && a.keyframes[1]?.opacity === 1)
+    );
+    assert.ok(Math.abs(Number(autohideFills[0]?.options.duration) - 5420 / 3) < 1e-6, "auto-hide compresses dots fill slice");
+    assert.ok(Math.abs(Number(autohideFills[1]?.options.delay) - 5420 / 3) < 1e-6);
+    assert.ok(Math.abs(Number(autohideFills[2]?.options.delay) - (2 * 5420) / 3) < 1e-6);
+    tDoc.documentElement.removeAttribute("blyrics-auto-hide-instrumental-bg");
+
+    // refreshInstrumentalStyle() live switches note <-> dots, preserves RTL/duet classes, and syncs swapLyrics signature
+    renderer.setLyrics(dotsLyrics, { songKey: "dots-swap-song" });
+    tDoc.documentElement.setAttribute(INSTRUMENTAL_STYLE_ATTR, "note");
+    (renderer as unknown as { refreshInstrumentalStyle: () => void }).refreshInstrumentalStyle();
+    assert.equal(renderer.lines[0].lyricElement.querySelector(".blyrics--instrumental-dots"), null);
+    const refreshedNoteSvg = renderer.lines[0].lyricElement.querySelector("svg.blyrics--instrumental-icon");
+    assert.ok(refreshedNoteSvg, "refreshInstrumentalStyle restores classic note SVG");
+    assert.equal(renderer.lines[2].lyricElement.classList.contains(RTL_CLASS), true);
+    assert.equal(renderer.lines[2].lyricElement.dataset.agent, "v2");
+
+    // Matching songKey + refreshed signature reuses existing SVG icon element
+    renderer.setLyrics(dotsLyrics, { songKey: "dots-swap-song" });
+    assert.equal(
+      renderer.lines[0].lyricElement.querySelector("svg.blyrics--instrumental-icon"),
+      refreshedNoteSvg,
+      "syncInstrumentalSignature prevents redundant rebuild on subsequent swapLyrics"
+    );
+
+    // Removing note override without refreshInstrumentalStyle() causes swapLyrics to detect signature change and rebuild to dots
+    tDoc.documentElement.removeAttribute(INSTRUMENTAL_STYLE_ATTR);
+    renderer.setLyrics(dotsLyrics, { songKey: "dots-swap-song" });
+    assert.equal(renderer.lines[0].lyricElement.querySelectorAll("span").length, 10, "swapLyrics detects style mismatch in lineSignature");
+
+    renderer.destroy();
+  }
 }
 
 console.log("lyricsRenderer selfcheck passed");

@@ -49,3 +49,4 @@ export type SwapPositions = Map<LineData, {
  * scrolled into, and the scrolls the engine is waiting to swallow are all the song's before.
  */
 export declare function swapLyrics(engine: AnimationEngineInstance, mount: HTMLElement, lyrics: Lyric[], options: SetLyricsOptions): SwapPositions | null;
+export declare function syncInstrumentalSignature(line: LineData, doc: Document): void;

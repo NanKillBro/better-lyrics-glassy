@@ -176,6 +176,22 @@
     "message": "Collapses inactive instrumental notes and background vocals, smoothly animating them in when they become active. Legacy renderer only (inactive when WebGL lyrics beta is enabled).",
     "description": "Tooltip for the Show instrumental & background lyrics only when active setting"
   },
+  "options_display_instrumentalStyle": {
+    "message": "Instrumental indicator",
+    "description": "Setting label for choosing the visual indicator shown during instrumental sections"
+  },
+  "options_display_instrumentalStyleHint": {
+    "message": "Choose between Apple Music-style animated three dots or the classic music note during instrumental breaks.",
+    "description": "Tooltip for the Instrumental indicator setting"
+  },
+  "options_display_instrumentalStyle_note": {
+    "message": "Classic note",
+    "description": "Option label for the classic music note instrumental indicator"
+  },
+  "options_display_instrumentalStyle_dots": {
+    "message": "Three dots",
+    "description": "Option label for the three dots instrumental indicator"
+  },
   "picture_in_picture_open": {
     "message": "Open Picture-in-Picture lyrics",
     "description": "Accessible label for the dock action that opens the floating lyrics window"

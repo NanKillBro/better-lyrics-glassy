@@ -11,10 +11,10 @@
 // diagnostic overlay supplies the sink, and one that says nothing draws nothing.
 import { imageHighlights, refreshInstrumentalImages } from "./imageHighlights.js";
 import { CUSTOM_THEME_STYLE_ID } from "./constants.js";
-import { clearLyrics, clearOnScreenLyrics as clearEngineOnScreenLyrics, clearStyleCaches as clearEngineStyleCaches, createAnimationEngineInstance, getRenderedLines, getRenderedSyncType, hasUnsyncedLyrics, noteContainerResize, noteUserScroll as noteEngineUserScroll, noteVisibilityChange as noteEngineVisibilityChange, relayout, relayoutChangedLines as relayoutEngineChangedLines, resetScrollResume, resolveTickOptions, settleSwappedLines, retickFromPlaybackClock as retickEngineFromPlaybackClock, scheduleLyricPositionUpdate as scheduleEngineLyricPositionUpdate, tickView, } from "./engine.js";
+import { clearLyrics, clearOnScreenLyrics as clearEngineOnScreenLyrics, clearStyleCaches as clearEngineStyleCaches, createAnimationEngineInstance, getRenderedLines, getRenderedSyncType, hasUnsyncedLyrics, noteContainerResize, noteUserScroll as noteEngineUserScroll, noteVisibilityChange as noteEngineVisibilityChange, refreshInstrumentalStyle as refreshEngineInstrumentalStyle, relayout, relayoutChangedLines as relayoutEngineChangedLines, resetScrollResume, resolveTickOptions, settleSwappedLines, retickFromPlaybackClock as retickEngineFromPlaybackClock, scheduleLyricPositionUpdate as scheduleEngineLyricPositionUpdate, tickView, } from "./engine.js";
 import { parseThemeConfig, setThemeSettings } from "./themeSettings.js";
 import { applyLyricLanguage, normalizeLanguage, resolveLyricLanguages } from "./language.js";
-import { setLyrics as buildLyricsView, swapLyrics as swapLyricsView } from "./view.js";
+import { setLyrics as buildLyricsView, swapLyrics as swapLyricsView, syncInstrumentalSignature } from "./view.js";
 /**
  * What the default `seek` dispatches at the mount. A consumer that gave the renderer no way to
  * reach its player can listen for this instead of writing a host.
@@ -343,6 +343,15 @@ export function createLyricsRenderer(rendererOptions) {
                 return;
             }
             relayoutEngineChangedLines(engine, changedIndices);
+        },
+        refreshInstrumentalStyle() {
+            if (isDestroyed)
+                return;
+            forgetScrollElement();
+            const changed = refreshEngineInstrumentalStyle(engine, areLinesMeasurable(getRenderedLines(engine)));
+            for (const line of changed) {
+                syncInstrumentalSignature(line, rendererDocument);
+            }
         },
         clear() {
             if (isDestroyed)

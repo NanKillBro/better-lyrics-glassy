@@ -6,8 +6,14 @@ import { SharpenMarker } from "@modules/ui/fullscreenWindow/sharpenMarker";
 import { isUsableArtworkUrl } from "@modules/ui/fullscreenWindow/trackInfo";
 import { createVideoFrameReceiver, type VideoFrameReceiver } from "@modules/ui/fullscreenWindow/videoTransport";
 import {
+  applyInstrumentalStyleAttribute,
+  normalizeInstrumentalStyle,
+  readInstrumentalStyle,
+} from "@modules/settings/instrumentalStyle";
+import {
   AUTO_HIDE_INSTRUMENTAL_BG_ATTR,
   initActiveReveal,
+  refreshActiveRevealInstrumental,
   syncActiveReveal,
 } from "@modules/ui/activeReveal";
 import { initGlassyFlowBridge } from "@modules/ui/glassyFlowBridge";
@@ -609,11 +615,22 @@ function applyDisplayFlags(flags?: FullscreenDisplayFlags): void {
   const upcomingChanged = root.hasAttribute(UNBLUR_UPCOMING_LYRICS_ATTR) !== flags.unblurUpcoming;
   const nextAutoHide = flags.autoHideInstrumentalBg === true;
   const autoHideChanged = root.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR) !== nextAutoHide;
+  const prevStyle = readInstrumentalStyle(document);
+  const nextStyle = normalizeInstrumentalStyle(flags.instrumentalStyle);
+  const instrumentalStyleChanged = prevStyle !== nextStyle;
   root.toggleAttribute(LYRICS_BLUR_DISABLED_ATTR, flags.lyricsBlurDisabled);
   root.toggleAttribute(UNBLUR_UPCOMING_LYRICS_ATTR, flags.unblurUpcoming);
   root.toggleAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, nextAutoHide);
-  if (autoHideChanged && renderer && !webglMode) {
-    syncActiveReveal(renderer);
+  applyInstrumentalStyleAttribute(document, nextStyle);
+  if (instrumentalStyleChanged) {
+    renderer?.refreshInstrumentalStyle?.();
+  }
+  if (renderer && !webglMode && (autoHideChanged || instrumentalStyleChanged)) {
+    if (autoHideChanged) {
+      syncActiveReveal(renderer);
+    } else {
+      refreshActiveRevealInstrumental(renderer);
+    }
     forceSharpenImmediate = true;
     runSingleTick();
   }

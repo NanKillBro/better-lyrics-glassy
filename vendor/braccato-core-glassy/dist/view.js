@@ -16,7 +16,7 @@ import { CREDITS_CLASS, CREDITS_NAMES_CLASS, CREDITS_TEXT_CLASS, LINE_CLASS, LYR
 import { lineScrollOffset, playerTimeForLyricTime, replaceRenderedLines, setupLineCullObserver, } from "./engine.js";
 import { addSeekHandler, applyDirection, buildLineSyncedParts, createLyricsLine, deriveSyncType, disableRichsync, findNearestAgent, hideCredits, isNearestLyricRtl, moveDecorations, newLineData, } from "./inject.js";
 import { refreshInstrumentalImages } from "./imageHighlights.js";
-import { createInstrumentalElement } from "./instrumental.js";
+import { createInstrumentalElement, readInstrumentalStyle } from "./instrumental.js";
 import { applyLyricLanguage, resolveLyricLanguages } from "./language.js";
 import { lyricBuildSettingsKey } from "./themeSettings.js";
 import { isGecko } from "./util.js";
@@ -107,7 +107,7 @@ function viewKey(context) {
 }
 // The language is left out: it is an attribute rather than anything built, and a swap writes it onto
 // every kept line instead.
-function lineSignature(lyrics, lineIndex) {
+function lineSignature(lyrics, lineIndex, doc) {
     const item = lyrics[lineIndex];
     const parts = item.parts?.map(part => [
         part.startTimeMs,
@@ -121,6 +121,7 @@ function lineSignature(lyrics, lineIndex) {
     const neighbours = item.isInstrumental
         ? [findNearestAgent(lyrics, lineIndex), isNearestLyricRtl(lyrics, lineIndex)]
         : null;
+    const instrumentalStyle = item.isInstrumental ? readInstrumentalStyle(doc) : null;
     return JSON.stringify([
         item.startTimeMs,
         item.durationMs,
@@ -129,6 +130,7 @@ function lineSignature(lyrics, lineIndex) {
         item.agent ?? null,
         parts ?? null,
         neighbours,
+        instrumentalStyle,
         decorationKey(item),
     ]);
 }
@@ -151,10 +153,20 @@ function buildLine(doc, lyrics, lineIndex, context) {
         if (!lyricItem.words?.trim())
             lyricElement.dataset.blank = "true";
     }
-    lineSignatures.set(line, lineSignature(lyrics, lineIndex));
+    lineSignatures.set(line, lineSignature(lyrics, lineIndex, doc));
     decorationKeys.set(line, decorationKey(lyricItem));
     builtTimings.set(line, lineTimings(line));
     return line;
+}
+export function syncInstrumentalSignature(line, doc) {
+    const prev = lineSignatures.get(line);
+    if (!prev)
+        return;
+    const parsed = JSON.parse(prev);
+    if (Array.isArray(parsed) && parsed.length === 9) {
+        parsed[7] = readInstrumentalStyle(doc);
+        lineSignatures.set(line, JSON.stringify(parsed));
+    }
 }
 /**
  * Writes what the container records about the song as a whole, over whatever it recorded about the
@@ -323,7 +335,7 @@ export function swapLyrics(engine, mount, lyrics, options) {
     const doc = engine.document;
     // A line whose times a consumer moved after it was built is built again, so the move is not applied twice.
     const previousSignatures = previousLines.map(line => timingsUnchanged(line) ? (lineSignatures.get(line) ?? "") : `\u0000moved:${lineSignatures.get(line)}`);
-    const nextSignatures = lyrics.map((_, lineIndex) => lineSignature(lyrics, lineIndex));
+    const nextSignatures = lyrics.map((_, lineIndex) => lineSignature(lyrics, lineIndex, doc));
     // Whatever a consumer put after the lines and the credits, such as a footer, stays after them.
     const children = Array.from(container.childNodes);
     const oldCredits = container.querySelector(`:scope > .${CREDITS_CLASS}`);

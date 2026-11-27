@@ -159,6 +159,11 @@ export function applyKaraokeTheme(css: string): void {
   stage.setTheme(css);
 }
 
+export function refreshKaraokeInstrumentalStyle(): void {
+  stage.refreshInstrumentalStyle();
+  if (isKaraokeActive()) retickKaraoke();
+}
+
 /** Forces the main-page karaoke stage to rebuild on the next tick or immediately if active. */
 export function rebuildKaraoke(): void {
   if (builtFrom === null && !isKaraokeWanted()) return;

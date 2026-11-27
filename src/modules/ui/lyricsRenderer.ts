@@ -51,6 +51,7 @@ import { readRendererMode } from "@modules/ui/rendererMode";
 export type { LineData, LyricsRenderer };
 export type LyricsView = LyricsRenderer & {
   relayoutChangedLines?: (changedIndices: readonly number[]) => void;
+  refreshInstrumentalStyle?: () => void;
 };
 
 // -- Loading the WebGL2 renderer --------------------------
@@ -503,6 +504,14 @@ export function createLyricsView(options: LyricsRendererOptions): LyricsView {
       } else {
         active.relayout(true);
       }
+    },
+    refreshInstrumentalStyle() {
+      if (!active) return;
+      if (activeWebgl) {
+        active.relayout(false);
+        return;
+      }
+      active.refreshInstrumentalStyle?.();
     },
     clear: () => active?.clear(),
     destroy() {

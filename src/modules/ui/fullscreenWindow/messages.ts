@@ -1,3 +1,4 @@
+import type { InstrumentalStyle } from "@modules/settings/instrumentalStyle";
 import type { PictureInPictureLyricsPayload } from "@modules/ui/pictureInPicture/bridge";
 
 export const FULLSCREEN_WINDOW_CHANNEL = "blyrics-fullscreen-window" as const;
@@ -40,6 +41,7 @@ export interface FullscreenDisplayFlags {
   readonly lyricsBlurDisabled: boolean;
   readonly unblurUpcoming: boolean;
   readonly autoHideInstrumentalBg?: boolean;
+  readonly instrumentalStyle?: InstrumentalStyle;
 }
 
 export type FullscreenLyricsPayload = PictureInPictureLyricsPayload;

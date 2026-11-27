@@ -35,6 +35,7 @@ import {
   toggleMute,
 } from "@modules/ui/playerControls/playerBarControls";
 import { currentViewLyrics } from "@modules/lyrics/viewLyrics";
+import { INSTRUMENTAL_STYLE_ATTR, readInstrumentalStyle } from "@modules/settings/instrumentalStyle";
 import { AUTO_HIDE_INSTRUMENTAL_BG_ATTR } from "@modules/ui/activeReveal";
 import { readRendererMode, WEBGL_LYRICS_ATTR } from "@modules/ui/rendererMode";
 
@@ -235,6 +236,7 @@ function readDisplayFlags(): FullscreenDisplayFlags {
     lyricsBlurDisabled: root?.hasAttribute(LYRICS_BLUR_DISABLED_ATTR) === true,
     unblurUpcoming: root?.hasAttribute(UNBLUR_UPCOMING_LYRICS_ATTR) === true,
     autoHideInstrumentalBg: root?.hasAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR) === true,
+    instrumentalStyle: readInstrumentalStyle(document),
   };
 }
 
@@ -251,7 +253,8 @@ function ensureModeObserver(): void {
       } else if (
         mutation.attributeName === LYRICS_BLUR_DISABLED_ATTR ||
         mutation.attributeName === UNBLUR_UPCOMING_LYRICS_ATTR ||
-        mutation.attributeName === AUTO_HIDE_INSTRUMENTAL_BG_ATTR
+        mutation.attributeName === AUTO_HIDE_INSTRUMENTAL_BG_ATTR ||
+        mutation.attributeName === INSTRUMENTAL_STYLE_ATTR
       ) {
         flagsChanged = true;
       } else if (mutation.attributeName === "style") {
@@ -269,6 +272,7 @@ function ensureModeObserver(): void {
       LYRICS_BLUR_DISABLED_ATTR,
       UNBLUR_UPCOMING_LYRICS_ATTR,
       AUTO_HIDE_INSTRUMENTAL_BG_ATTR,
+      INSTRUMENTAL_STYLE_ATTR,
       "style",
     ],
   });

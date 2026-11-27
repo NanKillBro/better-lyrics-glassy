@@ -1,11 +1,36 @@
 import { imageHighlights } from "./imageHighlights.js";
+export const INSTRUMENTAL_STYLE_ATTR = "blyrics-instrumental-style";
+export const INSTRUMENTAL_DOTS_CLASS = "blyrics--instrumental-dots";
+export const INSTRUMENTAL_DOT_CLASS = "blyrics--instrumental-dot";
+export const INSTRUMENTAL_DOT_BASE_CLASS = "blyrics--instrumental-dot-base";
+export const INSTRUMENTAL_DOT_LIT_CLASS = "blyrics--instrumental-dot-lit";
 export const INSTRUMENTAL_WAVE_PATH_HIGH = "M -4 3 Q 1 2 5 3 Q 10 4 14 3 Q 18 2 22 3 Q 26 4 30 3 L 30 4 L -4 4 Z";
 export const INSTRUMENTAL_WAVE_PATH_LOW = "M -4 3 Q 1 4 5 3 Q 10 2 14 3 Q 18 4 22 3 Q 26 2 30 3 L 30 4 L -4 4 Z";
 let nextInstrumentalId = 0;
+export function readInstrumentalStyle(doc) {
+    return doc?.documentElement?.getAttribute?.(INSTRUMENTAL_STYLE_ATTR) === "note" ? "note" : "dots";
+}
+function createDotsInstrumentalIcon(doc) {
+    const group = doc.createElement("span");
+    group.classList.add("blyrics--instrumental-icon", INSTRUMENTAL_DOTS_CLASS);
+    group.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < 3; i++) {
+        const dot = doc.createElement("span");
+        dot.classList.add(INSTRUMENTAL_DOT_CLASS);
+        const base = doc.createElement("span");
+        base.classList.add(INSTRUMENTAL_DOT_BASE_CLASS);
+        const lit = doc.createElement("span");
+        lit.classList.add(INSTRUMENTAL_DOT_LIT_CLASS);
+        dot.appendChild(base);
+        dot.appendChild(lit);
+        group.appendChild(dot);
+    }
+    return group;
+}
 /**
  * Creates an HTML element representing an instrumental break in the lyrics.
  *
- * @param doc - Document the SVG nodes are created in
+ * @param doc - Document the indicator nodes are created in
  * @param container - Element to place instrumental parts into
  * @param durationMs - Duration of the instrumental break in milliseconds
  * @returns HTMLDivElement representing the instrumental break
@@ -13,6 +38,10 @@ let nextInstrumentalId = 0;
 export function createInstrumentalElement(doc, container, durationMs) {
     container.classList.add("blyrics--instrumental");
     container.style.setProperty("--blyrics-duration", `${durationMs}ms`);
+    if (readInstrumentalStyle(doc) === "dots") {
+        container.appendChild(createDotsInstrumentalIcon(doc));
+        return container;
+    }
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = doc.createElementNS(svgNS, "svg");
     svg.classList.add("blyrics--instrumental-icon");
@@ -118,4 +147,12 @@ export function createInstrumentalElement(doc, container, durationMs) {
     svg.appendChild(g);
     container.appendChild(svg);
     return container;
+}
+export function replaceInstrumentalIcon(doc, container, durationMs) {
+    for (const child of Array.from(container.children)) {
+        if (child.classList?.contains("blyrics--instrumental-icon")) {
+            child.remove();
+        }
+    }
+    return createInstrumentalElement(doc, container, durationMs);
 }
