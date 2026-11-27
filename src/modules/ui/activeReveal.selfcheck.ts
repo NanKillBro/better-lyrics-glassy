@@ -419,7 +419,16 @@ const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMark
   const introExitAnim = recordedAnims.find(a => a.target.classList.contains("blyrics--instrumental-icon"));
   assert.ok(introExitAnim, "exit WAAPI runs on instrumental icon");
   assert.equal((introExitAnim.options as KeyframeAnimationOptions).delay, 0, "sync-scroll exit starts immediately without pause");
-  assert.equal((introExitAnim.options as KeyframeAnimationOptions).duration, 320, "exit duration is 320ms");
+  assert.equal(
+    (introExitAnim.options as KeyframeAnimationOptions).duration,
+    460,
+    "forward GlassyFlow exit stretches smoothly across the 240ms scroll hold"
+  );
+  assert.equal(
+    (introExitAnim.options as KeyframeAnimationOptions).easing,
+    "cubic-bezier(0.8, 0.15, 0.4, 1)",
+    "forward GlassyFlow exit uses gentle pre-scroll ease-in curve"
+  );
   const introExitFrames = introExitAnim.keyframes as Keyframe[];
   assert.ok(String(introExitFrames[0].filter).includes("blur(0px)"), "exit starts unblurred");
   assert.ok(String(introExitFrames[1].filter).includes("blur(8px)"), "exit blurs out to 8px");

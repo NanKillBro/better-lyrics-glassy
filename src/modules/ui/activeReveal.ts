@@ -20,6 +20,7 @@ const MIN_SHIFT_PX = 0.5;
 const BG_ENTER_DURATION_MS = 700;
 const INST_ENTER_DURATION_MS = 420;
 const INST_EXIT_DURATION_MS = 320;
+const GF_SYNC_EXIT_DURATION_MS = 460;
 const FLIP_SYNC_DURATION_MS = 460;
 const FLIP_IMMEDIATE_DURATION_MS = 620;
 const GF_ENTER_DELAY_MS = 180;
@@ -32,6 +33,7 @@ const BG_ENTER_BLUR_PX = 8;
 const INST_BLUR_PX = 8;
 const ENTER_EASING = "cubic-bezier(0.2, 0.85, 0.25, 1)";
 const EXIT_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
+const GF_SYNC_EXIT_EASING = "cubic-bezier(0.8, 0.15, 0.4, 1)";
 const FLIP_EASING = "cubic-bezier(0.2, 0.85, 0.25, 1)";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
@@ -628,6 +630,8 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
   function startExitAnimation(
     item: ManagedItem,
     anchorOffsetPx: number,
+    durationMs: number,
+    easing: string,
     precomputedBaseFilter?: string
   ): void {
     clearItemAnimations(item);
@@ -658,9 +662,9 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
         },
       ],
       {
-        duration: INST_EXIT_DURATION_MS,
+        duration: durationMs,
         delay: 0,
-        easing: EXIT_EASING,
+        easing,
         fill: "both",
       }
     );
@@ -941,6 +945,12 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
     const recentScrollHoldMs = withinRecentScrollWindow
       ? Math.max(0, GF_BG_SYNC_DELAY_MS - (nowMs - lastLyricScrollAtMs))
       : 0;
+    // On forward GlassyFlow scrolls (240ms hold), replace the 140ms dead delay with a 460ms
+    // gentle ease-in curve starting at t=0 so there is no freeze while finishing alongside scroll.
+    const syncExitToScrollHold = isGlassyFlowManaged && shiftMode === "sync-scroll" && signedScrollDelta > 2;
+    const exitDurationMs = syncExitToScrollHold ? GF_SYNC_EXIT_DURATION_MS : INST_EXIT_DURATION_MS;
+    const exitEasing = syncExitToScrollHold ? GF_SYNC_EXIT_EASING : EXIT_EASING;
+
     for (const item of toExpand) {
       let itemEnterDelayMs = useSyncDelay ? GF_ENTER_DELAY_MS : 0;
       if (item.kind !== "instrumental" && isGlassyFlowManaged) {
@@ -948,7 +958,6 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
       }
       startEnterAnimation(item, itemEnterDelayMs, expandBaseFilters.get(item));
     }
-    // Start exiting immediately even on forward GlassyFlow scrolls so the note dissolves instead of pausing during the 240ms hold.
     for (const item of toCollapse) {
       const snapshot = exitSnapshots.get(item);
       let anchorOffsetPx = snapshot?.fallbackOffsetPx ?? 0;
@@ -956,7 +965,7 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
         anchorOffsetPx =
           snapshot.beforeVisualTop - snapshot.midRestingTop + (isGlassyFlowManaged ? signedScrollDelta : 0);
       }
-      startExitAnimation(item, anchorOffsetPx, snapshot?.baseFilter);
+      startExitAnimation(item, anchorOffsetPx, exitDurationMs, exitEasing, snapshot?.baseFilter);
     }
 
     return result;
