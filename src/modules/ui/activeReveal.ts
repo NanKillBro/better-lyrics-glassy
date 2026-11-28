@@ -882,14 +882,18 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
     const didScroll = scrollDeltaPx > 2;
 
     let firstActiveLineIdx = -1;
+    let lastActiveLineIdx = -1;
     const lineShiftByIdx = new Map<number, number>(lineShifts);
     let maxActiveNetMovePx = 0;
+    let lastActiveNetMovePx = 0;
     for (let i = 0; i < lines.length; i += 1) {
       if (lines[i].lyricElement.classList.contains("blyrics--active")) {
         if (firstActiveLineIdx < 0) firstActiveLineIdx = i;
+        lastActiveLineIdx = i;
         const dy = lineShiftByIdx.get(i) ?? 0;
         const netMove = Math.abs(signedScrollDelta + dy);
         if (netMove > maxActiveNetMovePx) maxActiveNetMovePx = netMove;
+        lastActiveNetMovePx = netMove;
       }
     }
 
@@ -900,11 +904,17 @@ export function initActiveReveal(view: ActiveRevealView, options?: ActiveRevealO
     }
     // Engine stamps .blyrics--active up to 0.54s before committing the scroll, so compare net active-line motion
     // rather than .blyrics--active transitions to avoid holding mid-line bg reveals on lookahead stamps.
+    const allChangesBeforeLastActive =
+      lastActiveLineIdx > 0 && changedLineIndices.every(idx => idx < lastActiveLineIdx);
+    const isPureAboveFocalCompensation =
+      allChangesBeforeLastActive && lastActiveNetMovePx <= 12 && scrollDeltaPx <= maxLayoutShiftPx + 4;
     const anyChangeOnOrAfterActive =
       firstActiveLineIdx < 0 || changedLineIndices.some(idx => idx >= firstActiveLineIdx);
-    const isScrollTransition = anyChangeOnOrAfterActive
-      ? Math.max(scrollDeltaPx, maxActiveNetMovePx) > maxLayoutShiftPx * 0.75 + 12
-      : maxActiveNetMovePx > 12;
+    const isScrollTransition = isPureAboveFocalCompensation
+      ? false
+      : anyChangeOnOrAfterActive
+        ? Math.max(scrollDeltaPx, maxActiveNetMovePx) > maxLayoutShiftPx * 0.75 + 12
+        : maxActiveNetMovePx > 12;
 
     const isGlassyFlowManaged = container.classList.contains("blyrics--gf-managed");
     const shiftMode: LayoutShiftPayload["mode"] =

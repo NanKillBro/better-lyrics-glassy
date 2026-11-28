@@ -999,4 +999,92 @@ const { SharpenMarker } = await import("@modules/ui/fullscreenWindow/sharpenMark
   );
 }
 
+// 9. Tall trailing bg (+60px) expanding above an active focal line while past line still carries .blyrics--active uses immediate mode
+{
+  const testDom = new JSDOM("<!doctype html><html><body><div id='scroll'><div class='blyrics-container blyrics--gf-managed'></div></div></body></html>", {
+    pretendToBeVisual: true,
+  });
+  const tWin = testDom.window as unknown as Window & typeof globalThis;
+  const tDoc = tWin.document;
+  tDoc.documentElement.setAttribute(AUTO_HIDE_INSTRUMENTAL_BG_ATTR, "");
+  Object.defineProperty(tWin, "matchMedia", { configurable: true, value: stubMatchMedia });
+
+  const scroller = tDoc.getElementById("scroll")!;
+  let mockScrollTop = 88;
+  Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => 600 });
+  Object.defineProperty(scroller, "scrollTop", {
+    configurable: true,
+    get: () => mockScrollTop,
+    set: (v: number) => {
+      mockScrollTop = v;
+    },
+  });
+
+  const container = scroller.querySelector<HTMLElement>(".blyrics-container")!;
+  const line0El = tDoc.createElement("div");
+  line0El.className = "blyrics--line blyrics--active";
+  line0El.innerHTML = `<div class="blyrics-line-main"><span class="blyrics--word" data-time="10" data-duration="2.4">Line A</span></div><div class="blyrics-background-line"><span class="blyrics--word" data-time="13" data-duration="0.4">(tall bg)</span></div>`;
+  const line1El = tDoc.createElement("div");
+  line1El.className = "blyrics--line blyrics--active";
+  line1El.innerHTML = `<div class="blyrics-line-main"><span class="blyrics--word" data-time="13" data-duration="4">Line B</span></div>`;
+  container.appendChild(line0El);
+  container.appendChild(line1El);
+
+  const bgRow0 = line0El.querySelector<HTMLElement>(".blyrics-background-line")!;
+  const lines = [
+    { time: 10, duration: 3.4, position: 200, height: 60, lyricElement: line0El },
+    { time: 13, duration: 4, position: 280, height: 60, lyricElement: line1El },
+  ];
+
+  const shiftsReceived: LayoutShiftPayload[] = [];
+  container.addEventListener(LAYOUT_SHIFT_EVENT, ev => {
+    shiftsReceived.push(JSON.parse((ev as CustomEvent<string>).detail));
+  });
+
+  let compensateNextTick = false;
+  const fakeView: ActiveRevealView = {
+    get container() {
+      return container;
+    },
+    get lines() {
+      return lines;
+    },
+    syncType: "richsync",
+    setLyrics() {},
+    tick() {
+      if (compensateNextTick) {
+        mockScrollTop += 60;
+        compensateNextTick = false;
+      }
+      return "ok";
+    },
+    retickFromPlaybackClock() {
+      return "ok";
+    },
+    relayout() {
+      const expanded = !bgRow0.classList.contains(REVEAL_COLLAPSED_CLASS);
+      lines[0].height = expanded ? 120 : 60;
+      lines[1].position = expanded ? 340 : 280;
+    },
+    relayoutChangedLines() {
+      this.relayout(true);
+      compensateNextTick = true;
+    },
+  };
+
+  initActiveReveal(fakeView, { document: tDoc, isViewVisible: () => true, getScrollElement: () => scroller });
+  const tickOpts: TickOptions = { eventCreationTime: -1, isPlaying: true, smoothScroll: false };
+  fakeView.tick(12.5, tickOpts); // snap before bgRow0 openAtS=12.6
+  assert.equal(bgRow0.classList.contains(REVEAL_COLLAPSED_CLASS), true);
+
+  shiftsReceived.length = 0;
+  fakeView.tick(12.65, tickOpts); // expands +60px above Line B while scrollTop compensates +60px (Line B netMove = 0)
+  assert.equal(shiftsReceived.length, 1);
+  assert.equal(
+    shiftsReceived[0].mode,
+    "immediate",
+    "pure above-focal +60px layout compensation stays immediate instead of false-positive sync-scroll"
+  );
+}
+
 console.log("activeReveal self-checks passed");

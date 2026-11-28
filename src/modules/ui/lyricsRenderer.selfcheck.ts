@@ -793,13 +793,13 @@ function makeFakeElement(
     renderer.destroy();
   }
 
-  // 8. braccato-core-glassy@1.20.0-glassy.4: lookahead isolation on relayoutChangedLines & mainEndTime single-scroll centering
+  // 8. braccato-core-glassy@1.20.0-glassy.5: lookahead isolation on relayoutChangedLines & 2-line centering while bg sings
   {
     const renderer = makeRenderer();
     renderer.setLyrics([
       {
         startTimeMs: 10000,
-        durationMs: 3300, // ends 13.3s (main ends 12.4s, trailing bg 12.5-13.3s)
+        durationMs: 3300, // ends 13.3s (main ends 12.4s, short trailing bg 12.5-13.3s within 0.5s of Line B)
         words: "Line A (bg)",
         parts: [
           { startTimeMs: 10000, durationMs: 2400, words: "Line A" },
@@ -862,19 +862,20 @@ function makeFakeElement(
       `layout-only scroll centers Line A (${200 + 105 / 2 - targetOffset}), got ${scrollTopVal}`
     );
 
-    // At 12.55s (lyricScrollTime 13.05s >= Line B.time 13.0s), Line B MUST scroll straight to exact focal!
+    // At 12.55s (lyricScrollTime 13.05s >= Line B.time 13.0s), Line A finishes at 13.3s (within 0.5s ending threshold),
+    // so Line B MUST scroll straight to exact focal!
     renderer.tick(12.55, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
     assert.ok(
       Math.abs(scrollTopVal - (325 + 30 - targetOffset)) <= 1,
       `Line B reaches exact focal (${325 + 30 - targetOffset}), got ${scrollTopVal}`
     );
 
-    // 8b. Long overlapping trailing bg (Line A main 10-12.5s, bg 12.6-14.8s; Line B 13.0-17.0s):
-    // Line B must scroll ONCE straight to focal at 12.55s (no halfway stall, no second scroll!)
+    // 8b. Past line's trailing bg still playing when Line B starts (Line A main 10-12.5s, bg 12.6-14.8s; Line B 13.0-17.0s):
+    // Both lines are actively singing (> 0.5s left on Line A), so [Line A, Line B] MUST center together like normal!
     renderer.setLyrics([
       {
         startTimeMs: 10000,
-        durationMs: 4800, // ends 14.8s, but main ends 12.5s
+        durationMs: 4800, // ends 14.8s (main ends 12.5s, bg continues until 14.8s)
         words: "Line A (long bg)",
         parts: [
           { startTimeMs: 10000, durationMs: 2500, words: "Line A" },
@@ -894,7 +895,8 @@ function makeFakeElement(
         parts: [{ startTimeMs: 17500, durationMs: 3000, words: "Line C" }],
       },
     ]);
-    line0BgH = 0;
+    // Simulate Active Reveal OFF (bg already expanded) and also lookahead reveal -> both center [Line A, Line B]
+    line0BgH = 45;
     syncGeom();
     renderer.relayout(true);
 
@@ -904,36 +906,95 @@ function makeFakeElement(
     }
     scrollTopWrites = 0;
     renderer.tick(12.55, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
-    const lineBFocalNoBg = 280 + 30 - targetOffset; // 88
-    assert.equal(scrollTopWrites, 1, "Line B commits in 1 scroll");
+    // Line A: 200..305 (center 252.5), Line B: 325..385 (center 355), avg = 303.75 -> scrollTop = 81.75
+    const pairCenterWithBg = (200 + 105 / 2 + (325 + 30)) / 2 - targetOffset;
+    assert.equal(scrollTopWrites, 1, "2-line centering commits in 1 scroll");
     assert.ok(
-      Math.abs(scrollTopVal - lineBFocalNoBg) <= 1,
-      `overlapping trailing bg does not pull Line B off focal (${lineBFocalNoBg}), got ${scrollTopVal}`
+      Math.abs(scrollTopVal - pairCenterWithBg) <= 1,
+      `active trailing bg + Line B centers both lines (${pairCenterWithBg}), got ${scrollTopVal}`
     );
 
-    // 8c. If Line A's trailing bg expands AFTER Line B already scrolled, Line B stays locked at focal (scrollTop += 45)
-    line0BgH = 45;
-    syncGeom();
-    (renderer as unknown as { relayoutChangedLines: (idx: number[]) => void }).relayoutChangedLines([0]);
-    renderer.tick(12.75, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
-    const lineBFocalWithBg = 325 + 30 - targetOffset; // 133
-    assert.ok(
-      Math.abs(scrollTopVal - lineBFocalWithBg) <= 1,
-      `post-scroll bg expansion compensates scrollTop cleanly to keep Line B at focal (${lineBFocalWithBg}), got ${scrollTopVal}`
-    );
-
-    // Advancing through Line A's trailing bg end triggers 0 extra scrolls (no double scroll!)
+    // Advancing through Line A's trailing bg end triggers 0 extra scrolls (no double scroll)
     scrollTopWrites = 0;
     for (const t of [13.1, 13.5, 13.9, 14.3, 14.7, 15.1]) {
       renderer.tick(t, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
     }
     assert.equal(scrollTopWrites, 0, "zero secondary/double scrolls as past line's trailing bg finishes");
 
-    // 8d. Standalone background-only line centers when active, then lets incoming main Line B scroll straight to focal
+    // 8c. Post-scroll bg expansion under Active Reveal:
+    // (i) When Line A's trailing bg is still playing with Line B, expanding Line A's bg re-centers [Line A + bg, Line B] (+33.75px).
+    line0BgH = 0;
+    syncGeom();
+    renderer.relayout(true);
+    renderer.tick(10.5, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    for (const t of [10.9, 11.3, 11.7, 12.1]) {
+      renderer.tick(t, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    }
+    renderer.tick(12.55, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    const pairCenterNoBg = (200 + 30 + (280 + 30)) / 2 - targetOffset; // 48
+    assert.ok(
+      Math.abs(scrollTopVal - pairCenterNoBg) <= 1,
+      `collapsed Line A + Line B centers pair before bg reveal (${pairCenterNoBg}), got ${scrollTopVal}`
+    );
+    line0BgH = 45;
+    syncGeom();
+    (renderer as unknown as { relayoutChangedLines: (idx: number[]) => void }).relayoutChangedLines([0]);
+    renderer.tick(12.75, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    assert.ok(
+      Math.abs(scrollTopVal - pairCenterWithBg) <= 1,
+      `post-scroll bg expansion re-centers [Line A + bg, Line B] (${pairCenterWithBg}), got ${scrollTopVal}`
+    );
+
+    // (ii) When Line A's trailing bg finishes within 0.5s of Line B (13.0-13.4s) and expands right after Line B commits,
+    // Line B stays locked at exact focal (scrollTop += 45, zero push-down).
     renderer.setLyrics([
       {
         startTimeMs: 10000,
-        durationMs: 4500, // bg-only overlaps into Line B
+        durationMs: 3400, // ends 13.4s (within 0.5s of Line B at 13.0s)
+        words: "Line A (short post-scroll bg)",
+        parts: [
+          { startTimeMs: 10000, durationMs: 2400, words: "Line A" },
+          { startTimeMs: 13000, durationMs: 400, words: "(short)", isBackground: true },
+        ],
+      },
+      {
+        startTimeMs: 13000,
+        durationMs: 4000,
+        words: "Line B",
+        parts: [{ startTimeMs: 13000, durationMs: 4000, words: "Line B" }],
+      },
+      {
+        startTimeMs: 17500,
+        durationMs: 3000,
+        words: "Line C",
+        parts: [{ startTimeMs: 17500, durationMs: 3000, words: "Line C" }],
+      },
+    ]);
+    line0BgH = 0;
+    syncGeom();
+    renderer.relayout(true);
+    renderer.tick(10.5, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    for (const t of [10.9, 11.3, 11.7, 12.1]) {
+      renderer.tick(t, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    }
+    renderer.tick(12.55, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    const lineBFocalNoBg = 280 + 30 - targetOffset; // 88
+    assert.ok(Math.abs(scrollTopVal - lineBFocalNoBg) <= 1, `short-bg Line B reaches focal (${lineBFocalNoBg}), got ${scrollTopVal}`);
+    line0BgH = 45;
+    syncGeom();
+    (renderer as unknown as { relayoutChangedLines: (idx: number[]) => void }).relayoutChangedLines([0]);
+    renderer.tick(12.65, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
+    const lineBFocalWithBg = 325 + 30 - targetOffset; // 133
+    assert.ok(
+      Math.abs(scrollTopVal - lineBFocalWithBg) <= 1,
+      `short post-scroll bg compensates scrollTop cleanly to keep Line B at focal (${lineBFocalWithBg}), got ${scrollTopVal}`
+    );
+
+    // 8d. Standalone background-only line still playing when Line B starts centers both lines together
+    renderer.setLyrics([
+      {
+        startTimeMs: 10000,
+        durationMs: 4500, // bg-only overlaps into Line B (ends 14.5s > 13.0s + 0.5s)
         words: "(ooh yeah)",
         parts: [{ startTimeMs: 10000, durationMs: 4500, words: "(ooh yeah)", isBackground: true }],
       },
@@ -959,8 +1020,8 @@ function makeFakeElement(
       renderer.tick(t, { eventCreationTime: -1, isPlaying: true, smoothScroll: false });
     }
     assert.ok(
-      Math.abs(scrollTopVal - lineBFocalNoBg) <= 1,
-      `incoming main Line B scrolls straight to focal past overlapping bg-only line (${lineBFocalNoBg}), got ${scrollTopVal}`
+      Math.abs(scrollTopVal - pairCenterNoBg) <= 1,
+      `overlapping bg-only line + Line B centers both lines (${pairCenterNoBg}), got ${scrollTopVal}`
     );
 
     renderer.destroy();

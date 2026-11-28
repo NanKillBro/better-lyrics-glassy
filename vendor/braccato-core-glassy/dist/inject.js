@@ -84,7 +84,6 @@ export function newLineData(lyricElement, startTimeMs, durationMs) {
         lyricElement,
         time: startTimeMs / 1000,
         duration: durationMs / 1000,
-        mainEndTime: (startTimeMs + durationMs) / 1000,
         parts: [],
         isScrolled: false,
         isAnimationPlayStatePlaying: false,
@@ -393,34 +392,11 @@ export function createLyricsLine(doc, parts, line, lyricElement, options = { spl
         }
     }
     let mainStartMs = Infinity;
-    let mainEndMs = -Infinity;
-    let hasMainPart = false;
-    let hasTimedMainPart = false;
-    let hasBgPart = false;
     for (const part of parts) {
-        if (part.words.trim().length === 0)
-            continue;
-        if (part.isBackground === true) {
-            hasBgPart = true;
-            continue;
-        }
-        hasMainPart = true;
-        if (Number.isFinite(part.startTimeMs)) {
+        if (part.isBackground !== true && part.words.trim().length > 0 && Number.isFinite(part.startTimeMs)) {
             if (part.startTimeMs < mainStartMs)
                 mainStartMs = part.startTimeMs;
-            if (Number.isFinite(part.durationMs) && part.durationMs > 0) {
-                hasTimedMainPart = true;
-                const partEndMs = part.startTimeMs + part.durationMs;
-                if (partEndMs > mainEndMs)
-                    mainEndMs = partEndMs;
-            }
         }
-    }
-    if (hasTimedMainPart && Number.isFinite(mainEndMs)) {
-        line.mainEndTime = mainEndMs / 1000;
-    }
-    else if (!hasMainPart && hasBgPart) {
-        line.mainEndTime = line.time;
     }
     const backgroundStartOf = (group) => {
         let minStart = Infinity;

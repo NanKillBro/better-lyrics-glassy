@@ -3008,9 +3008,8 @@ export function tickView(engine, currentTime, options) {
             const scrollPosOffset = tabRendererHeight * getTargetScrollRatio(engine, lyricsElement);
             const endingThresholdS = LYRIC_ENDING_THRESHOLD_S.getNumberValue();
             let lastActiveLyric = activeElems[activeElems.length - 1];
-            // Ignore lyrics whose main vocal is finished/ending unless it is the last active lyric,
-            // so a past line's trailing background vocal never pulls the incoming active line off focal.
-            const sungLines = activeElems.filter((lineData, index) => lyricScrollTime < (lineData.mainEndTime ?? (lineData.time + lineData.duration)) - endingThresholdS ||
+            // Ignore lyrics close to finishing unless it is the last active lyric.
+            const sungLines = activeElems.filter((lineData, index) => lyricScrollTime < lineData.time + lineData.duration - endingThresholdS ||
                 index == activeElems.length - 1);
             const pinned = engine.pinnedScrollLine;
             if (pinned &&
@@ -3027,7 +3026,7 @@ export function tickView(engine, currentTime, options) {
                 const committedActiveElems = activeElems.filter(lineData => lyricScrollTime >= lineData.time || engine.lastScrollElements.includes(lineData));
                 if (committedActiveElems.length > 0 && committedActiveElems.length < activeElems.length) {
                     effectiveActiveElems = committedActiveElems;
-                    effectiveSungLines = committedActiveElems.filter((lineData, index) => lyricScrollTime < (lineData.mainEndTime ?? (lineData.time + lineData.duration)) - endingThresholdS ||
+                    effectiveSungLines = committedActiveElems.filter((lineData, index) => lyricScrollTime < lineData.time + lineData.duration - endingThresholdS ||
                         index === committedActiveElems.length - 1);
                 }
             }
